@@ -1,0 +1,23 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- Load order matters: each file extends the namespace the previous one created. -->
+    <Script file="Core.lua"/>
+    <Script file="Theme.lua"/>
+    <Script file="Widgets.lua"/>
+    <Script file="Window.lua"/>
+    <Script file="Pages.lua"/>
+    <Script file="Commands.lua"/>
+    <Script file="Copy.lua"/>
+    <Script file="Minimap.lua"/>
+    <Script file="QuizData.lua"/>
+    <Script file="Quiz_bossquotes.lua"/>
+    <Script file="Quiz_class.lua"/>
+    <Script file="Quiz_geography.lua"/>
+    <Script file="Quiz_goblins.lua"/>
+    <Script file="Quiz_hallowsend.lua"/>
+    <Script file="Quiz_items.lua"/>
+    <Script file="Quiz_lastwords.lua"/>
+    <Script file="Quiz_lore.lua"/>
+    <Script file="Quiz_murlocs.lua"/>
+    <Script file="Quiz_race.lua"/>
+    <Script file="Quiz.lua"/>
+</Ui>

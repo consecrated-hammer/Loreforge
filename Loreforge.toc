@@ -1,0 +1,21 @@
+## Interface: 120105
+## Title: Loreforge
+## Author: consecrated-hammer
+## Version: 0.1.0-beta
+## X-ReleaseDate: 2026-10-28
+## Notes: Host group and guild trivia with manual or automatic rounds, scores and records.
+## SavedVariables: LoreforgeDB
+## LoadSavedVariablesFirst: 1
+## IconTexture: Interface\Icons\INV_Misc_Book_09
+## X-License: GPL-3.0
+## X-Website: https://github.com/consecrated-hammer/Loreforge
+## X-CurseForge: https://www.curseforge.com/wow/addons/loreforge
+## X-Curse-Project-ID: 1769610
+
+Libs\HammerCore\HammerCore.xml
+Game.lua
+Core.lua
+Setup.lua
+Host.lua
+Options.lua
+Probe.lua

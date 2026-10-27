@@ -1,0 +1,23 @@
+# CurseForge packaging, for BigWigsMods/packager.  The repo root is the one
+# Loreforge folder; both TOCs ship inside it.
+package-as: Loreforge
+
+# HammerCore is vendored and committed, not a packager external.
+enable-nolib-creation: no
+
+# Release CI extracts only the tagged version's notes into this file.
+manual-changelog:
+  filename: RELEASE_NOTES.md
+  markup-type: markdown
+
+license-output: LICENSE.txt
+
+ignore:
+  - .github
+  - .pkgmeta
+  - .gitignore
+  - CHANGELOG.md
+  - tests
+  - tools
+  - docs
+  - .scratch

@@ -1,0 +1,30 @@
+# Secrets. A stray `git add -A` must never publish these, whatever the
+# repository's visibility is today.
+.env
+.env.*
+*.token
+
+# Archives
+*.zip
+
+# Packager output
+.release/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Lua bytecode / temp
+*.luac
+*.tmp
+__pycache__/
+*.pyc
+
+# Local notes and tooling
+.claude/
+.scratch/
+
+# Generated at release time by CI from CHANGELOG.md
+RELEASE_NOTES.md

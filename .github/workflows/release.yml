@@ -1,0 +1,138 @@
+name: Release
+
+# Tag a commit v0.1.0 (or 0.1.0) and this packages the addon and publishes it.
+# CurseForge upload only happens once CF_API_KEY is set in the repository
+# secrets AND the TOC carries an X-Curse-Project-ID; without either, the
+# packager still builds the zip and attaches it to the GitHub release.
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The packager builds the changelog from history, so it needs all of it.
+          fetch-depth: 0
+
+      - name: Require release commit on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::Release tag $GITHUB_REF_NAME is not on main. Merge the release commit into main before tagging."
+            exit 1
+          fi
+
+      # The zip is named from the TAG but the version players see in their addon
+      # list comes from the TOC. Letting those drift ships an old version inside
+      # a file called 0.2.0, which is confusing to diagnose and impossible to fix
+      # after upload. Fail before publishing anything instead. Both TOCs are
+      # checked: a Retail and a Forever copy that disagree would be two versions.
+      # A pre-release must visibly identify itself in-game too, so v0.2.0-beta
+      # must use 0.2.0-beta in both TOCs.
+      - name: Tag must match both TOC versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for toc in Loreforge.toc Loreforge_Camelot.toc; do
+            version=$(grep -oP '(?<=^## Version:\s).*' "$toc" | tr -d '[:space:]')
+            echo "tag=$tag  $toc=$version"
+            if [ "$tag" != "$version" ]; then
+              echo "::error::Tag $tag does not match '## Version: $version' in $toc."
+              exit 1
+            fi
+          done
+
+      - name: Check the changelog mentions this version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          # Require the exact Keep a Changelog heading, hyphen and all:
+          #   ## [1.2.3] - 2026-08-17
+          # CurseForge parses this format, and an em dash instead of a hyphen
+          # stops it sectioning the file. Invisible until published, so make CI
+          # refuse it.
+          if ! grep -qE "^## \\[$tag\\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md needs a heading exactly '## [$tag] - YYYY-MM-DD' (hyphen, not an em dash)."
+            exit 1
+          fi
+          for toc in Loreforge.toc Loreforge_Camelot.toc; do
+            release_date=$(sed -n 's/^## X-ReleaseDate:[[:space:]]*//p' "$toc")
+            if ! printf '%s' "$release_date" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+              echo "::error::$toc needs '## X-ReleaseDate: YYYY-MM-DD'."
+              exit 1
+            fi
+            if ! grep -Fq "## [$tag] - $release_date" CHANGELOG.md; then
+              echo "::error::X-ReleaseDate $release_date in $toc does not match CHANGELOG.md for [$tag]."
+              exit 1
+            fi
+          done
+
+      # Publish ONLY this version's notes. .pkgmeta points the packager at
+      # RELEASE_NOTES.md rather than CHANGELOG.md, so what reaches CurseForge is
+      # exactly the section below and never the whole history.
+      - name: Extract this version's release notes
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          awk -v v="$tag" '
+            $0 ~ ("^## \\[" v "\\] - ") { inside = 1; next }
+            inside && /^## \[/ { exit }
+            inside { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::Extracted no release notes for $tag from CHANGELOG.md."
+            exit 1
+          fi
+          echo "----- notes for $tag -----"
+          cat RELEASE_NOTES.md
+
+      - name: Package and release
+        uses: BigWigsMods/packager@v2
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+
+      # Posts this version's notes to #announcements on the Consecrated Hammer
+      # Discord. Needs the RELEASES_WEBHOOK_URL repository secret; the optional
+      # DISCORD_ROLE_ID repository variable pings that addon's role. Skipped
+      # for pre-releases, and a failed post never fails the release.
+      - name: Announce on Discord
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        env:
+          WEBHOOK: ${{ secrets.RELEASES_WEBHOOK_URL }}
+          ROLE_ID: ${{ vars.DISCORD_ROLE_ID }}
+          ADDON: ${{ github.event.repository.name }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "RELEASES_WEBHOOK_URL is not set; skipping"; exit 0; fi
+          python3 - <<'EOF'
+          import glob, json, os, re, urllib.request
+          addon, tag = os.environ["ADDON"], os.environ["GITHUB_REF_NAME"].lstrip("v")
+          link = f"https://www.curseforge.com/wow/addons/{addon.lower()}"
+          for toc in sorted(glob.glob("*.toc")):
+              found = re.search(r"^## X-CurseForge:\s*(\S+)", open(toc, encoding="utf-8").read(), re.M)
+              if found:
+                  link = found.group(1)
+                  break
+          notes = open("RELEASE_NOTES.md", encoding="utf-8").read().strip()
+          if len(notes) > 4000:
+              notes = notes[:3990].rsplit("\n", 1)[0] + "\n…"
+          role = os.environ.get("ROLE_ID", "").strip()
+          body = {
+              "content": f"<@&{role}>" if role else "",
+              "allowed_mentions": {"roles": [role] if role else []},
+              "embeds": [{"title": f"{addon} {tag} released", "url": link,
+                          "description": notes, "color": 0xD4AF37}],
+          }
+          request = urllib.request.Request(os.environ["WEBHOOK"], data=json.dumps(body).encode(), method="POST",
+                                           headers={"Content-Type": "application/json", "User-Agent": "consecrated-hammer-release"})
+          urllib.request.urlopen(request, timeout=30)
+          print(f"announced {addon} {tag}")
+          EOF
