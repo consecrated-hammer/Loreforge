@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.1.1-beta] - 2026-10-28
+
+- The development transport probe now uses ChatThrottleLib throttling and LibDeflate compression/encoding, with a new wire prefix. Both test players need this build.
+- Probe send failures now stop with a diagnostic. Probe queues stop on combat, restrictions, zoning or roster changes. Wire retries, incoming decoding, peer counts and question chunks are bounded.
+
+Both test players need 0.1.1-beta for `/lf probe`. This updates the development
+transport test; the player question UI and shared history are not implemented.
+Real two-client delivery remains unverified on Retail and WoW Forever.
+
 ## [0.1.0-beta] - 2026-10-28
 
 First public beta. Loreforge hosts trivia in group or guild chat, and only the

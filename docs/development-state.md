@@ -36,3 +36,25 @@ at 24 sends per run or listen window, and the log keeps 300 lines and the last
 10 run summaries in `LoreforgeDB.probe`. `tests/test_probe.lua` covers the
 protocol; real delivery needs the two-client run in check 15 of
 [the client checklist](client-checks.md).
+
+The 0.1.1-beta probe uses ChatThrottleLib and LibDeflate with a new wire
+prefix. Both test players need this build. AceComm is excluded because its
+licence raises a GPLv3 compatibility issue. See [transport](transport.md) for
+source pins, bounds, cancellation, test coverage and the remaining client
+proof. No player UI or shared history is implemented.
+
+Claude independently reviewed the transport diff. Follow-up fixes filter
+self-echoes before decoding, stop with a reason on rejected submissions, report
+pending cancellation and context changes, handle boolean/enum prefix results,
+and preserve upstream files through the packager's `plain-copy` setting.
+The fixed wire budget, strict deadline and context cancellation remain
+deliberate limits; an incomplete run must remain incomplete. A shared library
+fork that falsely retains version 32 cannot be authenticated by a version
+check and still needs client testing.
+
+The 0.1.1-beta release review also covered asynchronous native-send failures
+and enqueue errors. Both now stop or disable the probe explicitly, with
+regression coverage. The receive budget counts attempted decodes, including
+invalid input, to bound work from untrusted channel traffic. Exhausting that
+budget can make a run incomplete; it isn't a transport authentication scheme.
+The strict retry budget, deadline and context cancellation remain deliberate.

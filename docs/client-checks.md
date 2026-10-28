@@ -35,3 +35,11 @@ Report the version, client/build, channel, pacing, delivery state, current prima
 action and any BugGrabber error. In dev7 the user reproduced an immediate
 Instance restriction warning and ignored ready replies. Later host-side fixes
 and mocked tests require a fresh real-client run; they do not establish success.
+
+For the 0.1.1-beta library transport, both players must use the same new build.
+The public 0.1.0-beta and dev11 probes use the old wire format. Verify the
+report says prefix `LoreforgeP2`, ChatThrottleLib 32 and LibDeflate
+1.0.2-release. Begin outside combat and restricted activity; zoning, roster
+changes and restriction events stop the probe. Re-arm after those changes.
+Capture both reports, including CTL results and actual remote acknowledgments.
+A self-echo or successful send alone isn't a pass. See [transport](transport.md).

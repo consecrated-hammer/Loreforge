@@ -30,5 +30,7 @@ jobs:
           fetch-depth: 0
       - name: Vendored HammerCore matches its pinned commit
         run: python3 hammercore/tools/check.py addon
+      - name: Transport libraries match their pinned sources and notices
+        run: python3 addon/tools/check_transport_vendor.py
       - name: Each TOC loads exactly the addon's Lua files
         run: python3 hammercore/tools/toc_check.py addon

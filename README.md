@@ -87,4 +87,4 @@ See [development state](docs/development-state.md) for what has and hasn't been 
 
 ## Licence
 
-GPL v3, see [LICENSE.txt](LICENSE.txt). Loreforge's host engine and interface are original code. Blizzard's built-in book icon is referenced by its game path. There is no external artwork dependency.
+Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport libraries retain their own public-domain or zlib terms; see [third-party notices](Libs/TRANSPORT-NOTICES.md). Loreforge's host engine and interface are original code. Blizzard's built-in book icon is referenced by its game path. There is no external artwork dependency.

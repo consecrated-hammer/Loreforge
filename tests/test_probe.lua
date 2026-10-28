@@ -16,6 +16,7 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     IsInRaid = function() return false end
     GetNumSubgroupMembers = function() return 1 end
     RegisterStateDriver, UnregisterStateDriver = function() end, function() end
+    assert(loadfile('tests/transport-libs.lua'))()()
     local ns = wow.LoadHammerCore("Libs/HammerCore", "Loreforge")
     local addon, prefixes = {}, {}
     C_ChatInfo.RegisterAddonMessagePrefix = function(prefix) prefixes[prefix] = true; return 0 end
@@ -30,7 +31,7 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     loader.scripts.OnEvent(loader, "ADDON_LOADED", "Loreforge")
     IsInGroup = function(category) return category ~= 2 end
     local P = ns.Probe
-    eq(prefixes.LoreforgeP, true, "prefix registered at load")
+    eq(prefixes.LoreforgeP2, true, "prefix registered at load")
 
     -- UTF-8-safe chunking and integrity.
     local chunks = P.Chunks(P.SAMPLE, 180)
@@ -45,24 +46,33 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     assert(P.Checksum("abc") ~= P.Checksum("abd"), "checksum notices a change")
 
     local function drain(seconds)
-        for _ = 1, seconds * 10 do time = time + 0.1; P.Tick() end
+        for _ = 1, seconds * 10 do time = time + 0.1; P.Tick(); ChatThrottleLib.OnUpdate(ChatThrottleLib.Frame, 0.1) end
     end
-    local function recv(text, sender) P.Receive("LoreforgeP", text, "PARTY", sender) end
+    local function recv(text, sender) P.Receive("LoreforgeP2", text, "PARTY", sender) end
     local function sent(kind)
         local found = {}
-        for _, m in ipairs(addon) do if m.text:match("^1:" .. kind .. ":") then found[#found + 1] = m end end
+        for _, m in ipairs(addon) do
+            local text = ns.Transport.Unpack(m.text)
+            if text and text:match("^1:" .. kind .. ":") then
+                found[#found + 1] = { text = text, prefix = m.prefix, channel = m.channel }
+            end
+        end
         return found
     end
 
     -- Host side: a consenting peer completes every leg; self echoes never count.
     P.Start("party")
     local nonce = P.run.nonce
-    drain(1 + #chunks)
+    drain(10)
     eq(#sent("H"), 1, "hello sent")
     eq(#sent("Q"), #chunks, "every chunk sent")
-    eq(addon[1].prefix, "LoreforgeP", "probe prefix")
+    eq(addon[1].prefix, "LoreforgeP2", "probe prefix")
     eq(addon[1].channel, "PARTY", "chosen distribution")
-    for _, m in ipairs(addon) do recv(m.text, "Host") end
+    for _, m in ipairs(addon) do
+        P.frame.scripts.OnEvent(P.frame, "CHAT_MSG_ADDON", m.prefix, m.text, "PARTY", "Host")
+    end
+    eq(ns.Transport.decodes, 0, "self echoes do not spend decode budget")
+    for _, m in ipairs(addon) do recv(ns.Transport.Unpack(m.text), "Host") end
     eq(next(P.peers), nil, "self echo is not a peer")
     recv("1:R:" .. nonce .. ":retail:0.1.0", "Guest")
     recv("1:V:" .. nonce .. ":1:" .. #P.SAMPLE .. ":" .. P.Checksum(P.SAMPLE), "Guest")
@@ -77,6 +87,9 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     assert(summary:find("PASS"), "complete round trip passes")
     assert(table.concat(ns.db.probe.log, "\n"):find("SELF%-ECHO"), "self echo logged")
     assert(P.Report():find("== Runs =="), "copyable report")
+    assert(P.Report():find("ChatThrottleLib 32"), "report identifies loaded throttle library")
+    assert(P.Report():find("LibDeflate 1.0.2%-release"), "report identifies loaded codec")
+    assert(P.Report():find("prefix LoreforgeP2"), "report identifies wire protocol")
 
     -- No listener: an honest empty result.
     P.Start("raid")
@@ -144,7 +157,17 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     eq(#sent("V"), 0, "out-of-range chunks never assemble")
     assert(os.clock() - started < 1, "an oversized chunk total does not stall the client")
     assert(table.concat(ns.db.probe.log, "\n"):find("DROP chunk out of range"), "oversized chunk logged")
-    for _ = 1, 400 do P.Receive("LoreforgeP", "junk", "PARTY", "Guest") end
+    local pending = #P.queue
+    recv("1:Q:fff000:1:2:181:00000000:" .. string.rep("x", 181), "Guest")
+    eq(#P.queue, pending, "oversized individual chunk dropped")
+    for _ = 1, 400 do P.Receive("LoreforgeP2", "junk", "PARTY", "Guest") end
     eq(#ns.db.probe.log, 300, "log is bounded")
+    P.Stop()
+    drain(2)
+    C_ChatInfo.SendAddonMessage = function() return 5 end
+    P.Start("party")
+    drain(10)
+    eq(P.run, nil, "asynchronous native rejection stops the probe")
+    assert(table.concat(ns.db.probe.log, "\n"):find("CTL sent=false result=5"), "native failure retained in report")
 end
 io.write("loreforge probe tests passed\n")

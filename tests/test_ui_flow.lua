@@ -25,8 +25,9 @@ for _, forever in ipairs({ false, true }) do
     GetNumSubgroupMembers = function() return members end
     GetNumGroupMembers = function() return members + 1 end
     RegisterStateDriver, UnregisterStateDriver = function() end, function() end
+    assert(loadfile('tests/transport-libs.lua'))()()
     local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
-    for _, file in ipairs({'Game.lua','Core.lua','Setup.lua','Host.lua','Options.lua','Probe.lua'}) do assert(loadfile(file))('Loreforge', ns) end
+    for _, file in ipairs({'Transport.lua','Game.lua','Core.lua','Setup.lua','Host.lua','Options.lua','Probe.lua'}) do assert(loadfile(file))('Loreforge', ns) end
     local loader
     for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
     loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')

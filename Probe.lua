@@ -5,7 +5,7 @@ local HC = ns.HammerCore
 -- nonce; the host's own echo is logged but never counts as a pass.
 local Probe = { peers = {}, queue = {}, seen = {} }
 ns.Probe = Probe
-local PREFIX, VERSION = "LoreforgeP", 1
+local PREFIX, VERSION = ns.Transport.PREFIX, 1
 local CHANNELS = { party = "PARTY", raid = "RAID", instance = "INSTANCE_CHAT", guild = "GUILD" }
 local LISTEN_SECONDS, RUN_SECONDS, GAP, MAX_SENDS, MAX_LOG, MAX_RUNS, CHUNK = 600, 45, 1, 24, 300, 10, 180
 -- A listener answers any group member, so bound what one window will hold:
@@ -61,20 +61,12 @@ local function context()
         tostring(inInstance), tostring(kind), tostring(InCombatLockdown and InCombatLockdown() or false),
         tostring(ns.Restricted()), lockdown)
 end
-local function resultName(result)
-    local names = Enum and Enum.SendAddonMessageResult
-    if type(names) == "table" then
-        for name, value in pairs(names) do if value == result then return name end end
-    end
-    return tostring(result)
-end
 local function rawSend(text, channel)
-    if Probe.sends >= MAX_SENDS then log("HELD send budget reached: " .. text:sub(1, 12)); return end
-    Probe.sends = Probe.sends + 1
-    local send = C_ChatInfo and C_ChatInfo.SendAddonMessage or SendAddonMessage
-    local ok, result = pcall(send, PREFIX, text, channel)
-    log(string.format("SEND %s %s bytes=%d result=%s%s", channel, text:sub(1, 12), #text,
-        ok and resultName(result) or ("error " .. tostring(result)), ns.Restricted() and " (restricted)" or ""))
+    if Probe.sends >= MAX_SENDS then log("HELD send budget reached"); return false, "send budget reached" end
+    local ok, result = ns.Transport.Send(text, channel)
+    if ok then Probe.sends = Probe.sends + 1 end
+    log(string.format("SEND %s %s bytes=%d status=%s", channel, text:sub(1, 12), #text, tostring(result)))
+    return ok, result
 end
 local function queue(text, channel)
     if #Probe.queue >= MAX_SENDS then log("HELD queue full: " .. text:sub(1, 12)); return end
@@ -92,17 +84,24 @@ function Probe.Initialise()
     ns.db.probe = type(ns.db.probe) == "table" and ns.db.probe or {}
     local db = ns.db.probe
     db.log, db.runs = type(db.log) == "table" and db.log or {}, type(db.runs) == "table" and db.runs or {}
-    local register = C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix or RegisterAddonMessagePrefix
-    local ok, result = pcall(register, PREFIX)
-    Probe.registered = ok and tostring(result) or ("error " .. tostring(result))
+    Probe.registered = ns.Transport.Initialise(Probe.Receive, Probe.Busy, log, function(sender, channel)
+        local key = ns.Identity(sender)
+        local me = ns.Person("player")
+        if key and me and key == me.key then log("SELF-ECHO wire frame (not proof)"); return false end
+        if not key then log("DROP unresolved sender " .. sender); return false end
+        return not Probe.run or channel == Probe.run.channel
+    end, function(result) Probe.Stop("addon send failed, result " .. tostring(result)) end)
     Probe.sends = 0
     local frame = CreateFrame("Frame")
     Probe.frame = frame
     for _, event in ipairs({ "CHAT_MSG_ADDON", "ADDON_RESTRICTION_STATE_CHANGED", "PLAYER_REGEN_DISABLED",
         "PLAYER_REGEN_ENABLED", "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE" }) do pcall(frame.RegisterEvent, frame, event) end
     frame:SetScript("OnEvent", function(_, event, ...)
-        if event == "CHAT_MSG_ADDON" then Probe.Receive(...)
-        elseif Probe.Busy() then log("EVENT " .. event .. " " .. context()) end
+        if event == "CHAT_MSG_ADDON" then ns.Transport.Receive(...)
+        elseif Probe.Busy() then
+            log("EVENT " .. event .. " " .. context())
+            if event ~= "PLAYER_REGEN_ENABLED" then Probe.Stop(event .. "; re-arm to test the new context") end
+        end
     end)
     local elapsed = 0
     frame:SetScript("OnUpdate", function(_, delta)
@@ -112,11 +111,16 @@ function Probe.Initialise()
         Probe.Tick()
     end)
 end
-function Probe.Busy() return Probe.run ~= nil or (Probe.listenUntil or 0) > now() end
+function Probe.Busy()
+    return (Probe.run ~= nil and now() < Probe.run.deadline) or (Probe.listenUntil or 0) > now()
+end
 
 function Probe.Listen()
+    if Probe.run then HC.Print("Stop the running probe before listening."); return end
+    if not ns.Transport.Ready() or ns.Transport.Blocked() then HC.Print("Probe transport busy, unavailable or restricted. A stopped packet may still be draining."); return end
     Probe.listenUntil, Probe.sends, Probe.started = now() + LISTEN_SECONDS, 0, now()
-    Probe.seen, Probe.sessions = {}, 0
+    Probe.seen, Probe.sessions, Probe.queue = {}, 0, {}
+    ns.Transport.Begin()
     log("LISTEN armed for " .. LISTEN_SECONDS .. "s, prefix " .. PREFIX .. " registered=" .. Probe.registered .. " " .. context())
     HC.Print("Probe listening for 10 minutes. This client will answer one probe from the Game Master.")
 end
@@ -124,10 +128,14 @@ function Probe.Start(word)
     local channel = CHANNELS[(word or ""):lower()]
     if not channel then HC.Print("Choose party, raid, instance or guild."); return end
     if Probe.run then HC.Print("A probe is already running."); return end
-    if InCombatLockdown and InCombatLockdown() then HC.Print("Leave combat before probing."); return end
+    if ns.Transport.Blocked() then HC.Print("Leave combat or restricted activity before probing."); return end
+    if not ns.Transport.Ready() then HC.Print("Probe transport busy or unavailable. A stopped packet may still be draining; check the library versions if it persists."); return end
     local nonce = string.format("%06x", math.random(0, 0xffffff))
     Probe.run = { nonce = nonce, channel = channel, deadline = now() + RUN_SECONDS, chunks = Probe.Chunks(Probe.SAMPLE, CHUNK) }
     Probe.peers, Probe.queue, Probe.sends, Probe.started = {}, {}, 0, now()
+    Probe.peerCount = 0
+    Probe.listenUntil = nil
+    ns.Transport.Begin()
     log(string.format("START %s nonce=%s prefix registered=%s chunks=%d bytes=%d sum=%s %s", channel, nonce,
         Probe.registered, #Probe.run.chunks, #Probe.SAMPLE, Probe.Checksum(Probe.SAMPLE), context()))
     queue(table.concat({ VERSION, "H", nonce, ns.era, tostring(HC.GetMetadata("Version")) }, ":"), channel)
@@ -136,35 +144,49 @@ function Probe.Start(word)
     end
     HC.Print("Probe started on " .. channel .. ". Results in about " .. RUN_SECONDS .. " seconds; then /lf probe report.")
 end
-function Probe.Stop()
+function Probe.Stop(reason)
     if Probe.run then Probe.Finish("stopped") end
     Probe.listenUntil, Probe.queue = nil, {}
-    HC.Print("Probe stopped.")
+    ns.Transport.Cancel()
+    HC.Print(reason and ("Probe stopped: " .. reason) or "Probe stopped.")
 end
 
 function Probe.Tick()
-    local item = Probe.queue[1]
-    if item and now() >= (Probe.nextSend or 0) then
-        table.remove(Probe.queue, 1)
-        Probe.nextSend = now() + GAP
-        rawSend(item.text, item.channel)
-    end
     if Probe.run and now() >= Probe.run.deadline then Probe.Finish("complete") end
+    ns.Transport.Tick()
+    if ns.Transport.Blocked() then
+        if Probe.Busy() then Probe.Stop() end
+        return
+    end
+    if not Probe.Busy() then Probe.queue = {}; return end
+    local item = Probe.queue[1]
+    if item and ns.Transport.Ready() and now() >= (Probe.nextSend or 0) then
+        local ok, why = rawSend(item.text, item.channel)
+        if ok then
+            table.remove(Probe.queue, 1)
+            Probe.nextSend = now() + GAP
+        else Probe.Stop(tostring(why)) end
+    end
 end
 
 function Probe.Receive(prefix, text, channel, sender)
-    if prefix ~= PREFIX or not readable(text) or not readable(sender) or type(text) ~= "string" then return end
+    if prefix ~= PREFIX or not readable(text) or not readable(sender) or type(text) ~= "string" or #text > 240 then return end
     local version, kind, nonce, rest = text:match("^(%d+):(%u):(%x+):?(.*)$")
     if not kind then log("DROP malformed from " .. tostring(sender)); return end
     local key, match = resolve(sender, channel)
+    if not key then log("DROP unresolved sender " .. tostring(sender)); return end
     local mine = ns.Person("player")
     local me = mine and mine.key
     local own = key and me and key == me
     if own then log(string.format("SELF-ECHO %s %s via %s (not proof)", kind, nonce, channel)); return end
     if tonumber(version) ~= VERSION then log("DROP version " .. version .. " from " .. sender); return end
     local run = Probe.run
-    if run and nonce == run.nonce then
+    if run and nonce == run.nonce and channel == run.channel then
         -- Host side: peers answer the Game Master's nonce.
+        if not Probe.peers[key] then
+            if (Probe.peerCount or 0) >= MAX_SESSIONS then log("DROP peer limit"); return end
+            Probe.peerCount = (Probe.peerCount or 0) + 1
+        end
         local peer = Probe.peers[key] or { name = sender, match = match, channel = channel }
         Probe.peers[key] = peer
         local at = now() - Probe.started
@@ -185,11 +207,11 @@ function Probe.Receive(prefix, text, channel, sender)
     if not state then
         if (Probe.sessions or 0) >= MAX_SESSIONS then log("DROP session limit for nonce " .. nonce); return end
         Probe.sessions = (Probe.sessions or 0) + 1
-        state = { chunks = {}, host = key }
+        state = { chunks = {}, host = key, channel = channel }
         Probe.seen[nonce] = state
     end
     log(string.format("RECV %s %s from %s (%s) via %s bytes=%d", kind, nonce, sender, match, channel, #text))
-    if state.host ~= key then log("DROP different host for nonce " .. nonce); return end
+    if state.host ~= key or state.channel ~= channel then log("DROP different host for nonce " .. nonce); return end
     if kind == "H" and not state.replied then
         state.replied = true
         queue(table.concat({ VERSION, "R", nonce, ns.era, tostring(HC.GetMetadata("Version")) }, ":"), channel)
@@ -199,7 +221,9 @@ function Probe.Receive(prefix, text, channel, sender)
         index, total, length = tonumber(index), tonumber(total), tonumber(length)
         -- Check the frame before storing it or looping over its total.
         if total < 1 or total > MAX_CHUNKS or index < 1 or index > total or length > MAX_CHUNKS * CHUNK
-            or (state.total and state.total ~= total) then
+            or #payload > CHUNK or #sum ~= 8
+            or (state.total and (state.total ~= total or state.length ~= length or state.sum ~= sum))
+            or (state.chunks[index] and state.chunks[index] ~= payload) then
             log("DROP chunk out of range"); return
         end
         state.chunks[index], state.total, state.length, state.sum = payload, total, length, sum
@@ -227,7 +251,8 @@ end
 
 function Probe.Finish(reason)
     local run = Probe.run
-    Probe.run = nil
+    Probe.run, Probe.listenUntil, Probe.queue = nil, nil, {}
+    ns.Transport.Cancel()
     local lines = { string.format("Probe %s on %s, nonce %s, %d sends", reason, run.channel, run.nonce, Probe.sends) }
     local passed, count = 0, 0
     for _, peer in pairs(Probe.peers) do
@@ -253,6 +278,9 @@ end
 function Probe.Report()
     local db = ns.db.probe
     local text = "Loreforge transport probe\n" .. context() .. "\nPrefix registered: " .. tostring(Probe.registered)
+        .. "\nTransport: ChatThrottleLib " .. tostring(ChatThrottleLib and ChatThrottleLib.version)
+        .. "; LibDeflate " .. tostring(ns.Transport.deflate and ns.Transport.deflate._VERSION)
+        .. "; prefix " .. PREFIX .. "; wire attempts " .. tostring(ns.Transport.attempts)
         .. "\n\n== Runs ==\n" .. (#db.runs > 0 and table.concat(db.runs, "\n\n") or "None on this client")
         .. "\n\n== Log ==\n" .. table.concat(db.log, "\n")
     HC.Copy:Show("Loreforge probe", text)

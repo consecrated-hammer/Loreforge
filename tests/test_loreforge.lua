@@ -17,6 +17,7 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     GetNumSubgroupMembers = function() return 1 end
     RegisterStateDriver = function() end
     UnregisterStateDriver = function() end
+    assert(loadfile('tests/transport-libs.lua'))()()
     local ns = wow.LoadHammerCore("Libs/HammerCore", "Loreforge")
     for file in assert(io.open(toc)):read("*a"):gmatch("([^\r\n]+)") do
         if file:match("^[%w]+%.lua$") then assert(loadfile(file))("Loreforge", ns) end

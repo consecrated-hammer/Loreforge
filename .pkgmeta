@@ -12,6 +12,12 @@ manual-changelog:
 
 license-output: LICENSE.txt
 
+# Preserve upstream sources, including LibDeflate's metadata placeholders.
+plain-copy:
+  - Libs/LibStub
+  - Libs/ChatThrottleLib
+  - Libs/LibDeflate
+
 ignore:
   - .github
   - .pkgmeta

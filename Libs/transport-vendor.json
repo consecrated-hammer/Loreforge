@@ -1,0 +1,10 @@
+{
+  "ace3_commit": "ac3d1225037e0dc74e025a72342c0f7824aae147",
+  "libdeflate_commit": "afc3b78d12fb3bcfa6b21e5332031ad3d7572e19",
+  "sha256": {
+    "Libs/LibStub/LibStub.lua": "26401bc42c26d1d1b6f7ad9410aa464edcbe4d32d74ebadeeecd8c0110236f7d",
+    "Libs/ChatThrottleLib/ChatThrottleLib.lua": "3491b6c98cae1634a9f0494b436e86df1632309fb68181c25240b53c4d86dde8",
+    "Libs/LibDeflate/LibDeflate.lua": "880e396fbaac7dcf99d33fc706a7f129147f2910f8414a143f8dea57e327c06b",
+    "Libs/LibDeflate/LICENSE.txt": "07f118887f364847a7389185c703a1b0abf5a7f353d5cdc9da6a48c7f142bb16"
+  }
+}
