@@ -69,6 +69,19 @@ Lua tests and staged-file checks do not prove chat permissions, rendering, event
 
 See [chat-bot interaction notes](docs/chat-bot-interactions.md) for the research and possible future modes.
 
+## Party player beta
+
+With 0.2.0-beta on the host and addon participants, choose Party output and **Open Party lobby**.
+Players accept the join prompt, then the host clicks **Start game**. Joined
+players get clickable questions, confirmed answer locking, reveals, streaks and
+shared scores. Chat-only players can still answer normally. `/lf play`
+restores a joined match and `/lf history` opens completed results with final
+and per-round standings.
+
+This first version is scoped to Retail home Parties outside instances and
+combat. The complete flow still needs an in-game test. See [Party player
+behaviour and protocol](docs/party-client.md).
+
 ## Development
 
 Develop from this repository; client folders hold generated staging copies. HammerCore is vendored under `Libs/HammerCore`. Its curated question JSONL and category-file generator live in the HammerCore source repository. Change the shared source, then vendor it through HammerCore's sync tool.
@@ -78,7 +91,7 @@ Shipped category files are lightly obfuscated, including questions, choices and 
 The game engine in `Game.lua` has no WoW calls. `Host.lua` owns chat, identity, roster and secure UI integration; `Setup.lua` builds the Host game screen's game form; `Options.lua` owns general record management. The clock and random source are injectable for tests.
 
 ```sh
-docker run --rm -v "$PWD:/r:ro" -w /r nickblah/lua:5.1-alpine sh -c 'find . -name "*.lua" -not -path "./.git/*" -print0 | xargs -0 -n1 luac -p && for test in tests/test_*.lua; do lua "$test" || exit 1; done'
+docker run --rm -v "$PWD:/r:ro" -w /r nickblah/lua:5.1-alpine sh -c 'find . -name "*.lua" -not -path "./.git/*" -not -path "./.scratch/*" -print0 | xargs -0 -n1 luac -p && for test in tests/test_*.lua; do lua "$test" || exit 1; done'
 python3 ../HammerCore/tools/toc_check.py .
 python3 ../HammerCore/tools/check.py .
 ```

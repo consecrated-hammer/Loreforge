@@ -29,3 +29,15 @@ HC.Settings:NewPage({ name = 'Player records', description = 'General record man
     clear:SetPoint('LEFT', 208, 0); clear:SetText('Clear player records'); clear:SetScript('OnClick', ns.ConfirmClearRecords)
     return y
 end)
+
+HC.Settings:NewPage({name='Party player',description='Optional Party match invitations and saved matches.'},function(panel,y)
+    _,y=UI.Header(panel,'Party invitations',y)
+    _,y=UI.Check(panel,'Show Party match invitations','Ask before joining another player\'s match. Party UI is beta and currently limited to Retail outside instances.',y,
+        function() return ns.db.partyInvites ~= false end,function(value) ns.db.partyInvites=value end)
+    _,y=UI.Text(panel,'Joining enables clickable questions and sends your answers to the host. Party messages can be read by other addons in the group.',y)
+    local row
+    row,y=UI.Card(panel,y,40)
+    local history=UI.Button(row,180,24)
+    history:SetPoint('LEFT',8,0);history:SetText('Saved matches');history:SetScript('OnClick',function() if ns.Party then ns.Party.ShowHistory() end end)
+    return y
+end)

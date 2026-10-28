@@ -41,7 +41,8 @@ The 0.1.1-beta probe uses ChatThrottleLib and LibDeflate with a new wire
 prefix. Both test players need this build. AceComm is excluded because its
 licence raises a GPLv3 compatibility issue. See [transport](transport.md) for
 source pins, bounds, cancellation, test coverage and the remaining client
-proof. No player UI or shared history is implemented.
+proof. The 0.2.0-beta Party player implementation and its verification boundary
+are described in [Party client](party-client.md).
 
 Claude independently reviewed the transport diff. Follow-up fixes filter
 self-echoes before decoding, stop with a reason on rejected submissions, report
@@ -58,3 +59,14 @@ regression coverage. The receive budget counts attempted decodes, including
 invalid input, to bound work from untrusted channel traffic. Exhausting that
 budget can make a run incomplete; it isn't a transport authentication scheme.
 The strict retry budget, deadline and context cancellation remain deliberate.
+
+## Party player beta, 2026-10-29
+
+The new Party client is packaged in 0.2.0-beta, with Claude's front end and the
+host-authoritative session/history integration. All nine Lua suites, Lua 5.1
+syntax, both TOCs and the vendor checks pass. Independent review follow-ups
+and the complete in-game acceptance sequence are in [Party client](party-client.md).
+The beta is intended for the full-game acceptance test; local client staging
+is separate from CurseForge publication.
+Only the earlier 0.1.1-beta transport probe has real paired-client evidence;
+the new full-game flow still needs that test.

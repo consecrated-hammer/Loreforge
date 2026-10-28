@@ -1,9 +1,16 @@
 local _, ns = ...
--- Probe-only adapter. See docs/transport.md for the wire format and vendor pin.
+-- Bounded transport instances. Probe defaults remain unchanged.
+local function New(profile)
+profile = profile or {}
 local T = { generation = 0, incoming = {}, attempts = 0, decodes = 0 }
-ns.Transport = T
-T.PREFIX = "LoreforgeP2"
-local MAX_TEXT, MAX_WIRE, MAX_COMPRESSED, MAX_ATTEMPTS = 240, 255, 200, 24
+T.PREFIX = profile.prefix or "LoreforgeP2"
+local MAX_TEXT, MAX_WIRE, MAX_COMPRESSED, MAX_ATTEMPTS = 240, 255, 200, profile.limit or 24
+local windowStart, wireCount, decodeCount = GetTime(), 0, 0
+local function budgets()
+    if profile.window and GetTime() - windowStart >= profile.window then
+        windowStart, wireCount, decodeCount = GetTime(), 0, 0
+    end
+end
 local CHANNELS = { PARTY = true, RAID = true, INSTANCE_CHAT = true, GUILD = true }
 local function readable(v) return not (issecretvalue and issecretvalue(v)) end
 local function blocked()
@@ -44,6 +51,7 @@ end
 function T.Begin()
     T.Cancel()
     T.attempts, T.decodes = 0, 0
+    windowStart, wireCount, decodeCount = GetTime(), 0, 0
 end
 function T.Ready()
     return T.available and ChatThrottleLib and ChatThrottleLib.version == 32 and not T.pending
@@ -79,11 +87,12 @@ function T.Unpack(wire)
     return data
 end
 
-function T.Send(text, channel)
+function T.Send(text, channel, completed)
     if not T.Ready() then return false, "transport busy or unavailable" end
     if not CHANNELS[channel] then return false, "unsupported channel" end
     if not T.active() or blocked() then return false, "inactive or restricted" end
-    if T.attempts >= MAX_ATTEMPTS then return false, "wire budget reached" end
+    budgets()
+    if wireCount >= MAX_ATTEMPTS then return false, "wire budget reached" end
     local wire, why = T.Pack(text)
     if not wire then return false, why end
     local ctl, generation, deadline = ChatThrottleLib, T.generation, GetTime() + 45
@@ -92,12 +101,13 @@ function T.Send(text, channel)
     local failure = Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.GeneralError or 9
     local msg = { T.PREFIX, wire, channel, n = 3, nSize = #wire + ctl.MSG_OVERHEAD }
     msg.f = function(prefix, payload, distribution)
+        budgets()
         if ChatThrottleLib.version ~= 32 or generation ~= T.generation or not T.active() or GetTime() >= deadline
-            or blocked() or T.attempts >= MAX_ATTEMPTS then
+            or blocked() or wireCount >= MAX_ATTEMPTS then
             item.cancelled = true
             return failure
         end
-        T.attempts = T.attempts + 1
+        T.attempts, wireCount = T.attempts + 1, wireCount + 1
         T.log(string.format("WIRE attempt=%d channel=%s bytes=%d", T.attempts, distribution, #payload))
         return C_ChatInfo.SendAddonMessage(prefix, payload, distribution)
     end
@@ -105,6 +115,7 @@ function T.Send(text, channel)
         if T.pending == item then T.pending = nil end
         T.log(string.format("CTL sent=%s result=%s cancelled=%s", tostring(sent), tostring(result), tostring(item.cancelled or false)))
         if generation == T.generation and not item.cancelled and not sent and T.failed then T.failed(result) end
+        if completed then completed(sent,result,item.cancelled or false) end
     end
     -- Enqueue explicitly so every wire attempt, including throttle retries,
     -- passes our guard. SendAddonMessage's immediate path cannot do that.
@@ -119,12 +130,14 @@ function T.Send(text, channel)
 end
 
 function T.Receive(prefix, wire, channel, sender)
+    budgets()
     if not readable(prefix) or not readable(wire) or not readable(channel) or not readable(sender) then return end
     if prefix ~= T.PREFIX or not T.available or not T.active() or blocked()
         or type(channel) ~= "string" or not CHANNELS[channel] or type(sender) ~= "string" or #sender > 120
-        or type(wire) ~= "string" or #wire > MAX_WIRE or T.decodes >= MAX_ATTEMPTS then return end
+        or type(wire) ~= "string" or #wire > MAX_WIRE or decodeCount >= (profile.receiveLimit or MAX_ATTEMPTS)
+        or #T.incoming >= (profile.queueLimit or MAX_ATTEMPTS) then return end
     if T.accept and not T.accept(sender, channel) then return end
-    T.decodes = T.decodes + 1
+    T.decodes, decodeCount = T.decodes + 1, decodeCount + 1
     T.incoming[#T.incoming + 1] = { wire, channel, sender }
 end
 
@@ -140,3 +153,8 @@ function T.Tick()
     if ok and text then T.receive(T.PREFIX, text, item[2], item[3])
     else T.log("DROP invalid transport frame") end
 end
+
+return T
+end
+ns.Transport = New()
+ns.Transport.New = New

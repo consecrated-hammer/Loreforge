@@ -124,6 +124,7 @@ function ns.StartGame()
     ns.db.gameSerial, ns.scorePage = serial, 1
     ns.groupSignature = ns.db.channel ~= "GUILD" and groupSignature(ns.db.channel) or nil
     ns.nextSendAt = GetTime() + 1
+    if ns.Party then ns.Party.HostStarted() end
     ns.OpenHost()
 end
 
@@ -369,7 +370,7 @@ function ns.RefreshHost()
     local replies = 0
     for _ in pairs(g.answers or {}) do replies = replies + 1 end
     local labels = { setup = "Ready to host", ready_announcing = "Announcing ready check", ready = "Ready check",
-        announcing = "Announcing question", accepting = "Answers open",
+        announcing = "Announcing question", presenting = "Waiting for addon question delivery", opening = "Opening answers", accepting = "Answers open",
         revealing = "Results ready", between = "Between questions", paused = "Paused", finished = "Game complete", stopped = "Game stopped" }
     f.status:SetText((labels[g.phase] or g.phase) .. (g.config and (" | " .. (g.config.localOnly and "Local test" or ns.Game.CHANNELS[g.config.channel].label)
         .. (g.config.autoMode and " | Auto-advance" or " | Host-paced")
@@ -431,7 +432,7 @@ function ns.RefreshHost()
         f.send:SetAttribute("macrotext", prepared and not g.config.localOnly and (ns.Game.CHANNELS[g.config.channel].macro .. prepared) or nil)
     end
     local lineProgress = " (" .. g.cursor .. "/" .. #g.queue .. ")"
-    local sendLabel = g.phase == "ready_announcing" and "Send ready notice" or g.phase == "announcing" and "Send question" or "Send results"
+    local sendLabel = g.phase == "ready_announcing" and "Send ready notice" or g.phase == "announcing" and "Send question" or g.phase == "opening" and "Open answers" or "Send results"
     f.send.Text:SetText(pending and "Confirming chat..." or (sendLabel .. lineProgress))
     f.send:SetEnabled(prepared ~= nil)
     local manualLines = g.phase ~= "paused" and g.config.manualSend and (message ~= nil or pending ~= nil)

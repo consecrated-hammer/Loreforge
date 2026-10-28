@@ -118,6 +118,7 @@ function Game:Start(config, era, roster, serial)
         hostParticipates = config.hostParticipates == true, localOnly = config.localOnly == true,
         manualSend = config.manualSend == true }
     self.players, self.run, self.serial = players, {}, serial
+    self.presentationGate, self.presentationFrom = false, nil
     for _ = 1, count do
         local entry = table.remove(pool, self.random(#pool))
         local choices = { entry[2], entry[3], entry[4], entry[5] }
@@ -216,9 +217,13 @@ function Game:Echo(text)
     if self.phase == "paused" or not self.pending or text ~= self.pending.text then return false end
     self.pending, self.cursor = nil, self.cursor + 1
     if self.cursor > #self.queue then
+        self.presentationFrom = self.phase
         self.queue, self.cursor, self.phase = {}, 1, self.afterQueue
         if self.phase == "ready" or self.phase == "accepting" then self.rulesConfirmed = true end
-        if self.phase == "accepting" then self.deadline = self.clock() + self.config.seconds end
+        if self.phase == "accepting" and self.presentationGate and self.presentationFrom ~= "opening" then
+            self.phase = "presenting"
+        elseif self.phase == "accepting" then self.deadline = self.clock() + self.config.seconds end
+        self.presentationFrom = nil
         if self.phase == "ready" then self.readyDeadline = self.clock() + self.config.readySeconds end
         if self.phase == "between" and self.config.autoMode then
             self.nextQuestionAt = self.clock() + self.config.questionGap
@@ -229,6 +234,13 @@ function Game:Echo(text)
         end
         if self.phase == "finished" then self:RecordResults() end
     end
+    return true
+end
+
+function Game:ReleasePresentation()
+    if self.phase ~= "presenting" then return false end
+    self.phase, self.afterQueue = "opening", "accepting"
+    self:Enqueue("Answers open. Answer 1-4.")
     return true
 end
 
@@ -323,6 +335,7 @@ function Game:Close()
         self:Enqueue("No replies for " .. self.emptyQuestions .. " questions; automatic play will pause after these results.")
     end
     if self.index % self.config.perRound == 0 then self:Results(true) end
+    if self.onEvent then self.onEvent("reveal") end
     if self.index == #self.run then
         self:Results(false)
         self:PrepareRecords()
@@ -383,6 +396,7 @@ function Game:RecordResults()
     for key in pairs(self.records) do self.records[key] = nil end
     for key, value in pairs(self.pendingRecords) do self.records[key] = value end
     self.pendingRecords = nil
+    if self.onEvent then self.onEvent("recorded") end
 end
 
 function Game:Next()
@@ -420,7 +434,7 @@ function Game:Pause(reason, preservePending)
     if self.phase == "ready" or self.phase == "ready_announcing" then
         self.resumePhase = "readyRestart"
         self.queue, self.cursor = {}, 1
-    elseif self.phase == "accepting" or self.phase == "announcing" then
+    elseif self.phase == "accepting" or self.phase == "announcing" or self.phase == "presenting" or self.phase == "opening" then
         self.resumePhase = "question"
         self.queue, self.cursor, self.answers = {}, 1, {}
         self.attempt = self.attempt + 1
@@ -464,4 +478,5 @@ function Game:Stop()
     self.nextQuestionAt = nil
     self.readyDeadline = nil
     self.reason = "Game stopped. Start a new game when you're ready."
+    if self.onEvent then self.onEvent("stopped") end
 end

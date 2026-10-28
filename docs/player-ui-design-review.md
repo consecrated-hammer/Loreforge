@@ -1,6 +1,7 @@
 # Player UI and shared game history
 
-Design review, 2026-10-24. Proposed behaviour, not an implemented feature.
+Design review, 2026-10-24. Original design; see [current Party implementation](party-client.md)
+for the local implementation and remaining in-game checks.
 Reviewed with Astra and Claude Opus. The transport probe shipped in 0.1.0-dev11.
 
 ## Is this possible?
@@ -203,4 +204,6 @@ loss, major-version mismatch and oversized payloads. Verify a repeated final
 result never awards records twice and a missing-final client catches up when
 delivery becomes available. Large-roster traffic needs its own budget test.
 
-No player UI is implemented yet. The transport probe is in dev11 as `/lf probe`; see [development state](development-state.md) and check 15 in the [client checklist](client-checks.md).
+The local Party implementation now follows this design after the paired Retail
+probe passed on 2026-10-29. See [Party client](party-client.md) and the new
+[client acceptance checklist](client-checks.md) for its scope and remaining proof.

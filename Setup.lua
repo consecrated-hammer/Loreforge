@@ -52,6 +52,17 @@ function ns.BuildSetup(host)
             .. (issue and ('\n' .. issue) or ''))
         T.Text(count, issue and 'danger' or 'muted')
         setup.start:SetEnabled(not issue)
+        if setup.lobby then
+            local party = ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available()
+            setup.lobby:SetShown(party == true)
+            setup.start:SetText(party and (not ns.Party.host or ns.Party.host.started) and 'Open Party lobby' or 'Start game')
+            if setup.closeLobby then setup.closeLobby:SetShown(party and ns.Party.host and not ns.Party.host.started or false) end
+            setup.lobby:SetText(ns.Party and ns.Party.host and 'Invite new arrivals' or 'Open Party lobby')
+            if party and ns.Party.host then
+                local joined = 0; for _ in pairs(ns.Party.host.joined) do joined = joined + 1 end
+                count:SetText(count:GetText() .. ' | ' .. joined .. ' joined in addon')
+            end
+        end
         if setup.rosterButton then setup.rosterButton:SetText(ns.db.channel == 'GUILD' and 'Refresh guild roster' or 'Use current group') end
     end
     left.hcRefreshAll = function() ns.setupError = nil; refresh(left) end
@@ -108,7 +119,11 @@ function ns.BuildSetup(host)
     end
     setup.start = UI.Button(setup, 180, 30, 'primary')
     setup.start:SetPoint('BOTTOMLEFT', 18, 18); setup.start:SetText('Start game')
-    setup.start:SetScript('OnClick', ns.StartGame)
+    setup.start:SetScript('OnClick', function()
+        if ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available() and (not ns.Party.host or ns.Party.host.started) then
+            ns.Party.OpenLobby()
+        else ns.StartGame() end
+    end)
     local roster = UI.Button(setup, 180, 30)
     roster:SetPoint('BOTTOMLEFT', 214, 18); roster:SetText('Refresh guild roster')
     roster:SetScript('OnClick', function()
@@ -120,6 +135,14 @@ function ns.BuildSetup(host)
         setup.Refresh()
     end)
     setup.rosterButton = roster
+    local lobby = UI.Button(setup, 180, 30)
+    lobby:SetPoint('BOTTOMLEFT', 410, 18); lobby:SetText('Open Party lobby')
+    lobby:SetScript('OnClick', function() if ns.Party then ns.Party.OpenLobby() end end)
+    setup.lobby = lobby
+    local closeLobby=UI.Button(setup,132,30)
+    closeLobby:SetPoint('BOTTOMLEFT',606,18);closeLobby:SetText('Close lobby')
+    closeLobby:SetScript('OnClick',function() if ns.Party then ns.Party.CloseLobby() end end)
+    setup.closeLobby=closeLobby
     setup.Refresh = function() refresh(left); refresh(right) end
     setup:SetScript('OnHide', function()
         for _, panel in ipairs({ left, right }) do

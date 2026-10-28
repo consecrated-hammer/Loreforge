@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.2.0-beta] - 2026-10-29
+
+- Party player beta: opt-in invitations, joined-player question buttons, host-confirmed answers, reveals, streaks and shared scores.
+- A bounded presentation step keeps addon and chat answers behind the same opening announcement, with a chat fallback for delayed clients.
+- Completed matches sync to joined clients with duplicate-safe history, final standings and per-round scores.
+- This implementation is currently limited to Retail home Parties outside instances and combat. Full in-game acceptance is still outstanding.
+
+Both host and addon participants need 0.2.0-beta. Choose Party output, click
+Open Party lobby, let players join, then click Start game. Other players can
+still answer 1-4 in Party chat. The new full-game interface needs in-game
+acceptance; the existing paired-client proof covers the transport probe.
+
 ## [0.1.1-beta] - 2026-10-28
 
 - The development transport probe now uses ChatThrottleLib throttling and LibDeflate compression/encoding, with a new wire prefix. Both test players need this build.

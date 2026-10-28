@@ -7,8 +7,9 @@ The libraries are unmodified. AceComm isn't included because its licence's
 standalone redistribution restriction raises a GPLv3 compatibility issue.
 Loreforge's existing bounded framing handles the multi-message question.
 
-`Transport.lua` is consumed only by `Probe.lua`. It doesn't implement the
-player UI or shared game history. Both players need the new build; dev11 and
+`Transport.lua` retains its probe singleton and can create isolated instances.
+The 0.2.0-beta [Party client](party-client.md) uses a separate instance,
+prefix and rolling budgets; the limits below describe the original probe. Both players need the new build; dev11 and
 the public 0.1.0-beta probe use a different wire format. Prefix `LoreforgeP2`
 separates them. Silent old clients don't count as a successful test.
 
@@ -70,4 +71,5 @@ These are offline tests. Use check 15 in [client checks](client-checks.md) for
 a consenting two-player run on each client and distribution. API success,
 self-echo and these tests do not prove delivery in WoW. Start with open-world
 Party; test premade instances, queued Instance, Raid, Guild and Forever
-separately. The player UI remains deferred until those results are available.
+separately. The Party player implementation now follows the successful paired
+Retail probe. Its full-game verification remains separate.

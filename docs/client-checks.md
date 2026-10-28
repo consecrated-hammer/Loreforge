@@ -43,3 +43,30 @@ report says prefix `LoreforgeP2`, ChatThrottleLib 32 and LibDeflate
 changes and restriction events stop the probe. Re-arm after those changes.
 Capture both reports, including CTL results and actual remote acknowledgments.
 A self-echo or successful send alone isn't a pass. See [transport](transport.md).
+
+## Party player acceptance (new local implementation)
+
+Use the same new build on a host and another Party member, plus one chat-only
+player, in the Retail open world. The released 0.1.1-beta probe alone does not
+include this interface.
+
+1. Open host setup. Confirm no invitation appears until **Open Party lobby**.
+2. On the other client, decline once, then test a fresh lobby and join. Confirm
+   the host's joined count updates and joining is confirmed before play.
+3. Start a two-round match. Use **I'm ready**. Confirm settings, host name,
+   readiness and participant names are correct, including cross-realm names.
+4. Check full question/choice wrapping and scrolling at normal and small scales.
+   Buttons stay disabled during presentation and open after the chat notice.
+5. Race a click against a chat answer from the same player. Only the first
+   host-accepted choice locks. Retry never changes it. Let one answer time out.
+6. Check the correct answer reveal, your selected answer, streak changes, both
+   players' scores, chat-only participation and tied final winners.
+7. Hide/restore, pause/resume, change the roster and briefly enter combat.
+   Confirm old attempts cannot score and fallback/recovery messages are clear.
+8. Complete the final chat announcements. Check the host and joined player's
+   saved match have identical final and per-round standings. Reload the player
+   and reopen history; catch-up must not duplicate the match or legacy records.
+9. Stop another game during final output. It must not create a completed entry.
+
+Record client build and paired observations. Instance/Raid/Guild/Forever player
+transport and UI are separate checks, with no support claim from this test.

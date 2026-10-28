@@ -7,7 +7,7 @@ HC:Init({
     icon = "Interface\\Icons\\INV_Misc_Book_09", db = function() return ns.db end,
     resetSettings = function()
         local records, serial = ns.db.records, ns.db.gameSerial
-        LoreforgeDB = { records = records, gameSerial = serial }
+        LoreforgeDB = { records = records, gameSerial = serial, matches = ns.db.matches, partySerial = ns.db.partySerial, lastParty = ns.db.lastParty, pendingMatches = ns.db.pendingMatches }
         ReloadUI()
     end,
     clientLabel = function() return ns.era == "classic" and "WoW Forever" or "Retail" end,
@@ -23,12 +23,18 @@ HC:Init({
         "Have you considered reading the quest text?", "The real loot was knowing who dropped it.",
         "Someone in this party has memorised every boss line.", "The Headless Horseman has requested a rematch." } },
     railButton = { label = "Host game", run = function() ns.OpenHost() end },
-    minimap = { leftClick = function() ns.OpenHost() end, leftClickLabel = "Host game",
+    minimap = { leftClick = function() ns.OpenMain() end, leftClickLabel = "Host or joined match",
         rightClick = function() HC.Settings:Show() end, rightClickLabel = "settings" },
 })
 -- Loreforge's main action is the game table; settings remain a separate command.
-HC.Commands.byName[""].help = "Open Host game"
-HC.Commands.byName[""].run = function() ns.OpenHost() end
+HC.Commands.byName[""].help = "Open Host game or joined match"
+HC.Commands.byName[""].run = function() ns.OpenMain() end
+function ns.OpenMain()
+    if ns.Party and ns.Party.client and ns.Party.client.joined and ns.Party.client.model.state~="finished"
+        and ns.Party.client.model.state~="stopped" and ns.Player then
+        ns.Party.viewHistory=false;ns.Player.Render(ns.Party.client.model);ns.Player.Show()
+    else ns.OpenHost() end
+end
 local loginMessage = HC.LoginMessage
 HC.LoginMessage = function(coloured) return (loginMessage(coloured):gsub(" for settings,", " for Host game,")) end
 HC.Commands:Add({ name = "settings", section = "Core", help = "Open general addon settings", run = function() HC.Settings:Show() end })
@@ -63,6 +69,8 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     ns.game = ns.Game.New(HC.QUIZ, GetTime, nil, ns.db.records[ns.era])
     ns.InitialiseHost()
     ns.Probe.Initialise()
+    ns.Party.Initialise()
+    ns.Player.Initialise()
     HC:Start()
     self:UnregisterEvent("ADDON_LOADED")
 end)
