@@ -82,7 +82,7 @@ function Game:Active()
 end
 
 function Game:Enqueue(text)
-    local prefix = "[LF G" .. self.serial .. "] "
+    local prefix = "[Loreforge #" .. self.serial .. "] "
     for _, line in ipairs(Game.Messages(text, prefix)) do self.queue[#self.queue + 1] = line end
 end
 
@@ -116,7 +116,7 @@ function Game:Start(config, era, roster, serial)
         idleLimit = config.idleLimit == nil and 3 or config.idleLimit,
         readyCheck = config.readyCheck ~= false, readySeconds = config.readySeconds or 10,
         hostParticipates = config.hostParticipates == true, localOnly = config.localOnly == true,
-        manualSend = config.manualSend == true }
+        manualSend = config.manualSend == true, compactChoices = config.compactChoices ~= false }
     self.players, self.run, self.serial = players, {}, serial
     self.presentationGate, self.presentationFrom = false, nil
     for _ = 1, count do
@@ -139,10 +139,23 @@ function Game:Start(config, era, roster, serial)
     self.answers, self.deadline, self.reason, self.resumePhase = {}, nil, nil, nil
     self.queue, self.cursor, self.pending = {}, 1, nil
     self.rulesConfirmed = false
-    self.rulesText = config.rounds .. " rounds x " .. config.perRound .. " questions."
+    self.rulesText = Game.RulesText(config)
     if self.config.readyCheck then self:ReadyCheck()
     else self:Enqueue(self.rulesText .. " Answer 1-4."); self:Question() end
     return true
+end
+
+-- Opening line: game length plus a short category summary, so chat players
+-- know what they're in for without a second line.
+function Game.RulesText(config)
+    local names, total = {}, #Game.CATEGORIES
+    for _, category in ipairs(Game.CATEGORIES) do
+        if type(config.categories) == "table" and config.categories[category[1]] then names[#names + 1] = category[2] end
+    end
+    local topics = #names == total and "all categories" or #names > 3 and (#names .. " categories")
+        or table.concat(names, ", ")
+    return (config.rounds == 1 and "1 round" or (config.rounds .. " rounds")) .. " x " .. config.perRound
+        .. (config.perRound == 1 and " question" or " questions") .. (topics ~= "" and (", " .. topics) or "") .. "."
 end
 
 function Game:ReadyCheck()
@@ -200,7 +213,16 @@ function Game:Question()
     self.questionCursor = #self.queue + 1
     self:Enqueue("Round " .. self.round .. ", question " .. q .. " (" .. self.config.seconds .. "s)"
         .. (self.attempt > 1 and " (restarted)" or "") .. ": " .. item.text)
-    for i, text in ipairs(item.choices) do self:Enqueue(i .. ") " .. text) end
+    -- Compact games post every choice on one line; every shipped question
+    -- fits, but anything that would split falls back to one line each.
+    local parts = {}
+    for i, text in ipairs(item.choices) do parts[i] = i .. ") " .. text end
+    local line = table.concat(parts, "   ")
+    if self.config.compactChoices and #Game.Messages(line, "[Loreforge #" .. self.serial .. "] ") == 1 then
+        self:Enqueue(line)
+    else
+        for _, text in ipairs(parts) do self:Enqueue(text) end
+    end
 end
 
 function Game:NextMessage()
@@ -334,7 +356,8 @@ function Game:Close()
         self.idlePause = true
         self:Enqueue("No replies for " .. self.emptyQuestions .. " questions; automatic play will pause after these results.")
     end
-    if self.index % self.config.perRound == 0 then self:Results(true) end
+    -- A one-round game's round result would repeat the final result.
+    if self.index % self.config.perRound == 0 and self.config.rounds > 1 then self:Results(true) end
     if self.onEvent then self.onEvent("reveal") end
     if self.index == #self.run then
         self:Results(false)
@@ -354,7 +377,7 @@ function Game:PrepareRecords()
     end
     local standings = self:Standings(false)
     local best = standings[1] and standings[1].total or 0
-    for _, player in ipairs(standings) do
+    for place, player in ipairs(standings) do
         local record = records[player.key]
         if type(record) ~= "table" then record = {}; records[player.key] = record end
         local function previous(key)
@@ -368,7 +391,9 @@ function Game:PrepareRecords()
         record.wins = previous("wins") + ((best > 0 and player.total == best) and 1 or 0)
         record.bestStreak = math.max(previous("bestStreak"), player.bestStreak)
         record.lastGame = self.serial
-        if self.config.replayRecords then
+        -- Only the top three are announced; big channels don't need a line
+        -- per player, and the full table stays in the addon.
+        if self.config.replayRecords and place <= 3 then
             self:Enqueue(player.name .. ": " .. player.total .. "/" .. #self.run .. " correct, "
                 .. player.answered .. " answered, best streak " .. player.bestStreak .. ". Records: "
                 .. record.games .. " games, " .. record.wins .. " wins, " .. record.correct

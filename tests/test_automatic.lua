@@ -37,6 +37,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
         ns.db.channel, ns.db.rounds, ns.db.perRound, ns.db.seconds = channel, 2, 2, 5
         ns.db.readyCheck = false
+        ns.db.hostParticipates = false -- these games score other players only
         ns.db.questionGap, ns.db.autoMode = 3, false
         local event = ({ PARTY = 'CHAT_MSG_PARTY_LEADER', RAID = 'CHAT_MSG_RAID_LEADER', INSTANCE_CHAT = 'CHAT_MSG_INSTANCE_CHAT_LEADER', GUILD = 'CHAT_MSG_GUILD' })[channel]
         local function chat(text, sender, destination)
@@ -200,12 +201,12 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
                 if ns.game.phase == 'finished' then break end
                 if ns.game.config.manualSend then manualFlush() end
                 if ns.game.phase == 'ready' then
-                    ns.hostFrame.answerButtons[1].scripts.OnClick()
-                    eq(#ns.game:ReadyPlayers(), 1, 'Game Master can check in by button')
+                    ns.hostFrame.readyButton.scripts.OnClick()
+                    eq(#ns.game:ReadyPlayers(), 1, 'host can check in by button')
                     ns.hostFrame.next.scripts.OnClick()
                 elseif ns.game.phase == 'accepting' then
                     ns.hostFrame.answerButtons[ns.game.run[1].correct].scripts.OnClick()
-                    assert(ns.hostFrame.preview:GetText():find('Answer locked:', 1, true), 'click gives immediate locked feedback')
+                    assert(ns.hostFrame.preview:GetText():find('Your answer is locked:', 1, true), 'click gives immediate locked feedback')
                     eq(ns.hostFrame.answerButtons[ns.game.run[1].correct].enabled, false, 'first answer disables further choices')
                     assert(not ns.SubmitHostAnswer(tostring(ns.game.run[1].correct % 4 + 1)), 'Game Master cannot change a locked answer')
                 end

@@ -27,7 +27,7 @@ for _, forever in ipairs({ false, true }) do
     RegisterStateDriver, UnregisterStateDriver = function() end, function() end
     assert(loadfile('tests/transport-libs.lua'))()()
     local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
-    for _, file in ipairs({'Transport.lua','Codec.lua','PartyBus.lua','Game.lua','Core.lua','Setup.lua','Host.lua','Options.lua','Party.lua','Player.lua','Probe.lua'}) do assert(loadfile(file))('Loreforge', ns) end
+    for _, file in ipairs({'Transport.lua','Codec.lua','PartyBus.lua','Game.lua','Core.lua','Setup.lua','History.lua','Host.lua','Options.lua','Party.lua','Player.lua','Probe.lua'}) do assert(loadfile(file))('Loreforge', ns) end
     local loader
     for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
     loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
@@ -48,7 +48,8 @@ for _, forever in ipairs({ false, true }) do
     ns.db.channel = 'PARTY'
     ns.StartGame()
     eq(ns.game.phase, 'setup', 'bad destination keeps setup visible')
-    assert(ns.hostFrame.setup.pool:GetText():find('Use Instance', 1, true), 'setup error is visible in window')
+    assert(ns.hostFrame.setup.banner.text:GetText():find('Use Instance', 1, true), 'setup error is visible in window')
+    assert(ns.hostFrame.setup.rosterButton:IsShown(), 'the fix sits beside the problem')
     ns.hostFrame.setup.rosterButton.scripts.OnClick()
     eq(ns.db.channel, 'INSTANCE_CHAT', 'Use current group fixes destination')
     ns.db.rounds, ns.db.perRound, ns.db.seconds = 2, 1, 5
@@ -72,7 +73,7 @@ for _, forever in ipairs({ false, true }) do
         error('never reached ' .. phase .. '; actual ' .. ns.game.phase)
     end
     ns.StartGame()
-    ns.hostFrame.answerButtons[1].scripts.OnClick()
+    ns.hostFrame.readyButton.scripts.OnClick()
     eq(#ns.game:ReadyPlayers(), 1, 'Game Master ready button works before the notice finishes')
     chat("I'm ready!", 'Different Chat Formatting', 'party1-GUID')
     eq(#ns.game:ReadyPlayers(), 2, 'GUID fallback accepts natural ready replies despite different sender formatting')
@@ -97,7 +98,7 @@ for _, forever in ipairs({ false, true }) do
     blocked = true
     untilPhase('paused')
     eq(ns.hostFrame.next:GetText(), 'Resume game', 'failed send exposes recovery action')
-    eq(ns.hostFrame.mode:GetText(), 'Retry auto send', 'automatic delivery can be retried explicitly')
+    eq(ns.hostFrame.mode:GetText(), 'Retry automatic posting', 'automatic delivery can be retried explicitly')
     assert(ns.game.pending, 'timed-out line stays available for direct human confirmation')
     assert(ns.hostFrame.recover:IsShown(), 'paused timeout exposes visible-line confirmation without a resend')
     ns.hostFrame.recover.scripts.OnClick()

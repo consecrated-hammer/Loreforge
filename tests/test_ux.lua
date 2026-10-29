@@ -1,0 +1,281 @@
+package.path = './tests/hammercore/?.lua;' .. package.path
+local wow = require('wow')
+local function eq(a, b, why) assert(a == b, why .. ': ' .. tostring(a) .. ' ~= ' .. tostring(b)) end
+
+-- The 0.3 UX pass: setup presets and steppers, practice, the lobby guard,
+-- history, the Hall of Fame, interrupted games, chat output, the live host
+-- table and the player window's new cues.
+
+local now, members, grouped = 100, 2, true
+local sounds, sent = {}, {}
+local function load(db)
+    wow.Install({ Loreforge = { Version = '0.3.0' } })
+    LoreforgeDB = db
+    GetTime = function() return now end
+    GetServerTime = function() return 1800000000 + math.floor(now) end
+    InCombatLockdown = function() return false end
+    GetBuildInfo = function() return '', '', '', 120105 end
+    WOW_PROJECT_ID, WOW_PROJECT_MAINLINE = 1, 1
+    GetNormalizedRealmName = function() return 'Realm' end
+    local names = { player = 'Host', party1 = 'Guest', party2 = 'Third' }
+    UnitFullName = function(unit) if names[unit] then return names[unit], 'Realm' end end
+    GetUnitName = function(unit) return names[unit] end
+    UnitGUID = function(unit) return names[unit] and (unit .. '-GUID') end
+    IsInGroup = function(category) return grouped and category == 1 end
+    IsInRaid = function() return false end
+    IsInInstance = function() return false end
+    GetNumSubgroupMembers = function() return grouped and members or 0 end
+    GetNumGroupMembers = function() return grouped and members + 1 or 0 end
+    RegisterStateDriver, UnregisterStateDriver = function() end, function() end
+    PlaySound = function(id) sounds[#sounds + 1] = id end
+    GetBindingKey = function(name) return name == 'LOREFORGE_ANSWER2' and 'F2' or nil end
+    date = os.date
+    assert(loadfile('tests/transport-libs.lua'))()()
+    local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
+    for line in assert(io.open('Loreforge.toc')):read('*a'):gmatch('[^\r\n]+') do
+        if line:match('^[%w]+%.lua$') then assert(loadfile(line))('Loreforge', ns) end
+    end
+    local loader
+    for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
+    loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
+    sent = {}
+    C_ChatInfo.InChatMessagingLockdown = function() return false end
+    C_ChatInfo.SendChatMessage = function(text, channel)
+        sent[#sent + 1] = { text = text, channel = channel }
+        ns.events.scripts.OnEvent(ns.events, 'CHAT_MSG_PARTY', text, 'Host-Realm', nil, nil, nil, nil, nil, nil, nil, nil, nil, 'player-GUID')
+    end
+    return ns
+end
+local function tick(ns, seconds) now = now + seconds; ns.events.scripts.OnUpdate(ns.events, seconds) end
+local function chat(ns, text, sender, guid)
+    ns.events.scripts.OnEvent(ns.events, 'CHAT_MSG_PARTY', text, sender, nil, nil, nil, nil, nil, nil, nil, nil, nil, guid)
+end
+
+-- ── Engine: chat output ──
+local ns = load(nil)
+local Game = ns.Game
+eq(Game.RulesText({ rounds = 1, perRound = 5, categories = { lore = true, murlocs = true } }),
+    '1 round x 5 questions, General lore, Murlocs and Mischief.', 'opening line names a few categories')
+local all = {}
+for _, c in ipairs(Game.CATEGORIES) do all[c[1]] = true end
+eq(Game.RulesText({ rounds = 3, perRound = 5, categories = all }), '3 rounds x 5 questions, all categories.', 'all categories')
+
+local bank = {}
+for i = 1, 8 do bank[i] = { 'Question ' .. i, 'Right', 'Wrong A', 'Wrong B', 'Wrong C', categories = { 'lore' }, id = 'q' .. i } end
+local clock = 0
+local g = Game.New(bank, function() return clock end, function(n) return 1 end, {})
+local roster = {}
+for i, name in ipairs({ 'A', 'B', 'C', 'D', 'E' }) do roster[i] = { key = name:lower(), name = name } end
+assert(g:Start({ rounds = 1, perRound = 1, seconds = 5, channel = 'PARTY', readyCheck = false, difficulty = 'mixed',
+    categories = { lore = true } }, 'retail', roster, 7))
+local function flush()
+    while g:NextMessage() do g:Sent(); g:Echo(g.pending.text) end
+end
+flush()
+for _, p in ipairs(roster) do g:Answer(p.key, tostring(g.run[1].correct)) end
+clock = 10; g:Tick(); flush()
+eq(g.phase, 'finished', 'one-round game finishes')
+local roundLines, recordLines = 0, 0
+for _, line in ipairs(g.queue) do
+    if line:find('Round 1 winner', 1, true) then roundLines = roundLines + 1 end
+end
+-- The queue is cleared once flushed; replay the announcement order instead.
+local g2 = Game.New(bank, function() return clock end, function() return 1 end, {})
+clock = 0
+assert(g2:Start({ rounds = 1, perRound = 1, seconds = 5, channel = 'PARTY', readyCheck = false, difficulty = 'mixed',
+    categories = { lore = true } }, 'retail', roster, 8))
+while g2:NextMessage() do g2:Sent(); g2:Echo(g2.pending.text) end
+for _, p in ipairs(roster) do g2:Answer(p.key, tostring(g2.run[1].correct)) end
+clock = 10; g2:Tick()
+for _, line in ipairs(g2.queue) do
+    if line:find('Round 1', 1, true) then roundLines = roundLines + 1 end
+    if line:find('Records:', 1, true) then recordLines = recordLines + 1 end
+end
+eq(roundLines, 0, 'a one-round game skips the round result')
+eq(recordLines, 3, 'only the top three records are announced')
+local five = 0
+for _ in pairs(g2.pendingRecords) do five = five + 1 end
+eq(five, 5, 'every player still gets a saved record')
+
+-- ── Upgrade: old wider settings are clamped, not reset ──
+ns = load({ rounds = 20, perRound = 50, seconds = 120, questionGap = 3 })
+eq(ns.db.rounds, 10, 'rounds clamp to the new maximum')
+eq(ns.db.perRound, 15, 'questions per round clamp')
+eq(ns.db.seconds, 60, 'answer time clamps')
+eq(ns.db.questionGap, 3, 'in-range values are kept')
+
+-- ── Setup ──
+ns = load(nil)
+eq(ns.db.hostParticipates, true, 'the host plays along by default')
+eq(ns.db.compactChoices, true, 'two-line questions by default')
+ns.OpenHost()
+local f = ns.hostFrame
+local setup = f.setup
+assert(setup:IsShown(), 'Play opens on setup')
+local registered = false
+for _, name in ipairs(UISpecialFrames) do if name == 'LoreforgeHostTable' then registered = true end end
+assert(registered, 'Escape closes the main window')
+wow.Click(setup.presets[3])
+eq(ns.db.rounds, 5, 'Marathon sets rounds'); eq(ns.db.perRound, 10, 'Marathon sets questions')
+assert(f.tags:GetText():find('50 questions', 1, true), 'summary shows the question count')
+assert(f.tags:GetText():find('about %d+ minutes'), 'summary estimates the length')
+wow.Click(setup.presets[1])
+eq(ns.db.rounds, 1, 'Quick sets one round')
+eq(setup.start:GetText(), 'Start game', 'a group without Party lobby support starts directly')
+eq(setup.practice:IsShown(), true, 'practice is offered beside the start')
+
+-- Category counts, None and the blocking banner.
+local lore = setup.categoryRows.lore
+assert(tonumber(lore.count:GetText()) > 0, 'categories show their question counts')
+local none
+for _, frame in ipairs(wow.frames) do if rawget(frame, 'text') == 'None' then none = frame end end
+wow.Click(none)
+eq(setup.start.enabled, false, 'no categories blocks the start')
+assert(setup.banner:IsShown() and setup.banner.text:GetText():find('Pick more categories', 1, true), 'the banner says why')
+ns.db.categories.lore = true; setup.Refresh()
+
+-- Steppers clamp to the setup range.
+ns.db.seconds = 60; setup.Refresh()
+local secondsRow
+for _, frame in ipairs(wow.frames) do if rawget(frame, 'value') and frame.plus and frame.value.text == '60s' then secondsRow = frame end end
+assert(secondsRow, 'answer time shows seconds')
+eq(secondsRow.plus.enabled, false, 'the top of the range disables plus')
+wow.Click(secondsRow.minus)
+eq(ns.db.seconds, 55, 'minus steps answer time by five')
+
+-- Practice runs locally while grouped, for the host only.
+ns.StartGame(true)
+eq(ns.game.config.localOnly, true, 'practice never posts to chat')
+local count = 0
+for _ in pairs(ns.game.players) do count = count + 1 end
+eq(count, 1, 'practice is for the host alone')
+eq(ns.db.activeGame, nil, 'practice is not tracked as interruptible')
+ns.game:Stop(); ns.RefreshHost()
+
+-- Output change while a lobby is open asks first.
+local closed = false
+ns.Party.host = { started = false, joined = {}, expires = now + 30 }
+ns.Party.CloseLobby = function() closed = true; ns.Party.host = nil end
+setup.Refresh()
+eq(setup.lobbyPanel:IsShown(), true, 'an open lobby replaces the categories')
+assert(setup.lobbyPanel.timer:GetText():find('Closes in 0:30', 1, true), 'the lobby shows its timer')
+setup.SetOutput('GUILD')
+eq(wow.popups[#wow.popups], 'LOREFORGE_CLOSE_LOBBY', 'switching output with a lobby open asks first')
+eq(ns.db.channel, 'PARTY', 'nothing changes until confirmed')
+StaticPopupDialogs.LOREFORGE_CLOSE_LOBBY.OnAccept()
+eq(closed, true, 'confirming closes the lobby'); eq(ns.db.channel, 'GUILD', 'and switches output')
+setup.SetOutput('PARTY')
+ns.Party.host = nil; setup.Refresh()
+
+-- ── Live host table ──
+ns.db.readyCheck, ns.db.rounds, ns.db.perRound, ns.db.seconds = false, 1, 2, 20
+ns.db.autoMode = false
+ns.StartGame()
+eq(ns.game.config.compactChoices, true, 'compact choices reach the game')
+for _ = 1, 40 do if ns.game.phase == 'accepting' then break end; tick(ns, 0.5) end
+eq(ns.game.phase, 'accepting', 'the question opens')
+local questionLines = 0
+for _, line in ipairs(sent) do if line.text:find('1) ', 1, true) then questionLines = questionLines + 1 end end
+eq(questionLines, 1, 'all four choices go out on one line')
+assert(ns.db.activeGame and ns.db.activeGame.done == 0, 'a live game is tracked for interruption')
+assert(f.timer:IsShown(), 'the host sees a timer bar')
+eq(f.answerButtons[2].badge:GetText(), 'Key F2', 'bound answer keys are shown')
+eq(f.status:GetText(), 'Answers open', 'the phase is the heading')
+assert(f.tags:GetText():find('Question 1 of 2', 1, true), 'progress uses the round numbering')
+LoreforgeAnswer(ns.game.run[1].correct)
+local host = ns.Person('player')
+eq(ns.game.answers[host.key], ns.game.run[1].correct, 'the answer key binding answers for the host')
+chat(ns, '1', 'Guest-Realm', 'party1-GUID')
+assert(f.scoreTitle:GetText():find('2 of 3 answered', 1, true), 'the board counts answers')
+now = now + 16; f.timer:SetTime(4, 20)
+eq(f.timer.count.textColour[1], ns.HammerCore.Theme.Colour('danger')[1], 'the last seconds turn red')
+for _ = 1, 80 do if ns.game.phase == 'between' then break end; tick(ns, 0.5) end
+eq(ns.game.phase, 'between', 'results posted')
+eq(ns.db.activeGame.done, 1, 'tracking follows each reveal')
+eq(f.answerButtons[ns.game.run[1].correct].tint:IsShown(), true, 'the correct answer is tinted')
+wow.Click(f.pacingAuto)
+eq(ns.game.config.autoMode, true, 'the pacing switch changes mode')
+wow.Click(f.pacingHost)
+eq(ns.game.config.autoMode, false, 'and back')
+
+-- A line that never echoes raises one banner with both choices.
+local echo = C_ChatInfo.SendChatMessage
+C_ChatInfo.SendChatMessage = function(text, channel) sent[#sent + 1] = { text = text, channel = channel } end
+ns.hostFrame.next.scripts.OnClick()
+for _ = 1, 40 do if ns.game.phase == 'paused' then break end; tick(ns, 0.5) end
+eq(ns.game.phase, 'paused', 'a missing echo pauses')
+assert(f.banner:IsShown() and f.banner.text:GetText():find('Did this line appear', 1, true), 'one banner asks the host')
+assert(f.recover:IsShown() and f.retry:IsShown(), 'both answers are on the banner')
+wow.Click(f.retry)
+eq(ns.game.pending, nil, 'Post again prepares the line again')
+assert(f.send:IsShown() and f.send:GetAttribute('macrotext'), 'the line is ready to post by hand')
+C_ChatInfo.SendChatMessage = echo
+ns.game:Stop(); ns.RefreshHost()
+
+-- ── Interrupted game ──
+local saved = LoreforgeDB
+saved.activeGame = { era = 'retail', serial = 9, channel = 'PARTY', done = 4, total = 15, rows = { { name = 'Guest', total = 3 } } }
+ns = load(saved)
+ns.OpenHost()
+f = ns.hostFrame
+assert(f.setup.banner:IsShown() and f.setup.banner.text:GetText():find('after question 4 of 15', 1, true), 'setup reports the interrupted game')
+wow.Click(f.setup.banner.first)
+assert(sent[1] and sent[1].text:find('Game interrupted after question 4 of 15. Standings: Guest 3.', 1, true), 'standings are posted once')
+eq(ns.db.activeGame, nil, 'posting clears the notice')
+eq(f.setup.banner:IsShown(), false, 'the banner goes')
+
+-- ── History and Hall of Fame ──
+ns.db.readyCheck, ns.db.rounds, ns.db.perRound, ns.db.seconds = false, 1, 1, 5
+ns.db.autoMode, ns.db.replayRecords = true, true
+ns.StartGame()
+for _ = 1, 200 do
+    if ns.game.phase == 'finished' then break end
+    if ns.game.phase == 'accepting' and not ns.game.answers['guest-realm'] then chat(ns, tostring(ns.game.run[1].correct), 'Guest-Realm', 'party1-GUID') end
+    tick(ns, 0.5)
+end
+eq(ns.game.phase, 'finished', 'a short game finishes')
+eq(#ns.db.games.retail, 1, 'finished games are kept')
+eq(ns.db.games.retail[1].rows[1].name, 'Guest-Realm', 'with their standings')
+ns.Party.SavedResults = function()
+    return { { id = 'p1', host = 'Other-Realm', date = 1700000000, config = { rounds = 1, perRound = 3 },
+        rows = { { key = 'host-realm', name = 'Host-Realm', total = 2, rank = 1 } } } }
+end
+ns.OpenHost('history')
+assert(f.history:IsShown() and not f.setup:IsShown(), 'History replaces Play')
+eq(#ns.HistoryEntries(), 2, 'hosted and Party games share one list')
+assert(f.history.entries[1].sub:GetText():find('Winner: Guest-Realm', 1, true), 'the newest game first')
+wow.Click(f.history.entries[2])
+assert(f.history.detail.rows[1].name:GetText():find('(you)', 1, true), 'the detail marks you')
+ns.db.records.retail['zed-realm'] = { name = 'Zed-Realm', games = 5, wins = 4, correct = 9, answered = 10, bestStreak = 3 }
+ns.OpenHost('records')
+assert(f.records:IsShown(), 'Hall of Fame tab')
+eq(f.records.rows[1].cells[1]:GetText(), '1.  Zed-Realm', 'most wins first')
+eq(f.records.rows[1].cells[5]:GetText(), '90%', 'accuracy is shown')
+
+-- ── Player window ──
+local P = ns.Player
+local config = { rounds = 2, perRound = 3, seconds = 20, difficulty = 'mixed', categories = 'Lore', readyCheck = false }
+local rows = { { key = 'host-realm', name = 'Host-Realm', total = 3, round = 1, streak = 0, rank = 1 },
+    { key = 'guest-realm', name = 'Guest-Realm', total = 1, round = 0, streak = 0, rank = 2 } }
+local function model(state, extra)
+    local m = { id = 'pg', state = state, host = 'Guest-Realm', config = config, joined = true, me = 'host-realm', rows = rows,
+        index = 5, round = 2, attempt = 1, totalQuestions = 6, question = 'Q?', choices = { 'a', 'b', 'c', 'd' } }
+    for k, v in pairs(extra or {}) do m[k] = v end
+    return m
+end
+sounds = {}
+P.Render(model('invitation', { id = 'inv', joined = false }))
+eq(P.frame.secondary:GetText(), 'Decline', 'invitations say Decline')
+eq(sounds[#sounds], 880, 'an invitation plays a sound')
+P.Render(model('accepting', { deadline = now + 20 }))
+eq(P.frame.position:GetText(), 'Round 2 of 2 · Question 2 of 3', 'the player uses the host numbering')
+eq(sounds[#sounds], 875, 'a new question plays a sound')
+eq(P.frame.answers[2].badge:GetText(), 'Key F2', 'the player sees answer keys')
+P.Render(model('between', { correct = 1, nextIn = 5000, nextAt = now + 5 }))
+eq(P.frame.status:GetText(), 'Next question in 5s.', 'auto-advance counts down')
+P.Render(model('between', { correct = 1, hostPaced = true }))
+eq(P.frame.status:GetText(), 'The host will start the next question.', 'host pacing is explained')
+P.Render(model('finished', { correct = 1, id = 'pg-final' }))
+eq(P.frame.headline:GetText(), 'You won!', 'the finish has a headline')
+eq(sounds[#sounds], 888, 'a win plays the fanfare')
+io.write('loreforge UX tests passed\n')

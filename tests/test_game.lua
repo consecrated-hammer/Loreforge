@@ -27,11 +27,20 @@ eq(#Game.Pool(bank, config, "retail"), 21, "Retail pool")
 local c = { rounds = 1, perRound = 1, seconds = 10, channel = "GUILD", readyCheck = false, difficulty = "hard", categories = { class = true, race = true } }
 eq(#Game.Pool(bank, c, "classic"), 1, "hard class filter")
 eq(Game.Pool(bank, c, "classic")[1][1], "Forever mechanics", "no Retail contamination")
+local separate = new()
+local separateConfig = {}
+for k, v in pairs(config) do separateConfig[k] = v end
+separateConfig.compactChoices = false
+assert(separate:Start(separateConfig, "retail", roster, 1))
+for i = 1, 4 do
+    assert(separate.queue[separate.questionCursor + i]:find('] ' .. i .. ') ', 1, true), 'one numbered option per chat message')
+end
 local g = new()
 assert(g:Start(config, "retail", roster, 1))
-for i = 1, 4 do
-    assert(g.queue[g.questionCursor + i]:find('] ' .. i .. ') ', 1, true), 'one numbered option per chat message')
-end
+eq(#g.queue - g.questionCursor, 1, "compact games post the question and one choices line")
+local compact = g.queue[g.questionCursor + 1]
+for i = 1, 4 do assert(compact:find(i .. ') ', 1, true), 'compact line carries choice ' .. i) end
+assert(compact:find('[Loreforge #1] ', 1, true) == 1, 'readable game tag')
 eq(g:Answer("a-r", "1", "guidA"), false, "answers closed during announcement")
 flush(g)
 eq(g.phase, "accepting", "echo opens answers")

@@ -31,7 +31,7 @@ end
 
 assert(loadfile('tests/transport-libs.lua'))()()
 local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
-for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Setup.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua' }) do
+for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Setup.lua','History.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua' }) do
     assert(loadfile(file))('Loreforge', ns)
 end
 local loader
@@ -77,13 +77,13 @@ P.Render(model('invitation', { joined = false }))
 f = P.frame
 assert(f and f:IsShown(), 'an invitation opens the window')
 eq(f.primary:GetText(), 'Join quiz', 'invitation offers Join quiz')
-eq(f.secondary:GetText(), 'Not now', 'invitation offers Not now')
+eq(f.secondary:GetText(), 'Decline', 'invitation offers Decline')
 assert(not f.leave:IsShown(), 'Leave is not offered before joining')
 assert(f.detail:GetText():find('2 rounds of 3 questions', 1, true), 'invitation shows the game length')
 assert(f.detail:GetText():find('20s to answer', 1, true), 'invitation shows the answer time')
 wow.Click(f.secondary)
-eq(last()[1], 'Decline', 'Not now declines')
-assert(not f:IsShown(), 'Not now closes the invitation')
+eq(last()[1], 'Decline', 'Decline declines')
+assert(not f:IsShown(), 'Decline closes the invitation')
 for _ = 1, 5 do P.Render(model('invitation', { joined = false })) end
 assert(not f:IsShown(), 'a declined invitation never reopens on later renders')
 
@@ -305,7 +305,11 @@ assert(not f:IsShown(), 'Close shuts the history view')
 -- Leave ends window participation for that session.
 P.Render(model('lobby', { id = 'game-3' }))
 assert(f:IsShown(), 'a joined session opens once')
+local before = #calls
 wow.Click(f.leave)
+eq(wow.popups[#wow.popups], 'LOREFORGE_LEAVE_GAME', 'Leave asks first')
+eq(#calls, before, 'nothing is sent until Leave is confirmed')
+StaticPopupDialogs.LOREFORGE_LEAVE_GAME.OnAccept()
 eq(last()[1], 'Leave', 'Leave reports leaving')
 assert(not f:IsShown() and not P.restore:IsShown(), 'Leave closes without a restore button')
 P.Render(model('accepting', { id = 'game-3' }))

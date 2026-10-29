@@ -130,7 +130,13 @@ local function snapshot()
     if state == "ready_announcing" then state = "ready" elseif state == "opening" then state = "presenting" end
     local m = {state = state, host = clean(me().name), config = h.config, index = g.index or 0, round = g.round or 0,
         attempt = g.attempt or 0, totalQuestions = h.config.rounds * h.config.perRound, rows = rows(h.started and g or nil),
-        status = state == "lobby" and "The host is setting up the match." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
+        status = state == "lobby" and "The host is setting up the game." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
+    -- Between questions, players see a countdown with auto-advance, or that
+    -- the host starts the next one. Older clients ignore both fields.
+    if state == "between" and g.config then
+        m.hostPaced = not g.config.autoMode
+        if g.config.autoMode and g.nextQuestionAt then m.nextIn = math.floor(math.max(0, g.nextQuestionAt - now()) * 1000) end
+    end
     if state == "presenting" or state == "accepting" or state == "revealing" or state == "between" or state == "finished" then
         local item = g.run and g.run[g.index]
         if item then
@@ -173,6 +179,8 @@ local function apply(m)
         m.selected, m.locked, m.pending, m.answerStatus = c.model.selected, c.model.locked, c.model.pending, c.model.answerStatus
     end
     if type(m.status)~="string" or #m.status>512 then return end
+    if m.nextIn~=nil and not integer(m.nextIn,0,120000) then return end
+    if m.hostPaced~=nil and type(m.hostPaced)~="boolean" then return end
     m.status=clean(m.status);m.config.categories=clean(m.config.categories)
     if m.correctText~=nil then
         if type(m.correctText)~="string" or #m.correctText>2048 or not m.correct then return end
@@ -186,6 +194,7 @@ local function apply(m)
     if m.state=="stopped" and type(ns.db.pendingMatches)=="table" then ns.db.pendingMatches[c.id]=nil end
     m.id, m.host, m.me, m.joined = c.id, c.hostName, me().key, true
     m.deadline = now() + m.remaining / 1000
+    m.nextAt = m.nextIn and (now() + m.nextIn / 1000) or nil
     m.resultsPending = m.state=="finished" and not history().byId[c.id] or false
     for _, row in ipairs(m.rows) do if row.key == m.me then m.ready = row.ready == true end end
     c.model = m
@@ -248,10 +257,10 @@ function P.GameEvent(event)
 end
 function P.OpenLobby()
     if not P.Available() or ns.db.channel ~= "PARTY" or ns.game:Active() then
-        ns.HammerCore.Print("Addon joining is available in a Retail Party outside instances and combat."); return false
+        ns.HammerCore.Print("Party lobbies work in a Retail Party, outside instances and combat."); return false
     end
     if P.client and P.client.model.state ~= "finished" and P.client.model.state ~= "stopped" then
-        ns.HammerCore.Print("Leave the joined match before hosting."); return false
+        ns.HammerCore.Print("Leave the Party game you joined before hosting."); return false
     end
     if not P.host or P.host.started then
         ns.db.partySerial = (tonumber(ns.db.partySerial) or 0) + 1
@@ -260,9 +269,13 @@ function P.OpenLobby()
     end
     P.host.config, P.host.lastInvite = config(ns.db), now()
     send("invite", P.host.id, "*", {config = P.host.config}, 2, "invite")
-    ns.HammerCore.Print("Party invited. Start the match when everyone has joined; others can still answer in chat.")
+    ns.HammerCore.Print("Party invited. Start the game when everyone has joined; others can still answer in chat.")
     ns.RefreshHost()
     return true
+end
+function P.KeepLobbyOpen()
+    local h=P.host
+    if h and not h.started then h.expires,h.warned=now()+600,nil end
 end
 function P.CloseLobby()
     local h=P.host
@@ -275,7 +288,7 @@ end
 function P.HostStarted()
     local h = P.host
     if not h or h.started or ns.game.config.channel ~= "PARTY" then
-        if h then send("ended",h.id,"*",{reason="The host changed or started another match."},1) end
+        if h then send("ended",h.id,"*",{reason="The host started a different game."},1) end
         P.host = nil; return
     end
     h.started, h.config, h.dirty, h.serial = true, config(ns.db), true, ns.game.serial
@@ -328,7 +341,24 @@ function P.RequestSync()
     local c = P.client
     if c and c.joined then c.syncAt = now(); send("sync", c.id, c.hostKey, {}, 1); render(c.model) end
 end
+-- Decoded saved Party games, newest first, for the History tab.
+function P.SavedResults()
+    local db, list = history(), {}
+    for i = #db.order, 1, -1 do
+        local entry = db.byId[db.order[i]]
+        local result = entry and ns.Codec.Decode(entry.text)
+        if result then list[#list + 1] = result end
+    end
+    return list
+end
 function P.ShowHistory()
+    -- The main window's History tab when it can open; the player window's
+    -- own list in combat.
+    if ns.OpenHost and not (InCombatLockdown and InCombatLockdown()) then
+        if ns.Player then ns.Player.Hide() end
+        ns.OpenHost("history")
+        return
+    end
     if not me() then ns.HammerCore.Print("Player identity is unavailable. Try history again later.");return end
     local db, list = history(), {}
     for i = #db.order, 1, -1 do
@@ -341,7 +371,7 @@ function P.ShowHistory()
         end
     end
     P.viewHistory = true
-    if ns.Player then ns.Player.Render({state="history",history=list,status="Completed matches stored on this client.",activeMatch=P.client and P.client.joined and P.client.model.state~="finished" and P.client.model.state~="stopped" or false}); ns.Player.Show() end
+    if ns.Player then ns.Player.Render({state="history",history=list,status="Finished games saved on this client.",activeMatch=P.client and P.client.joined and P.client.model.state~="finished" and P.client.model.state~="stopped" or false}); ns.Player.Show() end
 end
 function P.OpenHistory(id)
     if not me() then ns.HammerCore.Print("Player identity is unavailable. Try history again later.");return end
@@ -350,7 +380,7 @@ function P.OpenHistory(id)
     if not result then return end
     P.viewHistory = true
     if ns.Player then ns.Player.Render({id=id,state="finished",host=result.host,config=result.config,rows=result.rows,me=me().key,
-        status="Saved results from "..result.host,totalQuestions=result.totalQuestions,rounds=result.rounds,
+        status=type(result.date)=="number" and date and ("Played "..date("%d %b %H:%M",result.date)) or "",totalQuestions=result.totalQuestions,rounds=result.rounds,
         activeMatch=P.client and P.client.joined and P.client.model.state~="finished" and P.client.model.state~="stopped" or false}); ns.Player.Show() end
 end
 local function lockFor(key, choice, reason)
@@ -375,7 +405,7 @@ function P.Receive(m, sender, person)
             if c and c.id==m.id then
                 c.model.state,c.model.rows,c.model.resultsPending="finished",m.result.rows,false
                 c.model.rounds=m.result.rounds
-                c.model.status="Match complete. Results saved on this client."
+                c.model.status="Game complete. Results saved."
                 render(c.model)
             end
         end
@@ -389,7 +419,7 @@ function P.Receive(m, sender, person)
         if c and not c.joined and c.hostKey==sender and c.id~=m.id then declined(c.id) end
         if m.id:sub(1,#sender+1) ~= sender..":" then return end
         if h and h.started and not g:Active() then P.host=nil end
-        P.client = {id=m.id,hostKey=sender,hostName=clean(person.name),seq=0,lastSeen=now(),model={id=m.id,state="invitation",host=clean(person.name),config=m.config,status="Join this Party trivia match?"}}
+        P.client = {id=m.id,hostKey=sender,hostName=clean(person.name),seq=0,lastSeen=now(),model={id=m.id,state="invitation",host=clean(person.name),config=m.config,status="Join this Party quiz?"}}
         P.viewHistory=false
         P.client.model.config.categories=clean(P.client.model.config.categories)
         render(P.client.model)
@@ -478,7 +508,7 @@ function P.Receive(m, sender, person)
             send("stored",c.id,c.hostKey,{},1)
             c.model.state,c.model.rows,c.model.resultsPending="finished",result.rows,false
             c.model.rounds=result.rounds
-            c.model.status="Match complete. Results saved on this client."
+            c.model.status="Game complete. Results saved."
             render(c.model)
         end
     end
@@ -517,12 +547,18 @@ function P.Tick()
     if h and h.started and h.serial ~= g.serial then P.host=nil;h=nil end
     if h and not h.started and ns.db.channel~="PARTY" then
         P.bus.Cancel()
-        send("ended",h.id,"*",{reason="The host changed the match channel."},1)
+        send("ended",h.id,"*",{reason="The host moved the game to another channel."},1)
         P.host=nil;h=nil
     end
+    if h and not h.started and not h.warned and h.expires-now()<=60 then
+        h.warned=true
+        ns.HammerCore.Print("The Party lobby closes in a minute. Start the game or keep the lobby open.")
+    end
     if h and not h.started and now()>=h.expires then
-        send("ended",h.id,"*",{reason="The lobby expired. The host can open another match."},1)
+        send("ended",h.id,"*",{reason="The lobby closed. The host can open another one."},1)
         P.host=nil;h=nil
+        ns.HammerCore.Print("The Party lobby closed after 10 minutes without a start.")
+        ns.RefreshHost()
     end
     if h then
         if next(h.joined) and not h.result and g.phase~="stopped" and now()-(h.heartbeatAt or 0)>5 then
@@ -628,10 +664,10 @@ function P.Initialise()
     if type(last)=="table" and type(last.id)=="string" and type(last.hostKey)=="string" and integer(last.date,0,1000000000000)
         and stamp()-last.date<3600 and roster()[last.hostKey] then
         P.client={id=last.id,hostKey=last.hostKey,hostName=clean(last.hostName),joined=true,seq=0,lastSeen=now(),syncAt=now(),
-            model={id=last.id,state="joining",host=clean(last.hostName),status="Restoring your previous match.",joined=true}}
+            model={id=last.id,state="joining",host=clean(last.hostName),status="Reconnecting to your Party game.",joined=true}}
         P.RequestSync()
     end
 end
-ns.HammerCore.Commands:Add({name="play",section="Trivia",help="Return to your joined Party match",run=function() if P.client then P.viewHistory=false;render(P.client.model);if ns.Player then ns.Player.Show() end else ns.HammerCore.Print("No joined Party match.") end end})
-ns.HammerCore.Commands:Add({name="history",section="Trivia",help="View saved match results",run=P.ShowHistory})
-ns.HammerCore.Commands:Add({name="leave",section="Trivia",help="Leave the joined addon match",run=P.Leave})
+ns.HammerCore.Commands:Add({name="play",section="Trivia",help="Return to the Party game you joined",run=function() if P.client then P.viewHistory=false;render(P.client.model);if ns.Player then ns.Player.Show() end else ns.HammerCore.Print("You haven't joined a Party game.") end end})
+ns.HammerCore.Commands:Add({name="history",section="Trivia",help="View your game history",run=function() P.ShowHistory() end})
+ns.HammerCore.Commands:Add({name="leave",section="Trivia",help="Leave the Party game you joined",run=P.Leave})

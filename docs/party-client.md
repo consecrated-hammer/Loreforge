@@ -11,10 +11,10 @@ chat game. Their addon player UI needs separate transport proof.
 
 ## Host and player flow
 
-The host opens `/lf`, configures Party output and clicks **Open Party lobby**.
+The host opens `/lf`, configures Party output and clicks **Open lobby**.
 That deliberate action sends invitations; opening the setup window alone
 remains private. Party members with the new build can choose **Join quiz** or
-**Not now**. The host sees the joined count and clicks **Start game** when
+**Decline**. The host sees the joined count and clicks **Start game** when
 ready. **Close lobby** cancels an invitation without starting. A player can decline the addon UI and still answer in Party chat.
 
 The ready check uses a separate **I'm ready** action. Joining does not mark a
@@ -83,6 +83,11 @@ or the correct answer before reveal. Recipient fields select the UI that
 handles a message. Party broadcasts are not confidential: other addons in the
 group can read the traffic. A checksum detects corruption, not a dishonest host.
 
+From 0.3.0-beta, a `between` snapshot can also carry `hostPaced` (boolean) and,
+with auto-advance, `nextIn` (milliseconds until the next question, 0 to
+120000). Both are optional: 0.2.0-beta clients ignore them, and 0.3.0-beta
+clients reject a snapshot only if a present field is malformed.
+
 ## Saved results
 
 Only `Game:RecordResults`, after all final chat output is confirmed, can publish
@@ -92,7 +97,7 @@ summaries under a unique host/session ID. Duplicate delivery acknowledges the
 existing entry; conflicting content is rejected. Client receipts confirm
 assignment to SavedVariables, not a proven disk flush.
 
-`/lf history` shows the twenty most recent completed matches on that client.
+`/lf history` opens the History tab, which lists hosted games and the twenty most recent Party games on that client.
 Open an entry for final standings and per-round scores. Received matches are
 separate from legacy player-record aggregates, so duplicate delivery cannot
 increment those counters. Reset settings preserves both record types. The host
@@ -133,5 +138,5 @@ Release follow-up checks also cover recovery when the answer-opening packet is
 lost, using the host's periodic accepting-state update. Fragment positions
 advance only after CTL confirms an actual send; rejected frames have bounded
 retries. Replacing a frame already queued in CTL cancels its partial transfer
-explicitly. Invitations respect Not now for the session; the host's reminder
+explicitly. Invitations respect Decline for the session; the host's reminder
 button invites new arrivals, and stale unanswered invitations expire.

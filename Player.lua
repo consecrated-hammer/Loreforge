@@ -9,7 +9,7 @@ local UI, T = HC.UI, HC.Theme
 local Player = { offered = {}, dismissed = {}, opened = {}, results = {} }
 ns.Player = Player
 
-local WIDTH, PAD, MAX_ROWS, MAX_HISTORY = 500, 16, 5, 8
+local WIDTH, PAD, MAX_ROWS, MAX_HISTORY = 500, 16, 5, 20
 local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 6, 10
 -- The body scrolls between a fixed title bar and a fixed footer of actions.
 local SCROLLBAR, HEADER, FOOTER, MIN_BODY = 10, 44, 48, 120
@@ -68,6 +68,10 @@ end
 local function answerButton(parent, index)
     local b = UI.Button(parent, INNER, 34)
     b:RegisterForClicks("LeftButtonUp")
+    -- Reveal tint behind the text: green for the answer, red for a wrong pick.
+    b.tint = b:CreateTexture(nil, "BORDER")
+    b.tint:SetPoint("TOPLEFT", 1, -1); b.tint:SetPoint("BOTTOMRIGHT", -1, 1)
+    b.tint:Hide()
     b.Text:ClearAllPoints()
     b.Text:SetPoint("TOPLEFT", 12, -8)
     b.Text:SetWidth(INNER - 24 - BADGE)
@@ -94,6 +98,19 @@ local function standingRow(parent)
     return row
 end
 
+local function anchor(frame, invitation)
+    local db = ns.db or {}
+    frame:ClearAllPoints()
+    if invitation then
+        -- Invitations sit near the top of the screen, out of the way.
+        frame:SetPoint("TOP", UIParent, "TOP", 0, -110)
+    elseif type(db.playerX) == "number" and type(db.playerY) == "number" then
+        frame:SetPoint("CENTER", UIParent, "CENTER", db.playerX, db.playerY)
+    else
+        frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+    end
+end
+
 local function savePosition(frame)
     if not ns.db then return end
     local _, _, _, x, y = frame:GetPoint()
@@ -110,15 +127,15 @@ local function create()
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); savePosition(self) end)
+    f:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        -- An invitation sits at its own spot; only the game window's position is kept.
+        if not Player.anchoredInvite then savePosition(self) end
+    end)
     T.Surface(f, "outer", "edge")
     local db = ns.db or {}
     f:SetScale(clampScale(db.playerScale))
-    if type(db.playerX) == "number" and type(db.playerY) == "number" then
-        f:SetPoint("CENTER", UIParent, "CENTER", db.playerX, db.playerY)
-    else
-        f:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
-    end
+    anchor(f, false)
 
     f.title = label(f, "GameFontNormalLarge", "accent")
     f.title:SetPoint("TOPLEFT", PAD, -14)
@@ -153,6 +170,7 @@ local function create()
         if not Player.syncingBar then Player.ScrollTo(value) end
     end)
 
+    f.headline = label(body, "GameFontNormalLarge", "flavour", INNER)
     f.status = label(body, "GameFontHighlight", "text", INNER)
     f.detail = label(body, "GameFontHighlightSmall", "muted", INNER)
     f.timer = CreateFrame("Frame", nil, body)
@@ -201,7 +219,7 @@ local function create()
     f.secondary = button(f, 120, function() Player.Secondary() end)
     f.leave = button(f, 90, function() Player.Leave() end, "danger")
     f.leave:SetText("Leave")
-    UI.AttachHint(f.leave, "Leave", "Stop playing in the window. Answers already locked keep their points.")
+    UI.AttachHint(f.leave, "Leave", "Leave the game. Points you've scored stay on the board.")
 
     -- Hiding by any route (Hide, Escape) keeps the player joined and leaves
     -- the restore button; only Player.Show brings the window back.
@@ -235,6 +253,12 @@ local function create()
         Player.Show()
     end)
     restore:SetText("Loreforge quiz")
+    -- A gentle pulse while a question waits for this player's answer.
+    restore:SetScript("OnUpdate", function(self, elapsed)
+        if not self.pulsing then return end
+        self.phase = ((self.phase or 0) + (elapsed or 0) * 3) % (math.pi * 2)
+        self:SetAlpha(0.65 + 0.35 * math.cos(self.phase))
+    end)
     restore:Hide()
     Player.restore = restore
     return f
@@ -272,19 +296,24 @@ local function remaining(model)
 end
 
 local STATUS = {
-    invitation = function(m) return (m.host or "The Game Master") .. " invited you to a quiz." end,
-    joining = function(m) return "Joining. Waiting for " .. (m.host or "the Game Master") .. " to confirm." end,
-    lobby = function(m) return "You're in. Waiting for " .. (m.host or "the Game Master") .. " to start." end,
+    invitation = function(m) return (m.host or "The host") .. " invited you to a quiz." end,
+    joining = function(m) return "Joining. Waiting for " .. (m.host or "the host") .. " to confirm." end,
+    lobby = function(m) return "You're in. Waiting for " .. (m.host or "the host") .. " to start." end,
     ready = function(m) return m.ready and "You're ready. Waiting for everyone else." or "Ready check: are you ready?" end,
-    presenting = function() return "Next question coming up." end,
+    presenting = function() return "Get ready. Answers open in a moment." end,
     accepting = function() return "Pick an answer. Your first click counts." end,
     revealing = function() return "Answer revealed." end,
-    between = function() return "Waiting for the next question." end,
+    between = function(m)
+        if type(m.nextAt) == "number" then
+            return "Next question in " .. math.max(0, math.ceil(m.nextAt - now())) .. "s."
+        end
+        return m.hostPaced and "The host will start the next question." or "Waiting for the next question."
+    end,
     paused = function() return "The game is paused." end,
-    finished = function(m) return "Final results from " .. (m.host or "the Game Master") .. "." end,
-    stopped = function(m) return (m.host or "The Game Master") .. " stopped the game." end,
-    disconnected = function(m) return "Lost contact with " .. (m.host or "the Game Master") .. "." end,
-    history = function() return "Saved games" end,
+    finished = function(m) return "Final results from " .. (m.host or "the host") .. "." end,
+    stopped = function(m) return (m.host or "The host") .. " stopped the game." end,
+    disconnected = function(m) return "Lost contact with " .. (m.host or "the host") .. "." end,
+    history = function() return "Your games" end,
 }
 
 local function configLine(config)
@@ -307,9 +336,11 @@ end
 local function positionLine(model)
     local parts = {}
     local config = type(model.config) == "table" and model.config or {}
-    if model.round and config.rounds then parts[#parts + 1] = "Round " .. model.round .. "/" .. config.rounds end
-    if model.index and model.totalQuestions then
-        parts[#parts + 1] = "Question " .. model.index .. "/" .. model.totalQuestions
+    -- Same numbering as the host: the question within its round.
+    if model.round and config.rounds then parts[#parts + 1] = "Round " .. model.round .. " of " .. config.rounds end
+    local per = tonumber(config.perRound)
+    if tonumber(model.index) and model.index > 0 and per and per > 0 then
+        parts[#parts + 1] = "Question " .. ((model.index - 1) % per + 1) .. " of " .. per
     end
     return table.concat(parts, " · ")
 end
@@ -350,7 +381,10 @@ local function drawRows(f, model)
             if row == me then suffix = " (you)" end
             if row.winner and model.state == "finished" then suffix = suffix .. (winners > 1 and " · Shared win" or " · Winner") end
             widget.name:SetText((row == pinned and "... " or "") .. rank .. name .. suffix)
-            T.Text(widget.name, row == me and "selected" or (row.winner and model.state == "finished") and "accent" or "text")
+            local medal = model.state == "finished" and (tonumber(row.total) or 0) > 0 and ns.MEDALS and ns.MEDALS[tonumber(row.rank) or 0]
+            if row == me then T.Text(widget.name, "selected")
+            elseif medal then widget.name:SetTextColor(medal[1], medal[2], medal[3])
+            else T.Text(widget.name, "text") end
             widget.score:SetText(lobby and "" or scoreText(row, model.state))
         end
     end
@@ -365,22 +399,29 @@ local function drawAnswers(f, model)
     local correct = REVEALED[state] and tonumber(model.correct) or nil
     for i, b in ipairs(f.answers) do
         b:SetText(i .. "   " .. choiceText(model, i))
-        local badge, border, role = "", "edge", "text"
+        local badge, border, role, tint = "", "edge", "text", nil
         if correct then
-            if i == correct then badge, border = "Correct answer", "accent" end
+            if i == correct then badge, border, tint = "Correct answer", "accent", "accent" end
             if i == choice then
                 badge = i == correct and "Your answer · Correct" or "Your answer"
                 border = i == correct and "accent" or "danger"
+                tint = border
             end
             if i ~= correct and i ~= choice then role = "muted" end
         elseif i == choice then
-            border = "selected"
+            border, tint = "selected", "selected"
             badge = confirm == "locked" and "Locked" or confirm == "pending" and "Sending..." or "Not confirmed"
         elseif choice or not open then
             role = "muted"
+        else
+            local key = ns.AnswerKey and ns.AnswerKey(i)
+            if key then badge = "Key " .. key end
         end
         b.badge:SetText(badge)
         T.Border(b, border)
+        if tint then
+            T.Fill(b.tint, tint); b.tint:SetAlpha(tint == "selected" and 0.18 or 0.28); b.tint:Show()
+        else b.tint:Hide() end
         T.Text(b.Text, role)
         b:SetEnabled(open)
         local height = b.Text.GetStringHeight and b.Text:GetStringHeight() or 14
@@ -412,6 +453,22 @@ local function revealText(model)
         end
     end
     return table.concat(lines, "\n")
+end
+
+-- The finish line: a win, a shared win or the place, for joined players.
+local function headlineText(model)
+    if model.state ~= "finished" then return "" end
+    local me = myRow(model)
+    if not me then return model.joined and "Game over" or "" end
+    local rank, total = tonumber(me.rank) or 0, tonumber(me.total) or 0
+    local rows = type(model.rows) == "table" and model.rows or {}
+    if rank == 1 and total > 0 then
+        local shared = 0
+        for _, row in ipairs(rows) do if tonumber(row.rank) == 1 then shared = shared + 1 end end
+        return shared > 1 and "Shared win!" or "You won!"
+    end
+    if rank > 0 then return ordinal(rank) .. " of " .. #rows end
+    return "Game over"
 end
 
 local function youText(model)
@@ -476,7 +533,7 @@ end
 local function actions(model)
     if model.activeMatch then return "Return to match",true,"Close" end
     local state = model.state
-    if state == "invitation" then return "Join quiz", true, "Not now" end
+    if state == "invitation" then return "Join quiz", true, "Decline" end
     if state == "joining" then return "Joining...", false end
     if state == "ready" then
         if model.ready then return "Ready", false end
@@ -487,7 +544,7 @@ local function actions(model)
         if confirm == "unconfirmed" then return "Retry answer", true end
     end
     if state == "disconnected" then return "Reconnect", true end
-    if state == "finished" or state == "stopped" then return "Saved games", true, "Close" end
+    if state == "finished" or state == "stopped" then return "Your games", true, "Close" end
     if state == "history" then return nil, false, "Close" end
 end
 
@@ -517,6 +574,9 @@ function Player.Draw()
     end
 
     f.position:SetText(state == "history" and "" or positionLine(model))
+    local headline = headlineText(model)
+    f.headline:SetText(headline)
+    add(f.headline, headline ~= "", 6)
     local status = STATUS[state] and STATUS[state](model) or ""
     f.status:SetText(status)
     add(f.status, status ~= "", 4)
@@ -663,7 +723,15 @@ function Player.UpdateTimer()
     local fraction = seconds and seconds > 0 and math.min(1, left / seconds) or 0
     f.timer.fill:SetShown(fraction > 0)
     f.timer.fill:SetWidth(math.max(1, (INNER - 44) * fraction))
+    if ns.TimerColour then ns.TimerColour(f.timer.fill, left, seconds) end
     f.timer.count:SetText(math.ceil(left) .. "s")
+    T.Text(f.timer.count, left <= 5 and "danger" or "text")
+    -- A soft tick for each of the last five seconds, until this player answers.
+    local whole = math.ceil(left)
+    if whole >= 1 and whole <= 5 and whole ~= Player.lastTick and not chosen(model) then
+        Player.lastTick = whole
+        if ns.Sound then ns.Sound("tick") end
+    end
     -- The deadline passing closes the choices without waiting for a model tick.
     if left <= 0 and not f.timer.expired then
         f.timer.expired = true
@@ -681,11 +749,10 @@ function Player.RefreshRestore()
     if browsing then model=ns.Party.client.model end
     local show = model and model.joined and ACTIVE[model.state] and not Player.dismissed[model.id]
         and (browsing or not (frame and frame:IsShown())) or false
-    if show and model.state == "accepting" and not chosen(model) then
-        restore:SetText("Loreforge: answer now")
-    else
-        restore:SetText("Loreforge quiz")
-    end
+    local urgent = show and model.state == "accepting" and not chosen(model)
+    restore:SetText(urgent and "Loreforge: answer now" or "Loreforge quiz")
+    restore.pulsing = urgent or nil
+    if not urgent then restore:SetAlpha(1) end
     restore:SetShown(show)
 end
 
@@ -694,6 +761,11 @@ end
 local function open()
     local f = create()
     Player.hiddenFor = nil
+    local invitation = Player.model and Player.model.state == "invitation" or false
+    if Player.anchoredInvite ~= invitation then
+        Player.anchoredInvite = invitation
+        anchor(f, invitation)
+    end
     if not f:IsShown() then
         Player.drawing = true
         f:Show()
@@ -729,6 +801,7 @@ local function wantsWindow(model)
         if not id or Player.offered[id] then return false end
         if restricted() then Player.deferred = id; return false end
         Player.offered[id], Player.deferred = true, nil
+        if ns.Sound then ns.Sound("invite") end
         return true
     end
     if model.joined and (ACTIVE[state] or state == "finished") and not Player.opened[id] then
@@ -758,6 +831,7 @@ function Player.Render(model)
     local previous = Player.model
     if previous and previous.id ~= model.id then Player.clicked = nil end
     Player.model = model
+    Player.Cue(previous, model)
     if wantsWindow(model) then
         local id = model.id
         if id and model.joined then Player.opened[id] = true end
@@ -767,6 +841,29 @@ function Player.Render(model)
         close()
     end
     Player.RefreshRestore()
+end
+
+-- Sound cues for a joined player: a new question, the reveal and the finish.
+function Player.Cue(previous, model)
+    if not ns.Sound or not model.joined then return end
+    local key = tostring(model.id) .. ":" .. tostring(model.index) .. ":" .. tostring(model.attempt)
+    local state = model.state
+    if state == "accepting" and Player.cueQuestion ~= key then
+        Player.cueQuestion, Player.lastTick = key, nil
+        ns.Sound("question")
+    elseif (state == "revealing" or state == "between") and Player.cueReveal ~= key and tonumber(model.correct) then
+        Player.cueReveal = key
+        local choice = chosen(model)
+        if choice then ns.Sound(choice == tonumber(model.correct) and "correct" or "wrong") end
+    elseif state == "finished" and Player.cueFinish ~= model.id and not (ns.Party and ns.Party.viewHistory) then
+        Player.cueFinish = model.id
+        local me = myRow(model)
+        ns.Sound(me and tonumber(me.rank) == 1 and (tonumber(me.total) or 0) > 0 and "win" or "finish")
+    end
+end
+
+function Player.ApplyScale()
+    if Player.frame then Player.frame:SetScale(clampScale(ns.db and ns.db.playerScale)) end
 end
 
 function Player.Show()
@@ -828,6 +925,19 @@ function Player.Secondary()
 end
 
 function Player.Leave()
+    if StaticPopupDialogs and StaticPopup_Show then
+        StaticPopupDialogs.LOREFORGE_LEAVE_GAME = {
+            text = "Leave this game? Your points so far stay on the board.", button1 = "Leave", button2 = "Stay",
+            timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+            OnAccept = function() Player.ConfirmLeave() end,
+        }
+        StaticPopup_Show("LOREFORGE_LEAVE_GAME")
+        return
+    end
+    Player.ConfirmLeave()
+end
+
+function Player.ConfirmLeave()
     local model = Player.model
     if model and model.id then Player.dismissed[model.id] = true end
     act("Leave")

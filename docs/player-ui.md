@@ -35,7 +35,7 @@ read in `revealing`, `between` and `finished`, so a stray value during
 ## When the window shows
 
 - An invitation opens once per session `id`. In combat or chat lockdown it
-  waits and appears afterwards. **Not now** declines and closes it for good.
+  waits and appears afterwards. **Decline** declines and closes it for good. Invitations sit near the top of the screen; joined games use the saved position.
 - A joined session opens once on its own, for example after a reload and
   `RequestSync`. After that, only **Hide**/Escape and the restore button
   control it, so ticks never pop it back up.
@@ -89,9 +89,24 @@ displayed, never re-ranked or used for scoring, and it's ignored outside
 
 ## Settings it reads
 
-`ns.db.playerScale` (clamped to 0.7 to 1.5) and `ns.db.playerX`/`playerY`,
-which are saved when the window is dragged. There's no Options control for
-the scale yet.
+`ns.db.playerScale` (clamped to 0.7 to 1.5, set under Settings > Interface)
+and `ns.db.playerX`/`playerY`, which are saved when the game window is dragged.
+An invitation sits near the top of the screen instead and doesn't save its
+position. `ns.db.sound` turns the cues below off.
+
+## Cues and finish
+
+The position line uses the host's numbering: the question within its round.
+Between questions, a model with `nextAt` counts down; `hostPaced` says the
+host starts the next one. The timer bar turns amber under 30% and red for the
+last five seconds, with a soft tick each second until the player answers.
+Sounds play for an invitation, a new question, a correct or wrong reveal and
+the finish (a fanfare for a win). Reveals tint the correct row green and a
+wrong pick red. Finished games show a headline (**You won!**, **Shared win!**
+or the place) and gold, silver and bronze names for the top three. **Leave**
+asks first. Answer key bindings show as **Key F2** style badges on open rows.
+History lists up to 20 games; **Your games** opens the main window's History
+tab out of combat.
 
 ## Tests
 

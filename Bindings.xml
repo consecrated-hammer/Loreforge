@@ -1,0 +1,6 @@
+<Bindings>
+    <Binding name="LOREFORGE_ANSWER1" header="LOREFORGE" category="ADDONS">LoreforgeAnswer(1)</Binding>
+    <Binding name="LOREFORGE_ANSWER2" category="ADDONS">LoreforgeAnswer(2)</Binding>
+    <Binding name="LOREFORGE_ANSWER3" category="ADDONS">LoreforgeAnswer(3)</Binding>
+    <Binding name="LOREFORGE_ANSWER4" category="ADDONS">LoreforgeAnswer(4)</Binding>
+</Bindings>

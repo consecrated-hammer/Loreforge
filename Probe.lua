@@ -122,7 +122,7 @@ function Probe.Listen()
     Probe.seen, Probe.sessions, Probe.queue = {}, 0, {}
     ns.Transport.Begin()
     log("LISTEN armed for " .. LISTEN_SECONDS .. "s, prefix " .. PREFIX .. " registered=" .. Probe.registered .. " " .. context())
-    HC.Print("Probe listening for 10 minutes. This client will answer one probe from the Game Master.")
+    HC.Print("Probe listening for 10 minutes. This client will answer one probe from the host.")
 end
 function Probe.Start(word)
     local channel = CHANNELS[(word or ""):lower()]
@@ -243,7 +243,7 @@ function Probe.Receive(prefix, text, channel, sender)
         if targetKey == me and not state.locked then
             state.locked = true
             log(string.format("LOCKED choice=%s round trip=%.2fs", tostring(choice), now() - (state.answered or now())))
-            HC.Print("Probe answer locked by the Game Master. Probe passed on this client.")
+            HC.Print("Probe answer locked by the host. Probe passed on this client.")
             queue(table.concat({ VERSION, "C", nonce, choice }, ":"), channel)
         end
     end

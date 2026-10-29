@@ -43,6 +43,7 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     eq(ns.HammerCore.Settings.pages.Game, nil, "game setup is not a settings page")
     eq(ns.HammerCore.Settings.pages.Hosting, nil, "hosting is not a settings page")
     ns.db.readyCheck = false
+    ns.db.hostParticipates = false -- a hosted chat game, not a solo practice
     ns.db.rounds, ns.db.perRound, ns.db.seconds = 1, 1, 10
     ns.StartGame()
     ns.game.config.manualSend = true; ns.RefreshHost()

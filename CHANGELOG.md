@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.3.0-beta] - 2026-10-29
+
+A look-and-feel pass over the whole addon.
+
+- One main window with Play, History and Hall of Fame tabs. Settings opens in its own window with a Back to game button.
+- Setup has Quick, Standard and Marathon presets, an estimated game length, plus and minus steppers, category question counts with All and None, and advanced options folded away. Problems show in a banner with the fix beside them.
+- Practice solo runs a private game for the host at any time. The host now plays along by default.
+- Party lobbies show who has joined, count down their 10 minutes, warn a minute before closing and can be kept open. Switching output away from Party asks before closing the lobby.
+- The live game shows the phase as a heading, a progress bar, a timer that turns amber then red, tinted reveals, a leaderboard showing who has answered, and a pacing switch. A line that may not have posted raises one banner: Yes, it posted or Post again.
+- Questions post their four choices on one chat line, so each question takes two lines instead of five. The chat tag reads `[Loreforge #N]` and the opening line names the categories. One-round games no longer repeat the winner, and closing records are announced for the top three only.
+- History lists every finished game on this client, hosted or joined. The Hall of Fame ranks saved records by wins, with accuracy and best streak.
+- A game cut short by a reload or disconnect is reported in setup, with an option to post the standings.
+- Party players get a top-of-screen invitation with Join quiz and Decline, the same question numbering as the host, a countdown between auto-advance questions, a finish headline with medal colours, and a confirmation before Leave.
+- Optional sound cues, answer key bindings (Key Bindings > AddOns > Loreforge) and window size settings.
+
+Party games still need 0.2.0-beta or later on every addon player; joined
+players see the between-question countdown from 0.3.0-beta. The new interface
+needs in-game checks in both clients.
+
 ## [0.2.0-beta] - 2026-10-29
 
 - Party player beta: opt-in invitations, joined-player question buttons, host-confirmed answers, reveals, streaks and shared scores.
