@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.3.1-beta] - 2026-10-30
+
+- Restore one chat line per answer choice, including on upgrade from the compact default. The compact layout remains optional.
+- Keep Party invitations above the main window and let `/lf` reopen an unanswered invitation.
+- Print a received-invitation notice in chat and include Party transport, invitation state and window errors in `/lf debug`.
+
 ## [0.3.0-beta] - 2026-10-29
 
 A look-and-feel pass over the whole addon.

@@ -8,8 +8,9 @@ local function eq(a, b, why) assert(a == b, why .. ': ' .. tostring(a) .. ' ~= '
 
 local now, members, grouped = 100, 2, true
 local sounds, sent = {}, {}
-local function load(db)
+local function load(db, partyEnabled)
     wow.Install({ Loreforge = { Version = '0.3.0' } })
+    if partyEnabled then C_ChatInfo.RegisterAddonMessagePrefix = function() return 0 end end
     LoreforgeDB = db
     GetTime = function() return now end
     GetServerTime = function() return 1800000000 + math.floor(now) end
@@ -49,6 +50,55 @@ end
 local function tick(ns, seconds) now = now + seconds; ns.events.scripts.OnUpdate(ns.events, seconds) end
 local function chat(ns, text, sender, guid)
     ns.events.scripts.OnEvent(ns.events, 'CHAT_MSG_PARTY', text, sender, nil, nil, nil, nil, nil, nil, nil, nil, nil, guid)
+end
+
+-- Real addon event -> transport -> Party bus -> player window, with setup open.
+do
+    local n = load({compactChoices = true}, true)
+    eq(n.db.compactChoices, false, 'upgrade restores separate choice lines')
+    n.db.compactChoices = true
+    n = load(n.db, true)
+    eq(n.db.compactChoices, true, 'later explicit compact preference is retained')
+    n.OpenHost()
+    local function invite(id)
+        local packet = assert(n.Party.bus.Send({v=1, kind='invite', id=id, to='*', config={
+            rounds=1, perRound=5, seconds=20, difficulty='mixed', categories='Lore', readyCheck=true}}, {}))
+        local frames = n.Party.bus.outgoing[packet].frames
+        n.Party.bus.outgoing[packet] = nil
+        for _, frame in ipairs(frames) do
+            n.Party.frame.scripts.OnEvent(n.Party.frame, 'CHAT_MSG_ADDON', 'LoreforgeM1',
+                assert(n.Party.bus.transport.Pack(frame)), 'PARTY', 'Guest-Realm')
+        end
+        for _ = 1, #frames do now=now+0.1; n.Party.Tick() end
+    end
+    invite('guest-realm:1')
+    local f = n.Player.frame
+    assert(f and f:IsShown(), 'received wire invitation opens the real player window')
+    eq(f:GetFrameStrata(), n.hostFrame:GetFrameStrata(), 'invitation shares the main window layer')
+    assert(f:GetFrameLevel() > n.hostFrame:GetFrameLevel(), 'invitation sits above setup')
+    assert(f.raised, 'opening an invitation raises it')
+    eq(f.primary:GetText(), 'Join quiz', 'wire invitation offers join')
+    n.Player.Hide()
+    n.OpenMain()
+    assert(f:IsShown(), 'slash command reopens an unanswered invitation')
+    assert(n.Party.Report():find('Invitation received',1,true), 'diagnostics show invitation delivery')
+    local render = n.Player.Render
+    n.Player.Render = function() error('test drawing failure') end
+    invite('guest-realm:2')
+    assert(n.Party.Report():find('test drawing failure',1,true), 'drawing errors survive in diagnostics')
+    local printed = #wow.printed
+    invite('guest-realm:2')
+    eq(#wow.printed, printed, 'the same drawing error does not spam chat')
+    n.Player.Render = render
+    invite('guest-realm:2')
+    eq(n.Party.renderError, nil, 'repeated invitation retries a failed render')
+    local wires = n.Party.wireReceived
+    n.Party.frame.scripts.OnEvent(n.Party.frame, 'CHAT_MSG_ADDON', 'LoreforgeM1', 'bad', 'PARTY', 'Host-Realm')
+    eq(n.Party.wireReceived, wires, 'self echoes do not count as remote prefix traffic')
+    n.Party.Report = function() error('test report failure') end
+    local report = n.HammerCore.spec.diagnostics()
+    assert(report:find('Party diagnostics failed:',1,true), 'Party report failure leaves other diagnostics available')
+    assert(report:find('Questions:',1,true), 'base diagnostics survive Party report failure')
 end
 
 -- ── Engine: chat output ──
@@ -107,7 +157,7 @@ eq(ns.db.questionGap, 3, 'in-range values are kept')
 -- ── Setup ──
 ns = load(nil)
 eq(ns.db.hostParticipates, true, 'the host plays along by default')
-eq(ns.db.compactChoices, true, 'two-line questions by default')
+eq(ns.db.compactChoices, false, 'separate choices by default')
 ns.OpenHost()
 local f = ns.hostFrame
 local setup = f.setup
@@ -171,12 +221,19 @@ ns.Party.host = nil; setup.Refresh()
 ns.db.readyCheck, ns.db.rounds, ns.db.perRound, ns.db.seconds = false, 1, 2, 20
 ns.db.autoMode = false
 ns.StartGame()
-eq(ns.game.config.compactChoices, true, 'compact choices reach the game')
+eq(ns.game.config.compactChoices, false, 'separate choices reach the game')
 for _ = 1, 40 do if ns.game.phase == 'accepting' then break end; tick(ns, 0.5) end
 eq(ns.game.phase, 'accepting', 'the question opens')
 local questionLines = 0
 for _, line in ipairs(sent) do if line.text:find('1) ', 1, true) then questionLines = questionLines + 1 end end
-eq(questionLines, 1, 'all four choices go out on one line')
+eq(questionLines, 1, 'choice one posts once')
+for i = 1, 4 do
+    local found = false
+    for _, line in ipairs(sent) do
+        if line.text:find('] ' .. i .. ') ', 1, true) then found = true end
+    end
+    assert(found, 'each choice gets its own chat message')
+end
 assert(ns.db.activeGame and ns.db.activeGame.done == 0, 'a live game is tracked for interruption')
 assert(f.timer:IsShown(), 'the host sees a timer bar')
 eq(f.answerButtons[2].badge:GetText(), 'Key F2', 'bound answer keys are shown')

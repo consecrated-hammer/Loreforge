@@ -121,7 +121,7 @@ local function create()
     if Player.frame then return Player.frame end
     local f = CreateFrame("Frame", "LoreforgePlayerWindow", UIParent, "BackdropTemplate")
     f:SetSize(WIDTH, 300)
-    f:SetFrameStrata("HIGH")
+    f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -243,7 +243,8 @@ local function create()
 
     local restore = UI.Button(UIParent, 150, 24, "primary")
     restore:SetPoint("TOP", UIParent, "TOP", 0, -140)
-    restore:SetFrameStrata("HIGH")
+    restore:SetFrameStrata("DIALOG")
+    restore:SetFrameLevel(10)
     restore:SetMovable(true)
     restore:RegisterForDrag("LeftButton")
     restore:SetScript("OnDragStart", function(self) self:StartMoving() end)
@@ -760,6 +761,7 @@ end
 
 local function open()
     local f = create()
+    if ns.hostFrame then f:SetFrameLevel(ns.hostFrame:GetFrameLevel() + 10) end
     Player.hiddenFor = nil
     local invitation = Player.model and Player.model.state == "invitation" or false
     if Player.anchoredInvite ~= invitation then
@@ -767,6 +769,7 @@ local function open()
         anchor(f, invitation)
     end
     if not f:IsShown() then
+        f:Raise()
         Player.drawing = true
         f:Show()
         Player.drawing = false

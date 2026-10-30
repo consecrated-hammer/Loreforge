@@ -14,7 +14,8 @@ chat game. Their addon player UI needs separate transport proof.
 The host opens `/lf`, configures Party output and clicks **Open lobby**.
 That deliberate action sends invitations; opening the setup window alone
 remains private. Party members with the new build can choose **Join quiz** or
-**Decline**. The host sees the joined count and clicks **Start game** when
+**Decline**. Invitations appear above the Loreforge main window and print a
+chat notice. `/lf` reopens an unanswered invitation. The host sees the joined count and clicks **Start game** when
 ready. **Close lobby** cancels an invitation without starting. A player can decline the addon UI and still answer in Party chat.
 
 The ready check uses a separate **I'm ready** action. Joining does not mark a
@@ -105,6 +106,16 @@ retains the prior consenting-recipient set for catch-up; merely knowing a match 
 does not authorise retrieving it. Up to twenty pending, previously consented
 match IDs survive reload and moving to a newer lobby; delayed finals can still
 be stored without replacing the current player window.
+
+## Troubleshooting invitations
+
+With both clients on 0.3.1-beta or later, use `/lf debug` on each client after
+opening a Party lobby. The Party section shows context availability, the
+loaded ChatThrottleLib version, remote prefix events, accepted frames, wire
+send attempts, the latest invitation outcome and any player-window error.
+Self-echoes do not count as remote traffic. An invitation hidden behind setup
+is a different failure from one that never reaches the client; neither a local
+send attempt nor a prefix event proves completed invitation delivery.
 
 ## Verification
 

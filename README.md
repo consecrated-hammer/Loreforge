@@ -12,7 +12,7 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 - **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. Pacing, the ready check and chat options sit under **Advanced options**.
 - **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Host-paced games wait at **Ask next question**; auto-advance continues after a short gap. The pacing switch changes mode mid-game.
 - **The host plays along** by default, answering by click, chat or an answer key. **Practice solo** runs a private game that posts nothing to chat.
-- **Two lines per question.** The question posts first, then all four numbered choices on one line. **Choices on one line** under Advanced options can switch back to one line per choice.
+- **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** under Advanced options enables the compact layout.
 - **Numbered answers.** Each player's first valid `1`, `2`, `3` or `4` locks their attempt. Correct answers earn one point; joint winners share the win.
 - **Round and overall scores**, live streaks, named recaps and personal-best callouts.
 - **Ready checks**, an inactivity pause, and closing records for the top three players.
@@ -77,6 +77,7 @@ See [chat-bot interaction notes](docs/chat-bot-interactions.md) for the research
 With 0.2.0-beta or later on the host and addon participants, choose Party
 output and **Open lobby**. Players get an invitation near the top of the
 screen with **Join quiz** and **Decline**, then the host clicks **Start game**.
+Use `/lf` to reopen a pending invitation. Invitations appear above the main window and also print a chat notice. `/lf debug` includes Party delivery and window errors if no prompt appears.
 Joined players get clickable questions, confirmed answer locking, tinted
 reveals, streaks, shared scores and a finish headline. Chat-only players can
 still answer normally. `/lf play` restores a joined game and `/lf history`

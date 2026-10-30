@@ -30,11 +30,12 @@ eq(Game.Pool(bank, c, "classic")[1][1], "Forever mechanics", "no Retail contamin
 local separate = new()
 local separateConfig = {}
 for k, v in pairs(config) do separateConfig[k] = v end
-separateConfig.compactChoices = false
+separateConfig.compactChoices = nil
 assert(separate:Start(separateConfig, "retail", roster, 1))
 for i = 1, 4 do
     assert(separate.queue[separate.questionCursor + i]:find('] ' .. i .. ') ', 1, true), 'one numbered option per chat message')
 end
+config.compactChoices = true
 local g = new()
 assert(g:Start(config, "retail", roster, 1))
 eq(#g.queue - g.questionCursor, 1, "compact games post the question and one choices line")

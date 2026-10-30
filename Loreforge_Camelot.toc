@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Loreforge (WoW Forever)
 ## Author: consecrated-hammer
-## Version: 0.3.0-beta
-## X-ReleaseDate: 2026-10-29
+## Version: 0.3.1-beta
+## X-ReleaseDate: 2026-10-30
 ## Notes: Host group and guild trivia with manual or automatic rounds, scores and records.
 ## AllowLoadGameType: camelot
 ## SavedVariables: LoreforgeDB

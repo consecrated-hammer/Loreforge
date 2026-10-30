@@ -1,8 +1,13 @@
 local addonName, ns = ...
 local HC = ns.HammerCore
+local function partyReport()
+    if not (ns.Party and ns.Party.Report) then return "" end
+    local ok, report = pcall(ns.Party.Report)
+    return "\n\n" .. (ok and report or ("Party diagnostics failed: " .. tostring(report)))
+end
 ns.DEFAULTS = { rounds = 3, perRound = 5, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
     autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 10, hostParticipates = true,
-    compactChoices = true, sound = true, hostScale = 1, playerScale = 1 }
+    compactChoices = false, sound = true, hostScale = 1, playerScale = 1 }
 -- Setup ranges. The engine and Party protocol accept wider values from older
 -- clients; the setup controls offer what makes a sensible game.
 ns.LIMITS = { rounds = { 1, 10, 1 }, perRound = { 1, 15, 1 }, seconds = { 5, 60, 5 }, questionGap = { 3, 30, 1 },
@@ -23,7 +28,8 @@ HC:Init({
         .. "\nDelivery: " .. (ns.game and ns.game.config and ns.game.config.manualSend and "Click-to-send fallback" or "Automatic")
         .. "\nChannel: " .. (ns.game and ns.game.config and ns.game.config.channel or ns.db.channel)
         .. "\nHost status: " .. (ns.game and ns.game.reason or "Ready")
-        .. "\nLast unmatched quiz sender: " .. (ns.lastUnmatched or "None") end,
+        .. "\nLast unmatched quiz sender: " .. (ns.lastUnmatched or "None")
+        .. partyReport() end,
     status = function() return ns.game and ("Game: " .. ns.game.phase) or "Ready to host" end,
     about = { note = "AT THE TAVERN", action = "Open the book", tips = {
         "Have you considered reading the quest text?", "The real loot was knowing who dropped it.",
@@ -36,7 +42,7 @@ HC:Init({
 HC.Commands.byName[""].help = "Open Loreforge, or the Party game you joined"
 HC.Commands.byName[""].run = function() ns.OpenMain() end
 function ns.OpenMain(tab)
-    if not tab and ns.Party and ns.Party.client and ns.Party.client.joined and ns.Party.client.model.state~="finished"
+    if not tab and ns.Party and ns.Party.client and (ns.Party.client.joined or ns.Party.client.model.state == "invitation") and ns.Party.client.model.state~="finished"
         and ns.Party.client.model.state~="stopped" and ns.Player then
         ns.Party.viewHistory=false;ns.Player.Render(ns.Party.client.model);ns.Player.Show()
     else ns.OpenHost(tab) end
@@ -77,6 +83,10 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     ns.db = LoreforgeDB
     local newChannel = ns.db.channel == nil
     for key, value in pairs(ns.DEFAULTS) do if type(ns.db[key]) ~= type(value) then ns.db[key] = value end end
+    -- Restore the separate-choice layout on upgrade from the compact default.
+    if ns.db.choiceLayoutVersion ~= 1 then
+        ns.db.compactChoices, ns.db.choiceLayoutVersion = false, 1
+    end
     if type(ns.db.categories) ~= "table" then ns.db.categories = {} end
     for _, category in ipairs(ns.Game.CATEGORIES) do
         if ns.db.categories[category[1]] == nil then ns.db.categories[category[1]] = true end

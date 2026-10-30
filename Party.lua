@@ -38,8 +38,17 @@ local function render(model)
     P.model = model
     if P.viewHistory and ns.Player and ns.Player.RefreshRestore then ns.Player.RefreshRestore() end
     if ns.Player and ns.Player.Render and not P.viewHistory then
-        local ok = pcall(ns.Player.Render, model)
-        if not ok then log("Player window failed; use Party chat."); return false end
+        local ok, err = pcall(ns.Player.Render, model)
+        if not ok then
+            local changed = P.renderError ~= tostring(err)
+            P.renderError = tostring(err)
+            if changed then
+                log("Player window failed: " .. P.renderError)
+                ns.HammerCore.Print("The Party window could not open. Use /lf debug to copy the error; you can still answer in Party chat.")
+            end
+            return false
+        end
+        P.renderError = nil
     end
     return ns.Player ~= nil
 end
@@ -412,16 +421,24 @@ function P.Receive(m, sender, person)
         return
     end
     if m.kind == "invite" then
+        P.invitesReceived = (P.invitesReceived or 0) + 1
         if ns.db.partyInvites == false or not validConfig(m.config) or P.declined[m.id] or (h and (not h.started or g:Active()))
             or (c and c.id ~= m.id and c.model.state ~= "finished" and c.model.state ~= "stopped" and c.model.state ~= "disconnected"
-                and not (not c.joined and c.model.state=="invitation" and c.hostKey==sender)) then return end
-        if c and c.id == m.id then c.lastSeen=now();return end
+                and not (not c.joined and c.model.state=="invitation" and c.hostKey==sender)) then
+            P.inviteStatus = ns.db.partyInvites == false and "Invitations disabled"
+                or not validConfig(m.config) and "Invalid invitation settings"
+                or P.declined[m.id] and "Already declined" or "Another lobby or match is active"
+            return
+        end
+        if c and c.id == m.id then c.lastSeen=now();if P.renderError then render(c.model) end;return end
         if c and not c.joined and c.hostKey==sender and c.id~=m.id then declined(c.id) end
         if m.id:sub(1,#sender+1) ~= sender..":" then return end
         if h and h.started and not g:Active() then P.host=nil end
         P.client = {id=m.id,hostKey=sender,hostName=clean(person.name),seq=0,lastSeen=now(),model={id=m.id,state="invitation",host=clean(person.name),config=m.config,status="Join this Party quiz?"}}
         P.viewHistory=false
         P.client.model.config.categories=clean(P.client.model.config.categories)
+        P.inviteStatus = "Invitation received"
+        ns.HammerCore.Print(clean(person.name) .. " invited you to a quiz. Use /lf to join or decline.")
         render(P.client.model)
         return
     end
@@ -636,6 +653,31 @@ function P.Tick()
         else c.model.state,c.model.status="disconnected","Join was not confirmed. You can use Party chat.";render(c.model) end
     end
 end
+-- Runtime diagnostics stay on the client; no raw packet or answer content.
+function P.Report()
+    local t = P.bus and P.bus.transport
+    local count = 0
+    for _ in pairs(roster()) do count = count + 1 end
+    local shown = ns.Player and ns.Player.frame and ns.Player.frame:IsShown() or false
+    local inside = IsInInstance and IsInInstance() or false
+    local lines = {
+        "Party player diagnostics",
+        "Available: " .. tostring(P.Available() == true) .. "; roster=" .. count .. "; instance=" .. tostring(inside)
+            .. "; blocked=" .. tostring(ns.Transport.Blocked()),
+        "Transport: " .. tostring(t and t.available) .. "; ChatThrottleLib=" .. tostring(ChatThrottleLib and ChatThrottleLib.version)
+            .. "; prefix=" .. tostring(t and t.PREFIX),
+        "Remote Party prefix events: " .. (P.wireReceived or 0) .. "; accepted frames=" .. (t and t.decodes or 0)
+            .. "; send attempts=" .. (t and t.attempts or 0),
+        "Invite messages: " .. (P.invitesReceived or 0) .. "; enabled=" .. tostring(ns.db.partyInvites ~= false)
+            .. "; last invite status=" .. (P.inviteStatus or "None received"),
+        "Lobby: " .. (P.host and (P.host.started and "Started" or "Open") or "None")
+            .. "; player=" .. (P.client and P.client.model.state or "None") .. "; window=" .. tostring(shown),
+        "Player error: " .. (P.renderError or "None"),
+        "Recent Party log:",
+    }
+    for i = math.max(1, #P.logs - 14), #P.logs do lines[#lines + 1] = P.logs[i] end
+    return table.concat(lines, "\n")
+end
 function P.Initialise()
     history()
     P.bus=ns.PartyBus.New(P.Receive,roster,context,log,function(message,sender)
@@ -655,7 +697,14 @@ function P.Initialise()
     frame:RegisterEvent("CHAT_MSG_ADDON")
     frame:RegisterEvent("GROUP_ROSTER_UPDATE")
     frame:SetScript("OnEvent",function(_,event,...)
-        if event=="CHAT_MSG_ADDON" then P.bus.transport.Receive(...)
+        if event=="CHAT_MSG_ADDON" then
+            local prefix, _, _, sender = ...
+            local mine = me()
+            if mine and not (issecretvalue and (issecretvalue(prefix) or issecretvalue(sender)))
+                and prefix == P.bus.transport.PREFIX and ns.Identity(sender) ~= mine.key then
+                P.wireReceived=(P.wireReceived or 0)+1
+            end
+            P.bus.transport.Receive(...)
         else rosterAt=nil end
     end)
     local elapsed=0

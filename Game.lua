@@ -116,7 +116,7 @@ function Game:Start(config, era, roster, serial)
         idleLimit = config.idleLimit == nil and 3 or config.idleLimit,
         readyCheck = config.readyCheck ~= false, readySeconds = config.readySeconds or 10,
         hostParticipates = config.hostParticipates == true, localOnly = config.localOnly == true,
-        manualSend = config.manualSend == true, compactChoices = config.compactChoices ~= false }
+        manualSend = config.manualSend == true, compactChoices = config.compactChoices == true }
     self.players, self.run, self.serial = players, {}, serial
     self.presentationGate, self.presentationFrom = false, nil
     for _ = 1, count do
