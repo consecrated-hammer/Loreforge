@@ -37,9 +37,12 @@ local function stepper(panel, labelText, hint, y, key, format, width)
     local function render()
         local v = ns.db[key]
         value:SetText(format and format(v) or tostring(v))
-        minus:SetEnabled(v > limits[1]); plus:SetEnabled(v < limits[2])
+        local enabled = key ~= "readySeconds" or ns.db.readyCheck
+        minus:SetEnabled(enabled and v > limits[1]); plus:SetEnabled(enabled and v < limits[2])
+        T.Text(value, enabled and "text" or "muted")
     end
     local function change(direction)
+        if key == "readySeconds" and not ns.db.readyCheck then return end
         local step = limits[3]
         local v = math.floor((ns.db[key] + direction * step) / step + 0.5) * step
         v = math.max(limits[1], math.min(limits[2], v))
@@ -149,6 +152,9 @@ function ns.BuildSetup(host)
     _, y = stepper(left, 'Rounds', nil, y, 'rounds', nil, 400)
     _, y = stepper(left, 'Questions per round', nil, y, 'perRound', nil, 400)
     _, y = stepper(left, 'Answer time', nil, y, 'seconds', seconds, 400)
+    _, y = UI.Check(left, 'Countdown before starting', 'Players can join and type ready before the first question.', y,
+        function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, 400)
+    setup.countdown, y = stepper(left, 'Start countdown', 'Seconds before the first question. You can start sooner; disable the countdown above to skip it.', y, 'readySeconds', seconds, 400)
     _, y = UI.Dropdown(left, 'Difficulty', 'Hard includes obscure lore, talents and procs.', y,
         { 'mixed', 'easy', 'hard' }, { 'Mixed', 'Easier', 'Hard' },
         function() return ns.db.difficulty end, function(value) ns.db.difficulty = value end, 400, 190, 150)
@@ -165,10 +171,6 @@ function ns.BuildSetup(host)
     _, a = stepper(advanced, 'Question gap', 'Seconds between questions with auto-advance.', a, 'questionGap', seconds, 400)
     _, a = stepper(advanced, 'Pause when quiet', 'Auto-advance pauses after this many questions with no answers.', a, 'idleLimit',
         function(v) return v == 0 and 'Off' or plural(v, 'question') end, 400)
-    a = section(advanced, 'Ready check', a - 6)
-    _, a = UI.Check(advanced, 'Ready check before starting', 'Players can type ready during a short countdown.', a,
-        function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, 400)
-    _, a = stepper(advanced, 'Countdown', 'You can start sooner.', a, 'readySeconds', seconds, 400)
     a = section(advanced, 'Chat', a - 6)
     _, a = UI.Check(advanced, 'Choices on one line', 'Posts the four choices on one line instead of four.', a,
         function() return ns.db.compactChoices end, function(value) ns.db.compactChoices = value end, 400)

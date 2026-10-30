@@ -108,7 +108,18 @@ assert(f.leave:IsShown(), 'Leave is available once joined')
 assert(f.rows[3]:IsShown() and f.rows[3].name:GetText():find('Chatonly', 1, true), 'chat-only players stay in the list')
 
 -- Ready check.
-P.Render(as(model('ready', { ready = false })))
+P.Render(as(model('ready', { ready = false, remaining = 30000, deadline = now + 30 })))
+assert(f.timer:IsShown(), 'ready countdown is visible to the player')
+eq(f.timer.count:GetText(), '30s', 'player starts with thirty seconds')
+now = now + 29; P.UpdateTimer()
+eq(f.timer.count:GetText(), '1s', 'player countdown ticks without a redraw')
+now = now + 1; P.UpdateTimer()
+eq(f.primary.enabled, false, 'readiness closes after the countdown expires')
+local readyCalls = #calls
+P.Primary()
+eq(#calls, readyCalls, 'expired readiness cannot be submitted')
+now = now - 30
+P.Render(as(model('ready', { ready = false, remaining = 30000, deadline = now + 30 })))
 eq(f.primary:GetText(), "I'm ready", 'ready check asks for readiness')
 wow.Click(f.primary)
 eq(last()[1], 'Ready', "I'm ready reports readiness")

@@ -5,8 +5,11 @@ reveals, streaks, shared standings and completed-match history. The full flow ha
 been checked through a complete match in WoW. The existing 0.1.1-beta probe
 proved only the underlying bidirectional Retail Party message exchange.
 
-The first supported context is a Retail home Party outside instances, combat
-and chat restrictions. Raid, Instance, Guild and Forever retain the ordinary
+The beta permits a Retail home Party in the open world or a dungeon when
+combat, activity restrictions and chat lockdown are inactive. An owner-supplied 0.3.1-beta probe log on 2026-10-30 confirms a full
+bidirectional exchange inside a premade dungeon Party in 4.97 seconds.
+That proves the probe transport for the reported context; the full player UI
+and completed-match flow still need an in-game check. Raid, Instance, Guild and Forever retain the ordinary
 chat game. Their addon player UI needs separate transport proof.
 
 ## Host and player flow
@@ -17,6 +20,14 @@ remains private. Party members with the new build can choose **Join quiz** or
 **Decline**. Invitations appear above the Loreforge main window and print a
 chat notice. `/lf` reopens an unanswered invitation. The host sees the joined count and clicks **Start game** when
 ready. **Close lobby** cancels an invitation without starting. A player can decline the addon UI and still answer in Party chat.
+
+Setup exposes **Countdown before starting** and **Start countdown** outside
+Advanced options. The countdown defaults to 30 seconds and can be set from
+5 to 60 seconds or disabled. An old unmarked 10-second default upgrades once
+to 30; other saved durations and later choices are preserved. The full delay
+begins after the opening chat notice is confirmed. Invitations repeat during
+the countdown and players can join until questions begin. The host can still
+choose to start early.
 
 The ready check uses a separate **I'm ready** action. Joining does not mark a
 player ready. Joining closes once question announcements start. The host can
@@ -50,7 +61,7 @@ identical across clients; displayed client timers are estimates and the host
 decides whether an answer is in time.
 
 Pause/restart changes the attempt number. Old choices and acknowledgements
-cannot unlock or score a new attempt. Combat, instances and restrictions stop
+cannot unlock or score a new attempt. Combat and activity/chat restrictions stop
 native sends and disable the player interface. Roster changes use the host's
 existing pause policy; departed members cannot submit or retrieve results.
 A host reload ends active play. A participant reload requests the current

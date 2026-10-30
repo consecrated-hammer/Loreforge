@@ -5,9 +5,9 @@ cannot prove client rendering, chat permissions or server event delivery.
 
 1. Check `/lf version`. `/lf` and minimap left-click must open the main window on Play; the History and Hall of Fame tabs must switch views. Settings and minimap right-click open general settings, and **Back to game** returns. Escape closes the main window out of combat, and it must not reappear after the next combat. Check all text fits at 70%, 100% and 150% window size, scrolling works, and the window can be dragged.
 2. In setup, try each preset and check the summary's question count and minutes. Steppers stop at their limits and respond to the mouse wheel. Category counts change with difficulty; **None** blocks the start with a banner. **Advanced options** opens and folds. Select a wrong destination: the banner explains it and **Use current group** fixes it. Guild uses **Refresh guild roster**.
-3. With a player who has no addon, start two questions in host-paced mode. Notices, question lines and results should post automatically. Check that the question is followed by one line with all four numbered choices, and that **Choices on one line** off restores four lines. The answer timer starts only after the last option is confirmed. Between questions, the primary action is **Ask next question** and nothing advances until clicked.
+3. With a player who has no addon, start two questions in host-paced mode. Notices, question lines and results should post automatically. Check that the question is followed by four separately numbered choice lines, and that **Choices on one line** enables the compact layout. The answer timer starts only after the last option is confirmed. Between questions, the primary action is **Ask next question** and nothing advances until clicked.
 4. Repeat in auto-advance mode. Verify the gap begins after results finish, all rounds complete, records save once, and **New game** returns to setup. Switch pacing during a game and check that it takes effect at the next gap. Closing the window must not stop timers or automatic delivery.
-5. Enable ready check. Verify `ready`, `Ready!`, `rdy` and `I'm ready` work during the notice and countdown in the selected channel. A wrong channel must not count. Check **Start questions now**, the ready/enrolled count and **Refresh enrolled players** before question one. New players must not join once questions have begun.
+5. Enable **Countdown before starting**. Verify **Start countdown** is visible without Advanced options, defaults to 30 seconds, and can be changed from 5 to 60 seconds. The first question must wait until that countdown ends unless the host starts early. Both host and joined player see the timer. Verify `ready`, `Ready!`, `rdy` and `I'm ready` work during the notice and countdown in the selected channel. A wrong channel must not count. Check **Start questions now**, the ready/enrolled count and **Refresh enrolled players** before question one. New players must not join once questions have begun.
 6. On Forever, test characters with surnames. Unit API names and chat sender names must refer to the same players. Own chat echoes must advance the queue; ready replies and answers must reach those players. A surname must never appear as the stored realm. On Retail, verify same-name players on different realms remain separate.
 7. Try early, malformed, wrong-channel, wrong-GUID and duplicate answers. Only the first valid answer in the window counts. The displayed correct number must match the choices posted to chat. Correct players are named with running scores and streaks; a new streak best gets one callout.
 8. Test Party, Raid, Instance and Guild separately, including leader chat events. Instance requires an instance group; a normal premade party in a dungeon uses Party. No setup should enrol one group's units while sending to another group.
@@ -49,7 +49,8 @@ A self-echo or successful send alone isn't a pass. See [transport](transport.md)
 ## Party player acceptance (new local implementation)
 
 Use the same new build on a host and another Party member, plus one chat-only
-player, in the Retail open world. The released 0.1.1-beta probe alone does not
+player, first in the Retail open world and then in a premade dungeon Party
+with activity restrictions inactive. The released 0.1.1-beta probe alone does not
 include this interface.
 
 1. Open host setup. Confirm no invitation appears until **Open lobby**.
@@ -76,5 +77,7 @@ include this interface.
     colours, Leave confirmation and the pulsing restore button. A 0.2.0-beta
     player must still play normally against a 0.3.0-beta host.
 
-Record client build and paired observations. Instance/Raid/Guild/Forever player
+Record client build and paired observations separately for open world and
+premade dungeon Party. Only remote acknowledgements and a completed game
+prove dungeon delivery; self-echoes do not. Queued Instance/Raid/Guild/Forever player
 transport and UI are separate checks, with no support claim from this test.

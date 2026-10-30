@@ -6,7 +6,7 @@ local function partyReport()
     return "\n\n" .. (ok and report or ("Party diagnostics failed: " .. tostring(report)))
 end
 ns.DEFAULTS = { rounds = 3, perRound = 5, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
-    autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 10, hostParticipates = true,
+    autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 30, hostParticipates = true,
     compactChoices = false, sound = true, hostScale = 1, playerScale = 1 }
 -- Setup ranges. The engine and Party protocol accept wider values from older
 -- clients; the setup controls offer what makes a sensible game.
@@ -86,6 +86,10 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     -- Restore the separate-choice layout on upgrade from the compact default.
     if ns.db.choiceLayoutVersion ~= 1 then
         ns.db.compactChoices, ns.db.choiceLayoutVersion = false, 1
+    end
+    if ns.db.startCountdownVersion ~= 1 then
+        if ns.db.readySeconds == 10 then ns.db.readySeconds = 30 end
+        ns.db.startCountdownVersion = 1
     end
     if type(ns.db.categories) ~= "table" then ns.db.categories = {} end
     for _, category in ipairs(ns.Game.CATEGORIES) do

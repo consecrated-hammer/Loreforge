@@ -68,6 +68,17 @@ H.step(1)
 eq(c.sent,count,'no queued native sends in combat')
 c.combat=false;Q.RequestSync()
 H.untilTrue(function()return c.last.state~='disconnected' end,30,'resync after restrictions',true)
+-- Activity restrictions and chat lockdown still block dungeon traffic outside combat.
+h.instance,c.instance=true,true
+for _, flag in ipairs({'restricted','lockdown'}) do
+    c[flag]=true; H.step(1)
+    eq(c.last.state,'disconnected',flag .. ' visibly suspends player view')
+    local sent=c.sent
+    assert(not Q.Answer(1),flag .. ' prevents answer clicks')
+    H.step(1);eq(c.sent,sent,flag .. ' blocks native traffic')
+    c[flag]=false;Q.RequestSync()
+    H.untilTrue(function()return c.last.state~='disconnected' end,30,flag .. ' recovery inside dungeon',true)
+end
 -- A previously joined character can restore the match after leaving/rejoining the Party.
 local guest=table.remove(H.members,2)
 g:Pause('roster changed')

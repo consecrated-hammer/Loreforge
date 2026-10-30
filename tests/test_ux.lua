@@ -59,6 +59,33 @@ do
     n.db.compactChoices = true
     n = load(n.db, true)
     eq(n.db.compactChoices, true, 'later explicit compact preference is retained')
+    IsInInstance = function() return true, 'party' end
+    assert(n.Party.Available(), 'premade Party can use the player UI inside a dungeon')
+    for _, kind in ipairs({'arena','pvp','raid','scenario','unknown'}) do
+        IsInInstance = function() return true, kind end
+        assert(not n.Party.Available(), 'other instance type stays excluded: ' .. kind)
+    end
+    IsInInstance = function() return true, 'party' end
+    local group, raid, restrictions = IsInGroup, IsInRaid, C_ChatInfo.InChatMessagingLockdown
+    IsInRaid = function() return true end
+    now = now + 0.1
+    assert(not n.Party.Available(), 'raid roster still rejected')
+    IsInRaid = raid
+    IsInGroup = function() return true end
+    now = now + 0.1
+    assert(not n.Party.Available(), 'dual or queued instance group still rejected')
+    IsInGroup = function(category) return category == 2 end
+    now = now + 0.1
+    assert(not n.Party.Available(), 'queued instance group still rejected')
+    IsInGroup = function() return false end
+    now = now + 0.1
+    assert(not n.Party.Available(), 'solo is still local only')
+    IsInGroup = group
+    now = now + 0.1
+    C_ChatInfo.InChatMessagingLockdown = function() return true end
+    assert(not n.Party.Available(), 'chat lockdown still blocks invitations')
+    C_ChatInfo.InChatMessagingLockdown = restrictions
+    assert(n.Party.Available(), 'restored unrestricted dungeon Party is eligible')
     n.OpenHost()
     local function invite(id)
         local packet = assert(n.Party.bus.Send({v=1, kind='invite', id=id, to='*', config={
@@ -147,6 +174,15 @@ local five = 0
 for _ in pairs(g2.pendingRecords) do five = five + 1 end
 eq(five, 5, 'every player still gets a saved record')
 
+-- Old default countdown upgrades once; custom durations and later choices survive.
+ns = load({readySeconds=10})
+eq(ns.db.readySeconds, 30, 'old countdown default upgrades')
+ns.db.readySeconds = 10
+ns = load(ns.db)
+eq(ns.db.readySeconds, 10, 'explicit shorter countdown survives reload')
+ns = load({readySeconds=45})
+eq(ns.db.readySeconds, 45, 'custom countdown preserved')
+
 -- ── Upgrade: old wider settings are clamped, not reset ──
 ns = load({ rounds = 20, perRound = 50, seconds = 120, questionGap = 3 })
 eq(ns.db.rounds, 10, 'rounds clamp to the new maximum')
@@ -157,11 +193,22 @@ eq(ns.db.questionGap, 3, 'in-range values are kept')
 -- ── Setup ──
 ns = load(nil)
 eq(ns.db.hostParticipates, true, 'the host plays along by default')
+eq(ns.db.readySeconds, 30, 'default start countdown is thirty seconds')
 eq(ns.db.compactChoices, false, 'separate choices by default')
 ns.OpenHost()
 local f = ns.hostFrame
 local setup = f.setup
 assert(setup:IsShown(), 'Play opens on setup')
+eq(setup.countdown:GetParent(), setup.left, 'start countdown is outside folded advanced options')
+wow.Click(setup.countdown.plus)
+eq(ns.db.readySeconds, 35, 'start countdown can be configured')
+wow.Click(setup.countdown.minus)
+eq(ns.db.readySeconds, 30, 'start countdown steps back to default')
+ns.db.readyCheck = false; setup.Refresh()
+eq(setup.countdown.plus.enabled, false, 'disabled countdown cannot imply a delay')
+wow.Click(setup.countdown.plus)
+eq(ns.db.readySeconds, 30, 'disabled countdown ignores changes')
+ns.db.readyCheck = true; setup.Refresh()
 local registered = false
 for _, name in ipairs(UISpecialFrames) do if name == 'LoreforgeHostTable' then registered = true end end
 assert(registered, 'Escape closes the main window')

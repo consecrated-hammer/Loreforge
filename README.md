@@ -9,7 +9,7 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 ## What it does
 
 - **One main window.** `/lf` opens Loreforge with three tabs: **Play** for setup and the live game, **History** for finished games and **Hall of Fame** for saved player records.
-- **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. Pacing, the ready check and chat options sit under **Advanced options**.
+- **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. The start countdown is visible in setup; pacing and chat options sit under **Advanced options**.
 - **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Host-paced games wait at **Ask next question**; auto-advance continues after a short gap. The pacing switch changes mode mid-game.
 - **The host plays along** by default, answering by click, chat or an answer key. **Practice solo** runs a private game that posts nothing to chat.
 - **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** under Advanced options enables the compact layout.
@@ -25,7 +25,7 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 1. Join a party, raid, instance group or guild and open `/lf`. Ungrouped, the main button is **Practice solo**.
 2. Pick a preset or set the rounds, questions and answer time yourself, then choose categories and difficulty. Fresh settings select your current group's channel. If the channel doesn't match your group, the banner says so and **Use current group** fixes it. For Guild, **Refresh guild roster** updates the cached players.
 3. Click **Start game**. With Party output in Retail, the button is **Open lobby** first: players with Loreforge can join, the lobby shows who has, and **Start game** begins.
-4. The ready check posts. Players can type `ready`, `ready!`, `rdy` or `I'm ready`. **Start questions now** starts early. **Refresh players** adds anyone who joined the group since; enrolment is fixed once questions begin.
+4. The start countdown defaults to 30 seconds. Set **Start countdown** from 5 to 60 seconds, or disable **Countdown before starting** to skip it. The ready check posts. Players can type `ready`, `ready!`, `rdy` or `I'm ready`. **Start questions now** starts early. **Refresh players** adds anyone who joined the group since; enrolment is fixed once questions begin.
 5. Each question posts with its choices. Players answer `1` to `4` in chat. The board shows who has answered, and the timer turns amber and then red as time runs out.
 6. Results post when time runs out, with the correct answer tinted. In host-paced mode, click **Ask next question** when everyone's ready.
 7. Final scores post, records save and the main button becomes **New game**.
@@ -83,8 +83,10 @@ reveals, streaks, shared scores and a finish headline. Chat-only players can
 still answer normally. `/lf play` restores a joined game and `/lf history`
 opens your history.
 
-This first version is scoped to Retail home Parties outside instances and
-combat. The complete flow still needs an in-game test. See [Party player
+This beta uses Retail home Parties, including premade Parties in dungeons
+when combat and activity restrictions are inactive. Queued Instance groups,
+raids and Forever player UI remain unsupported. The dungeon transport probe has passed; the
+complete player flow still needs an in-game test. See [Party player
 behaviour and protocol](docs/party-client.md).
 
 ## Development

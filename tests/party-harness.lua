@@ -9,7 +9,7 @@ local function create(index,saved)
     e.GetTime=function() return clock end
     e.GetServerTime=function() return 1800000000+math.floor(clock) end
     e.GetFramerate=function() return 60 end
-    e.IsInInstance=function() return c.instance or false end
+    e.IsInInstance=function() return c.instance or false, c.instance and "party" or "none" end
     e.InCombatLockdown=function() return c.combat end
     e.Enum={SendAddonMessageResult={Success=0,AddonMessageThrottle=3,GeneralError=9}}
     e.issecretvalue=function() return false end
@@ -23,7 +23,7 @@ local function create(index,saved)
     end
     e.table=setmetatable({wipe=function(t) for k in pairs(t) do t[k]=nil end end},{__index=table})
     e.CreateFrame=function() return {Show=function() end,Hide=function() end,RegisterEvent=function() end,SetScript=function(self,key,fn) self[key]=fn end} end
-    e.C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,InChatMessagingLockdown=function() return false end,
+    e.C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,InChatMessagingLockdown=function() return c.lockdown or false end,
         SendAddonMessage=function(prefix,text,channel)
             c.sent=c.sent+1
             if c.sendResult then return c.sendResult end
@@ -33,7 +33,7 @@ local function create(index,saved)
             return 0
         end}
     local ns={era="retail",db=saved or {rounds=2,perRound=1,seconds=20,readyCheck=true,readySeconds=5,channel="PARTY",categories={lore=true},difficulty="mixed",replayRecords=false},
-        Restricted=function() return c.combat end,Identity=function(name) return name:lower() end,
+        Restricted=function() return c.combat or c.restricted end,Identity=function(name) return name:lower() end,
         Person=function() return who end,Roster=function() return members end,RefreshHost=function() end,
         HammerCore={Print=function(s)c.logs[#c.logs+1]=s end,Commands={Add=function() end}},
         Player={Render=function(m) c.last=m;c.models[#c.models+1]=m end,Show=function()end,Hide=function()end}}

@@ -537,6 +537,7 @@ local function actions(model)
     if state == "invitation" then return "Join quiz", true, "Decline" end
     if state == "joining" then return "Joining...", false end
     if state == "ready" then
+        if (model.remaining or 0) > 0 and (remaining(model) or 0) <= 0 then return "Starting...", false end
         if model.ready then return "Ready", false end
         return "I'm ready", true
     end
@@ -593,7 +594,8 @@ function Player.Draw()
     f.detail:SetText(detail)
     add(f.detail, detail ~= "", 10)
 
-    local timed = state == "accepting" and type(model.deadline) == "number"
+    local timed = (state == "accepting" or (state == "ready" and (model.remaining or 0) > 0))
+        and type(model.deadline) == "number"
     add(f.timer, timed, 12, 6)
     f.timer.count:SetShown(timed)
     local question = (state == "presenting" or state == "accepting" or REVEALED[state]) and text(model.question) or ""
@@ -718,9 +720,10 @@ end
 
 function Player.UpdateTimer()
     local f, model = Player.frame, Player.model
-    if not (f and model and model.state == "accepting" and f.timer:IsShown()) then return end
+    if not (f and model and (model.state == "accepting" or model.state == "ready") and f.timer:IsShown()) then return end
     local left = remaining(model) or 0
-    local seconds = type(model.config) == "table" and tonumber(model.config.seconds) or nil
+    local seconds = type(model.config) == "table" and tonumber(model.state == "ready"
+        and (model.config.readySeconds or (model.remaining or 0) / 1000) or model.config.seconds) or nil
     local fraction = seconds and seconds > 0 and math.min(1, left / seconds) or 0
     f.timer.fill:SetShown(fraction > 0)
     f.timer.fill:SetWidth(math.max(1, (INNER - 44) * fraction))
@@ -729,7 +732,7 @@ function Player.UpdateTimer()
     T.Text(f.timer.count, left <= 5 and "danger" or "text")
     -- A soft tick for each of the last five seconds, until this player answers.
     local whole = math.ceil(left)
-    if whole >= 1 and whole <= 5 and whole ~= Player.lastTick and not chosen(model) then
+    if model.state == "accepting" and whole >= 1 and whole <= 5 and whole ~= Player.lastTick and not chosen(model) then
         Player.lastTick = whole
         if ns.Sound then ns.Sound("tick") end
     end
@@ -905,7 +908,8 @@ function Player.Primary()
     if state == "invitation" then
         if model.id then Player.opened[model.id] = true end
         act("Join")
-    elseif state == "ready" then act("Ready")
+    elseif state == "ready" then
+        if (model.remaining or 0) <= 0 or (remaining(model) or 0) > 0 then act("Ready") end
     elseif state == "accepting" then act("RetryAnswer")
     elseif state == "disconnected" then act("RequestSync")
     elseif state == "finished" or state == "stopped" then act("ShowHistory")

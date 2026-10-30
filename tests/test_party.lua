@@ -3,6 +3,7 @@ local H=assert(loadfile('tests/party-harness.lua'))()
 local create,step,untilTrue,clients,members=H.create,H.step,H.untilTrue,H.clients,H.members
 local h,c=create(1),create(2)
 local P,Q,g=h.ns.Party,c.ns.Party,h.ns.game
+h.instance,c.instance=true,true -- premade home Party physically inside a dungeon
 assert(P.OpenLobby())
 untilTrue(function()return Q.client~=nil end,20,'invitation delivered')
 eq(c.last.state,'invitation','explicit invitation')

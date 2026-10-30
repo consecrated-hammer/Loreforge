@@ -163,6 +163,17 @@ for i = 1, 5 do
     if i < 5 then milestones:Next(); flush(milestones) end
 end
 eq(callouts, 1, "rebuilding a streak does not repeat a personal-best callout")
+local defaultReady = new()
+local defaultReadyConfig = {}
+for k, v in pairs(config) do defaultReadyConfig[k] = v end
+defaultReadyConfig.readyCheck = true
+assert(defaultReady:Start(defaultReadyConfig, "retail", roster, 99))
+flush(defaultReady)
+eq(defaultReady.readyDeadline, time + 30, "default countdown starts after announcement echo")
+time = time + 29; defaultReady:Tick()
+eq(defaultReady.phase, "ready", "first question waits for the full default countdown")
+time = time + 1; defaultReady:Tick()
+eq(defaultReady.phase, "announcing", "first question starts after thirty seconds")
 local readyConfig = { rounds = 1, perRound = 1, seconds = 5, channel = "RAID", difficulty = "mixed",
     categories = { lore = true }, readyCheck = true, readySeconds = 5 }
 local ready = Game.New(bank, function() return time end, function(n) return n end, {})

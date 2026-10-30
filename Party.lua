@@ -24,7 +24,10 @@ local function roster()
 end
 local function context()
     if ns.era ~= "retail" or ns.Transport.Blocked() or not me() then return false end
-    if IsInInstance then local inside = IsInInstance(); if inside then return false end end
+    if IsInInstance then
+        local inside, kind = IsInInstance()
+        if inside and kind ~= "party" then return false end
+    end
     local r, count = roster(), 0
     for _ in pairs(r) do count = count + 1 end
     return count > 1 and r[me().key]~=nil
@@ -64,12 +67,13 @@ local function config(source)
     local cats = {}
     for _, cat in ipairs(ns.Game.CATEGORIES) do if source.categories and source.categories[cat[1]] then cats[#cats + 1] = cat[2] end end
     return {rounds = source.rounds, perRound = source.perRound, seconds = source.seconds,
-        difficulty = source.difficulty or "mixed", categories = table.concat(cats, ", "), readyCheck = source.readyCheck ~= false}
+        difficulty = source.difficulty or "mixed", categories = table.concat(cats, ", "), readyCheck = source.readyCheck ~= false, readySeconds = source.readySeconds or 30}
 end
 local function validConfig(c)
     return type(c) == "table" and integer(c.rounds, 1, 20) and integer(c.perRound, 1, 50)
         and integer(c.seconds, 5, 120) and type(c.categories) == "string" and #c.categories <= 512
         and (c.difficulty == "mixed" or c.difficulty == "easy" or c.difficulty == "hard") and type(c.readyCheck) == "boolean"
+        and (c.readySeconds == nil or integer(c.readySeconds, 5, 60))
 end
 local function validRows(rows)
     if type(rows) ~= "table" or #rows > 5 then return false end
@@ -266,7 +270,7 @@ function P.GameEvent(event)
 end
 function P.OpenLobby()
     if not P.Available() or ns.db.channel ~= "PARTY" or ns.game:Active() then
-        ns.HammerCore.Print("Party lobbies work in a Retail Party, outside instances and combat."); return false
+        ns.HammerCore.Print("Party lobbies need a Retail home Party without combat or activity restrictions."); return false
     end
     if P.client and P.client.model.state ~= "finished" and P.client.model.state ~= "stopped" then
         ns.HammerCore.Print("Leave the Party game you joined before hosting."); return false
@@ -302,6 +306,10 @@ function P.HostStarted()
     end
     h.started, h.config, h.dirty, h.serial = true, config(ns.db), true, ns.game.serial
     ns.game.presentationGate = next(h.joined) ~= nil
+    if ns.game.phase == "ready" or ns.game.phase == "ready_announcing" then
+        h.lastInvite = now()
+        send("invite", h.id, "*", {config=h.config}, 2, "invite")
+    end
 end
 function P.Join()
     local c = P.client
@@ -329,7 +337,10 @@ function P.Leave()
 end
 function P.Ready()
     local c = P.client
-    if c and c.joined and c.model.state == "ready" then send("ready", c.id, c.hostKey, {}, 1) end
+    if c and c.joined and c.model.state == "ready" and context()
+        and not ((c.model.remaining or 0) > 0 and now() >= c.model.deadline) then
+        send("ready", c.id, c.hostKey, {}, 1)
+    end
 end
 function P.Answer(choice)
     local c = P.client
@@ -537,7 +548,7 @@ function P.Tick()
         ns.game.presentationGate=false
         if P.wasAvailable then
             P.bus.Cancel()
-            if P.host and ns.game:Active() and next(P.host.joined) then ns.game:Pause("Party UI paused; return to the open world and resume.") end
+            if P.host and ns.game:Active() and next(P.host.joined) then ns.game:Pause("Party UI paused; end combat or restricted activity, check your Party and resume.") end
             if P.client and P.client.joined then P.client.model.state,P.client.model.status="disconnected","Party UI unavailable. Use Party chat when it is safe.";render(P.client.model) end
         end
         P.wasAvailable = false
@@ -588,6 +599,9 @@ function P.Tick()
             if ns.Codec.Encode(current) ~= ns.Codec.Encode(h.config) then h.config=current;h.dirty=true end
             if now()-(h.lastInvite or 0)>15 then h.lastInvite=now();send("invite",h.id,"*",{config=h.config},2,"invite") end
         else
+            if (g.phase=="ready" or g.phase=="ready_announcing") and now()-(h.lastInvite or 0)>15 then
+                h.lastInvite=now();send("invite",h.id,"*",{config=h.config},2,"invite")
+            end
             g.presentationGate = next(h.joined) ~= nil
             if g.phase == "presenting" and (not h.gate or h.gate.index~=g.index or h.gate.attempt~=g.attempt) then
                 h.gate={index=g.index,attempt=g.attempt,pending=targets(),deadline=now()+12}
@@ -659,10 +673,11 @@ function P.Report()
     local count = 0
     for _ in pairs(roster()) do count = count + 1 end
     local shown = ns.Player and ns.Player.frame and ns.Player.frame:IsShown() or false
-    local inside = IsInInstance and IsInInstance() or false
+    local inside, kind = false, "none"
+    if IsInInstance then inside, kind = IsInInstance() end
     local lines = {
         "Party player diagnostics",
-        "Available: " .. tostring(P.Available() == true) .. "; roster=" .. count .. "; instance=" .. tostring(inside)
+        "Available: " .. tostring(P.Available() == true) .. "; roster=" .. count .. "; instance=" .. tostring(inside) .. "/" .. tostring(kind)
             .. "; blocked=" .. tostring(ns.Transport.Blocked()),
         "Transport: " .. tostring(t and t.available) .. "; ChatThrottleLib=" .. tostring(ChatThrottleLib and ChatThrottleLib.version)
             .. "; prefix=" .. tostring(t and t.PREFIX),

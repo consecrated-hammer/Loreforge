@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.3.2-beta] - 2026-10-30
+
+- Allow the Party player beta in premade Retail Parties inside dungeons when combat, activity restrictions and chat lockdown are inactive. Queued Instance groups and raids remain excluded. The dungeon transport probe has passed; the full player flow still needs an in-game check.
+- Default the configurable start countdown to 30 seconds and expose it in the main setup controls. The old 10-second default upgrades once; other saved durations are preserved.
+- Show joined players the start countdown and repeat invitations until the first question so players can join during the countdown.
+
 ## [0.3.1-beta] - 2026-10-30
 
 - Restore one chat line per answer choice, including on upgrade from the compact default. The compact layout remains optional.

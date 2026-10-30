@@ -49,7 +49,7 @@ end)
 
 HC.Settings:NewPage({ name = 'Party games', description = 'Invitations to other hosts\' Party games.' }, function(panel, y)
     _, y = UI.Header(panel, 'Party invitations', y)
-    _, y = UI.Check(panel, 'Show Party game invitations', 'Ask before joining another player\'s game. Party games work in Retail, outside instances.', y,
+    _, y = UI.Check(panel, 'Show Party game invitations', 'Ask before joining another player\'s game. Party games work in Retail home Parties, including dungeons when activity restrictions are inactive.', y,
         function() return ns.db.partyInvites ~= false end, function(value) ns.db.partyInvites = value end)
     _, y = UI.Text(panel, 'Joining gives you clickable questions and sends your answers to the host. Other addons in the group can read Party addon messages.', y)
     local row

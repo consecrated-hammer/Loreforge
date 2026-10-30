@@ -114,7 +114,7 @@ function Game:Start(config, era, roster, serial)
         channel = config.channel, replayRecords = config.replayRecords ~= false,
         autoMode = config.autoMode == true, questionGap = config.questionGap or 5,
         idleLimit = config.idleLimit == nil and 3 or config.idleLimit,
-        readyCheck = config.readyCheck ~= false, readySeconds = config.readySeconds or 10,
+        readyCheck = config.readyCheck ~= false, readySeconds = config.readySeconds or 30,
         hostParticipates = config.hostParticipates == true, localOnly = config.localOnly == true,
         manualSend = config.manualSend == true, compactChoices = config.compactChoices == true }
     self.players, self.run, self.serial = players, {}, serial
