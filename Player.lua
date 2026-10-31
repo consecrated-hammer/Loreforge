@@ -15,7 +15,7 @@ local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 6, 10
 local SCROLLBAR, HEADER, FOOTER, MIN_BODY = 10, 44, 48, 120
 local INNER = WIDTH - PAD * 2 - SCROLLBAR
 local BADGE = 96
-local ACTIVE = { joining = true, lobby = true, ready = true, presenting = true, accepting = true,
+local ACTIVE = { preparing=true, announcing=true, joining = true, lobby = true, ready = true, presenting = true, accepting = true,
     revealing = true, between = true, paused = true, disconnected = true }
 local REVEALED = { revealing = true, between = true, finished = true }
 local NOT_CONFIRMED = "Answer not confirmed; use Party chat"
@@ -170,7 +170,9 @@ local function create()
         if not Player.syncingBar then Player.ScrollTo(value) end
     end)
 
-    f.headline = label(body, "GameFontNormalLarge", "flavour", INNER)
+    -- Completion view: a large headline, the winner line and your result.
+    f.headline = label(body, "GameFontNormalHuge", "flavour", INNER)
+    f.winner = label(body, "GameFontNormalLarge", "text", INNER)
     f.status = label(body, "GameFontHighlight", "text", INNER)
     f.detail = label(body, "GameFontHighlightSmall", "muted", INNER)
     f.timer = CreateFrame("Frame", nil, body)
@@ -300,9 +302,24 @@ local STATUS = {
     invitation = function(m) return (m.host or "The host") .. " invited you to a quiz." end,
     joining = function(m) return "Joining. Waiting for " .. (m.host or "the host") .. " to confirm." end,
     lobby = function(m) return "You're in. Waiting for " .. (m.host or "the host") .. " to start." end,
-    ready = function(m) return m.ready and "You're ready. Waiting for everyone else." or "Ready check: are you ready?" end,
+    ready = function(m)
+        if (m.remaining or 0)>0 and (remaining(m) or 0)<=0 then return "Countdown complete. Waiting for the first question." end
+        if m.ready then return "You're ready. Waiting for everyone else." end
+        if m.readyPending then return "Ready sent. Waiting for the host to confirm." end
+        return m.readyStatus or "Ready check: are you ready?"
+    end,
+    preparing = function() return "Preparing the next question for everyone." end,
+    announcing = function() return "Read the question. Answers open after the choices post." end,
     presenting = function() return "Get ready. Answers open in a moment." end,
-    accepting = function() return "Pick an answer. Your first click counts." end,
+    accepting = function(m)
+        local choice,confirm=chosen(m)
+        if choice then
+            if confirm=="locked" then return "Your answer is locked. Waiting for the result." end
+            if confirm=="pending" then return "Waiting for the host to lock your answer." end
+            return text(m.answerStatus)~="" and m.answerStatus or NOT_CONFIRMED
+        end
+        return text(m.answerStatus)~="" and m.answerStatus or "Pick an answer. Your first click counts."
+    end,
     revealing = function() return "Answer revealed." end,
     between = function(m)
         if type(m.nextAt) == "number" then
@@ -382,6 +399,9 @@ local function drawRows(f, model)
             if row == me then suffix = " (you)" end
             if row.winner and model.state == "finished" then suffix = suffix .. (winners > 1 and " · Shared win" or " · Winner") end
             widget.name:SetText((row == pinned and "... " or "") .. rank .. name .. suffix)
+            -- Final standings read at normal size; live standings stay compact.
+            local font = model.state == "finished" and "GameFontHighlight" or "GameFontHighlightSmall"
+            if widget.name.SetFontObject then widget.name:SetFontObject(font); widget.score:SetFontObject(font) end
             local medal = model.state == "finished" and (tonumber(row.total) or 0) > 0 and ns.MEDALS and ns.MEDALS[tonumber(row.rank) or 0]
             if row == me then T.Text(widget.name, "selected")
             elseif medal then widget.name:SetTextColor(medal[1], medal[2], medal[3])
@@ -456,23 +476,74 @@ local function revealText(model)
     return table.concat(lines, "\n")
 end
 
--- The finish line: a win, a shared win or the place, for joined players.
+-- Top scorers of a finished game: names of everyone sharing the best total
+-- above zero, and that total.
+local function winners(model)
+    local rows = type(model.rows) == "table" and model.rows or {}
+    local best = 0
+    for _, row in ipairs(rows) do best = math.max(best, tonumber(row.total) or 0) end
+    local names = {}
+    if best > 0 then
+        for _, row in ipairs(rows) do
+            if (tonumber(row.total) or 0) == best then
+                names[#names + 1] = text(row.name) ~= "" and row.name or tostring(row.key or "?")
+            end
+        end
+    end
+    return names, best
+end
+
+-- Completion view: "Game complete", then the winner or a shared win.
 local function headlineText(model)
+    if model.state=="finished" then return "Game complete" end
+    if model.state=="ready" then
+        if (model.remaining or 0)>0 and (remaining(model) or 0)<=0 then return "Starting soon" end
+        if model.ready then return "You're ready" end
+        if model.readyPending then return "Ready sent" end
+        if model.readyStatus then return "Ready not confirmed" end
+    elseif model.state=="accepting" then
+        local choice,confirm=chosen(model)
+        if choice then return "Answer "..choice..(confirm=="locked" and " locked" or confirm=="pending" and " selected" or " not confirmed") end
+        if text(model.answerStatus)~="" then return "Answer not sent" end
+    end
+    return ""
+end
+
+local function winnerText(model)
     if model.state ~= "finished" then return "" end
+    if model.resultsPending and #(type(model.rows) == "table" and model.rows or {}) == 0 then return "Final scores are on their way." end
+    local names, best = winners(model)
+    if #names == 0 then return "No correct answers, so no winner this time." end
+    if #names == 1 then return names[1] .. " wins with " .. plural(best, "point") .. "." end
+    return "Shared win: " .. table.concat(names, ", ") .. ", " .. plural(best, "point") .. " each."
+end
+
+local function finishedYouText(model)
     local me = myRow(model)
-    if not me then return model.joined and "Game over" or "" end
+    if not me then
+        -- Only players who answered appear in the standings.
+        if not model.joined then return "" end
+        return model.resultsPending and "Your result arrives with the final scores."
+            or "You didn't answer any questions in this game."
+    end
     local rank, total = tonumber(me.rank) or 0, tonumber(me.total) or 0
     local rows = type(model.rows) == "table" and model.rows or {}
+    local result
     if rank == 1 and total > 0 then
-        local shared = 0
-        for _, row in ipairs(rows) do if tonumber(row.rank) == 1 then shared = shared + 1 end end
-        return shared > 1 and "Shared win!" or "You won!"
+        result = (#winners(model) > 1 and "You shared the win with " or "You won with ") .. plural(total, "point")
+    elseif rank > 0 then
+        result = "You finished " .. ordinal(rank) .. " of " .. #rows .. " with " .. plural(total, "point")
+    else
+        result = "You scored " .. plural(total, "point")
     end
-    if rank > 0 then return ordinal(rank) .. " of " .. #rows end
-    return "Game over"
+    local parts = { result }
+    local best = tonumber(me.bestStreak) or 0
+    if best >= 2 then parts[#parts + 1] = "best streak " .. best end
+    return table.concat(parts, " · ")
 end
 
 local function youText(model)
+    if model.state == "finished" then return finishedYouText(model) end
     local me = myRow(model)
     if not me then return model.joined and "You: no points yet" or "" end
     local parts = { "You: " .. plural(tonumber(me.total) or 0, "point") }
@@ -539,7 +610,8 @@ local function actions(model)
     if state == "ready" then
         if (model.remaining or 0) > 0 and (remaining(model) or 0) <= 0 then return "Starting...", false end
         if model.ready then return "Ready", false end
-        return "I'm ready", true
+        if model.readyPending then return "Ready sent...", false end
+        return model.readyStatus and "Try ready again" or "I'm ready", true
     end
     if state == "accepting" then
         local _, confirm = chosen(model)
@@ -578,7 +650,10 @@ function Player.Draw()
     f.position:SetText(state == "history" and "" or positionLine(model))
     local headline = headlineText(model)
     f.headline:SetText(headline)
-    add(f.headline, headline ~= "", 6)
+    add(f.headline, headline ~= "", 8)
+    local winner = winnerText(model)
+    f.winner:SetText(winner)
+    add(f.winner, winner ~= "", 6)
     local status = STATUS[state] and STATUS[state](model) or ""
     f.status:SetText(status)
     add(f.status, status ~= "", 4)
@@ -598,7 +673,9 @@ function Player.Draw()
         and type(model.deadline) == "number"
     add(f.timer, timed, 12, 6)
     f.timer.count:SetShown(timed)
-    local question = (state == "presenting" or state == "accepting" or REVEALED[state]) and text(model.question) or ""
+    -- The completion view leaves the last question, choices and reveal behind.
+    local finished = state == "finished"
+    local question = not finished and (state == "announcing" or state == "presenting" or state == "accepting" or REVEALED[state]) and text(model.question) or ""
     f.question:SetText(question)
     add(f.question, question ~= "", 12)
     local hasChoices = question ~= "" and type(model.choices) == "table"
@@ -606,13 +683,14 @@ function Player.Draw()
     for _, b in ipairs(f.answers) do add(b, hasChoices, 6, b:GetHeight()) end
     f.answerStatus:SetText(answerStatus)
     add(f.answerStatus, answerStatus ~= "", 10)
-    local reveal = REVEALED[state] and revealText(model) or ""
+    local reveal = REVEALED[state] and not finished and revealText(model) or ""
     f.reveal:SetText(reveal)
     add(f.reveal, reveal ~= "", 10)
 
-    local you = (ACTIVE[state] and state ~= "joining" or state == "finished") and youText(model) or ""
+    local you = (ACTIVE[state] and state ~= "joining" or finished) and youText(model) or ""
     f.you:SetText(you)
-    add(f.you, you ~= "", 12)
+    T.Text(f.you, finished and "selected" or "text")
+    add(f.you, you ~= "", finished and 16 or 12)
 
     local history = state == "history"
     local count = history and 0 or drawRows(f, model)
@@ -625,7 +703,7 @@ function Player.Draw()
     end
     f.standTitle:SetText(heading)
     add(f.standTitle, heading ~= "", 6)
-    for i, row in ipairs(f.rows) do add(row, not history and i <= count, 2, 20) end
+    for i, row in ipairs(f.rows) do add(row, not history and i <= count, finished and 4 or 2, finished and 22 or 20) end
 
     local rounds = roundEntries(model)
     local view = Player.roundView
@@ -896,7 +974,12 @@ function Player.Choose(index)
     if left and left <= 0 then return end
     Player.clicked = { id = model.id, index = model.index, attempt = model.attempt, choice = index, at = now() }
     Player.Draw()
-    act("Answer", index)
+    local accepted=act("Answer", index)
+    if accepted==false then
+        Player.clicked=nil
+        if not model.selected then model.answerStatus="Answer not sent. Check your Party and try again." end
+        Player.Draw()
+    end
 end
 
 function Player.Primary()
@@ -909,7 +992,7 @@ function Player.Primary()
         if model.id then Player.opened[model.id] = true end
         act("Join")
     elseif state == "ready" then
-        if (model.remaining or 0) <= 0 or (remaining(model) or 0) > 0 then act("Ready") end
+        if not model.ready and not model.readyPending and ((model.remaining or 0) <= 0 or (remaining(model) or 0) > 0) then act("Ready") end
     elseif state == "accepting" then act("RetryAnswer")
     elseif state == "disconnected" then act("RequestSync")
     elseif state == "finished" or state == "stopped" then act("ShowHistory")

@@ -5,6 +5,9 @@
     "Libs/LibStub/LibStub.lua": "26401bc42c26d1d1b6f7ad9410aa464edcbe4d32d74ebadeeecd8c0110236f7d",
     "Libs/ChatThrottleLib/ChatThrottleLib.lua": "3491b6c98cae1634a9f0494b436e86df1632309fb68181c25240b53c4d86dde8",
     "Libs/LibDeflate/LibDeflate.lua": "880e396fbaac7dcf99d33fc706a7f129147f2910f8414a143f8dea57e327c06b",
-    "Libs/LibDeflate/LICENSE.txt": "07f118887f364847a7389185c703a1b0abf5a7f353d5cdc9da6a48c7f142bb16"
-  }
+    "Libs/LibDeflate/LICENSE.txt": "07f118887f364847a7389185c703a1b0abf5a7f353d5cdc9da6a48c7f142bb16",
+    "Libs/LibSerialize/LibSerialize.lua": "5aa318ac8f511094a0e0f6437941754528a109fe4c3c307433b7451b3ccf8b4a",
+    "Libs/LibSerialize/LICENSE": "20dfddf4b7b254dc9048734b9cf67658769299189cd0a53b3c638eafd4c0da06"
+  },
+  "libserialize_commit": "aa6e50dddad28f8dfa6c27c9b1e15ae40262b4a5"
 }

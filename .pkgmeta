@@ -17,6 +17,7 @@ plain-copy:
   - Libs/LibStub
   - Libs/ChatThrottleLib
   - Libs/LibDeflate
+  - Libs/LibSerialize
 
 ignore:
   - .github

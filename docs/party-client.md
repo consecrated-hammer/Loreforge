@@ -30,12 +30,15 @@ the countdown and players can join until questions begin. The host can still
 choose to start early.
 
 The ready check uses a separate **I'm ready** action. Joining does not mark a
-player ready. Joining closes once question announcements start. The host can
+player ready. Clicking it immediately shows **Ready sent** and disables repeated
+clicks until the host confirms **You're ready**. Missing confirmation or a queue
+failure offers a retry or Party-chat fallback. Joining closes once question announcements start. The host can
 continue without every player checking in, matching the existing optional
 ready-check rules.
 
 Joined players get the current question with four wrapped, clickable choices.
-The first click shows **Sending...**. Only the host's receipt changes that to
+The first click immediately highlights the choice and shows a prominent
+**Answer N selected** heading with **Sending...**. Only the host's receipt changes that to
 **Locked**. A missing receipt offers a retry of the same choice or Party-chat
 fallback. A chat answer winning the race stays authoritative; a later click
 cannot replace it. Correct answers, streaks and party scores appear after
@@ -51,14 +54,33 @@ reachable, and supports a clamped scale.
 
 ## Timing and failure behaviour
 
-`Game.lua` remains the only scoring and answer-acceptance engine. After the
-last question chat echo, joined clients receive the question in a disabled
-presentation state. They acknowledge complete, validated assembly. The host
-waits up to 12 seconds, then sends an explicit **Answers open** chat line and
-opens one host-owned answer deadline after that line is confirmed. Missing
-clients get a chat-fallback notice. Reading time and message latency are not
-identical across clients; displayed client timers are estimates and the host
-decides whether an answer is in time.
+`Game.lua` remains the only scoring and answer-acceptance engine. The staged
+question-sync update negotiates `earlyQuestions` per participant. When all
+joined addon players support it, the current question is prepared on their
+clients while hidden on both the host and player screens. Rules can post,
+but the first question line waits for preparation receipts, up to 12 seconds.
+A timeout prints an explicit Party-chat fallback notice.
+
+The first question chat echo reveals the host card. A prepared player's
+selected-host Party/Party-leader chat event reveals the same cached question
+immediately. A small `show` packet is the fallback if that event is missed.
+The queued-text preview and secure send button obey the same hold, and
+restart chat lines include the numeric attempt to reject stale cues.
+
+Preparation uses a stable session/question/attempt/revision identity separate
+from ordinary snapshot sequence numbers. A `show` arriving before the payload
+is buffered. Showing the question never enables answers. After the final
+choice is confirmed, the existing presentation gate retains shown receipts;
+it does not resend the same bulk question. Only the confirmed **Answers open**
+notice starts the host-owned deadline. Missing clients have a second bounded
+presentation timeout and can use chat. Mixed older clients keep the previous
+post-chat snapshot flow; all addon participants need the staged update for
+the synchronized presentation path.
+
+This removes the intentional host reading lead. It cannot promise identical
+wall-clock display times across two networked clients, and a modified addon
+can inspect prepared data. Display timers remain estimates and the host
+alone decides whether an answer is in time. Transport queue/rate bounds and restrictions are unchanged.
 
 Pause/restart changes the attempt number. Old choices and acknowledgements
 cannot unlock or score a new attempt. Combat and activity/chat restrictions stop
@@ -78,7 +100,12 @@ decoding. Each encoded native packet still fits 255 bytes and retains the
 small compressed-input cap. Native send guards check the active context and
 generation on every CTL attempt, including retries.
 
-`Codec.lua` parses typed length-prefixed values without evaluating Lua. It
+Party packets negotiate the network-only LibSerialize codec when all explicit
+recipients support it. Invite, join and sync messages remain in the original
+format. Unknown or older recipients use the original format for the whole
+packet. See [wire codec](wire-codec.md) for compatibility, bounds and measurements.
+
+`Codec.lua` remains the saved-history and legacy packet codec. It
 limits messages to 32 KiB, strings to 4 KiB, nesting to eight and parsed values
 to 8,192. `PartyBus.lua` splits into 160-byte fragments with declared size and
 checksum; at most 205 fragments and sixteen concurrent assemblies, with two bulk and

@@ -121,7 +121,7 @@ local function targets()
     return out
 end
 local function send(kind, id, to, body, priority, replace)
-    body = body or {}; body.v, body.kind, body.id, body.to = 1, kind, id, to
+    body = body or {}; body.wireCodec = ns.WireCodec.Available() and 2 or nil; body.v, body.kind, body.id, body.to = 1, kind, id, to
     local expected = to == "*" and targets() or {[to] = true}
     if kind == "invite" then expected = {} end
     if kind=="result" then
@@ -136,11 +136,21 @@ local function send(kind, id, to, body, priority, replace)
     end
     return packet,why
 end
-local phases = {lobby=true, ready=true, announcing=true, presenting=true, accepting=true, revealing=true, between=true, paused=true, finished=true, stopped=true}
+local phases = {preparing=true,lobby=true, ready=true, announcing=true, presenting=true, accepting=true, revealing=true, between=true, paused=true, finished=true, stopped=true}
+local function supportsEarly(h)
+    if not h or not next(h.joined) then return false end
+    for key in pairs(h.joined) do if not (h.early and h.early[key]) then return false end end
+    return true
+end
+local function earlyQuestions(h)
+    local mode=h and h.questionMode
+    return mode and mode.index==ns.game.index and mode.attempt==ns.game.attempt and mode.early
+end
 local function snapshot()
     local h, g = P.host, ns.game
     local state = h.started and g.phase or "lobby"
     if state == "ready_announcing" then state = "ready" elseif state == "opening" then state = "presenting" end
+    if state == "announcing" and h.preparation and earlyQuestions(h) and not g.questionVisible then state="preparing" end
     local m = {state = state, host = clean(me().name), config = h.config, index = g.index or 0, round = g.round or 0,
         attempt = g.attempt or 0, totalQuestions = h.config.rounds * h.config.perRound, rows = rows(h.started and g or nil),
         status = state == "lobby" and "The host is setting up the game." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
@@ -150,7 +160,7 @@ local function snapshot()
         m.hostPaced = not g.config.autoMode
         if g.config.autoMode and g.nextQuestionAt then m.nextIn = math.floor(math.max(0, g.nextQuestionAt - now()) * 1000) end
     end
-    if state == "presenting" or state == "accepting" or state == "revealing" or state == "between" or state == "finished" then
+    if state == "preparing" or (state == "announcing" and g.questionVisible) or state == "presenting" or state == "accepting" or state == "revealing" or state == "between" or state == "finished" then
         local item = g.run and g.run[g.index]
         if item then
             m.question, m.choices = clean(item.text), {}
@@ -162,26 +172,76 @@ local function snapshot()
             end
         end
     end
+    if state=="preparing" then m.firstLine=h.preparation.firstLine end
     if state=="lobby" then m.index,m.round,m.attempt=0,0,0 end
     return m
 end
 local function broadcast(kind, to)
     local h = P.host
     if not h then return end
-    local revision = h.gate and ns.game.phase == "presenting" and h.gate.revision
+    local revision = h.gate and not h.gate.preloaded and ns.game.phase == "presenting" and h.gate.revision
     if not revision then h.seq = h.seq + 1; revision = h.seq end
     local m = snapshot(); m.seq = revision
+    local prep=h.preparation
+    if prep and prep.index==ns.game.index and prep.attempt==ns.game.attempt then m.preparationRevision=prep.revision or revision end
     send(kind or "snapshot", h.id, to or "*", m, 2, "snapshot:" .. (to or "*"))
     return h.seq
+end
+local function showPrepared(c, index, attempt, revision)
+    local m=c and c.model
+    if not m or m.index~=index or m.attempt~=attempt or m.preparationRevision~=revision or not m.question
+        or (m.state~="preparing" and m.state~="announcing") then return false end
+    m.state="announcing"
+    c.shownRevision=revision
+    if render(m) then send("presented",c.id,c.hostKey,{index=index,attempt=attempt,revision=revision},1) end
+    return true
+end
+function P.Chat(text, sender, channel)
+    local c=P.client
+    if not c or not c.joined or channel~="PARTY" or ns.Identity(sender)~=c.hostKey or not context() then return end
+    if c.model.state=="preparing" and text==c.model.firstLine then
+        showPrepared(c,c.model.index,c.model.attempt,c.model.preparationRevision)
+    end
+end
+-- Prime the question while it is hidden on both screens. Only the first
+-- public chat echo may reveal it; answer/scoring gates remain independent.
+function P.PrepareQuestion()
+    local h,g=P.host,ns.game
+    if not h or not h.started or g.phase~="announcing" then return end
+    if not h.questionMode or h.questionMode.index~=g.index or h.questionMode.attempt~=g.attempt then
+        h.questionMode={index=g.index,attempt=g.attempt,early=supportsEarly(h)}
+    end
+    if not earlyQuestions(h) then return end
+    local prep=h.preparation
+    if not prep or prep.index~=g.index or prep.attempt~=g.attempt then
+        prep={index=g.index,attempt=g.attempt,pending=targets(),shown={},deadline=now()+12,firstLine=g.queue[g.questionCursor]}
+        h.preparation=prep
+        prep.revision=broadcast()
+    end
+end
+-- This callback is read-only: getters and secure button refreshes cannot
+-- transmit data or reset the preparation deadline.
+function P.CanPostQuestion()
+    local h,g=P.host,ns.game
+    if not h or not h.started or g.phase~="announcing" or not earlyQuestions(h) then return true end
+    if g.cursor~=g.questionCursor or g.questionVisible then return true end
+    local prep=h.preparation
+    if not prep or prep.index~=g.index or prep.attempt~=g.attempt then return false end
+    if now()>=prep.deadline then return true end
+    for key in pairs(prep.pending) do if h.joined[key] and roster()[key] then return false end end
+    return true
 end
 local function apply(m)
     local c = P.client
     if not c or not phases[m.state] or not validConfig(m.config) or not validRows(m.rows)
-        or not integer(m.seq, 1, 1000000000) or m.seq < (c.seq or 0) or (m.seq == (c.seq or 0) and (m.state ~= "presenting"
-            or (c.model.state ~= "presenting" and c.model.state ~= "disconnected")))
+        or not integer(m.seq, 1, 1000000000) or m.seq < (c.seq or 0) or (m.seq == (c.seq or 0) and not (
+            ((m.state=="presenting" or m.state=="preparing") and (c.model.state==m.state or c.model.state=="disconnected"))
+            or (m.state=="announcing" and c.model.state=="preparing")))
         or not integer(m.index, 0, 1000) or not integer(m.attempt, 0, 10000)
         or not integer(m.round, 0, 20) or not integer(m.remaining, 0, 120000) then return end
-    if (m.state == "presenting" or m.state == "accepting" or m.state == "revealing" or m.state == "between") and not m.question then return end
+    if (m.state == "preparing" or m.state == "presenting" or m.state == "accepting" or m.state == "revealing" or m.state == "between") and not m.question then return end
+    if m.preparationRevision~=nil and not integer(m.preparationRevision,1,1000000000) then return end
+    if m.state=="preparing" and (not m.preparationRevision or type(m.firstLine)~="string" or #m.firstLine>240) then return end
     if m.question then
         if type(m.question) ~= "string" or #m.question > 4096 or type(m.choices) ~= "table" or #m.choices ~= 4 then return end
         for i = 1, 4 do if type(m.choices[i]) ~= "string" or #m.choices[i] > 2048 then return end; m.choices[i] = clean(m.choices[i]) end
@@ -210,9 +270,21 @@ local function apply(m)
     m.nextAt = m.nextIn and (now() + m.nextIn / 1000) or nil
     m.resultsPending = m.state=="finished" and not history().byId[c.id] or false
     for _, row in ipairs(m.rows) do if row.key == m.me then m.ready = row.ready == true end end
+    if m.state=="ready" and not m.ready and c.model.state=="ready" and c.model.index==m.index and c.model.attempt==m.attempt then
+        m.readyPending,m.readyStatus=c.model.readyPending,c.model.readyStatus
+    else c.readyAt=nil end
+    if c.pendingShow and ((m.preparationRevision and c.pendingShow.revision<m.preparationRevision) or m.state=="finished" or m.state=="stopped") then c.pendingShow=nil end
     c.model = m
-    if render(m) and m.state == "presenting" and m.question then
-        send("presented", c.id, c.hostKey, {index = m.index, attempt = m.attempt, revision = m.seq}, 1)
+    if render(m) and m.question then
+        if m.state=="preparing" then
+            send("prepared",c.id,c.hostKey,{index=m.index,attempt=m.attempt,revision=m.preparationRevision},1)
+            local show=c.pendingShow
+            if (show and show.index==m.index and show.attempt==m.attempt and show.revision==m.preparationRevision) or c.shownRevision==m.preparationRevision then
+                c.pendingShow=nil;showPrepared(c,m.index,m.attempt,m.preparationRevision)
+            end
+        elseif m.state=="presenting" or (m.state=="announcing" and m.preparationRevision) then
+            send("presented", c.id, c.hostKey, {index = m.index, attempt = m.attempt, revision = m.preparationRevision or m.seq}, 1)
+        end
     end
     return true
 end
@@ -245,6 +317,14 @@ end
 function P.GameEvent(event)
     local h, g = P.host, ns.game
     if not h or not h.started or h.serial ~= g.serial then return end
+    if event == "question_queued" then P.PrepareQuestion();return end
+    if event == "question_shown" then
+        local prep=h.preparation
+        if prep and prep.index==g.index and prep.attempt==g.attempt and earlyQuestions(h) then
+            send("show",h.id,"*",{index=g.index,attempt=g.attempt,revision=prep.revision},1,"show")
+        end
+        return
+    end
     if event == "reveal" and g.index % g.config.perRound == 0 then
         local roundRows = rows(g)
         table.sort(roundRows,function(a,b) if a.round~=b.round then return a.round>b.round end;return a.key<b.key end)
@@ -306,6 +386,7 @@ function P.HostStarted()
     end
     h.started, h.config, h.dirty, h.serial = true, config(ns.db), true, ns.game.serial
     ns.game.presentationGate = next(h.joined) ~= nil
+    P.PrepareQuestion()
     if ns.game.phase == "ready" or ns.game.phase == "ready_announcing" then
         h.lastInvite = now()
         send("invite", h.id, "*", {config=h.config}, 2, "invite")
@@ -315,7 +396,7 @@ function P.Join()
     local c = P.client
     if not c or c.model.state ~= "invitation" or not context() then return end
     c.model.state, c.model.status, c.joinAt, c.joinRetries = "joining", "Waiting for the host to confirm your place.", now(), 0
-    send("join", c.id, c.hostKey, {}, 1)
+    send("join", c.id, c.hostKey, {earlyQuestions=true}, 1)
     render(c.model)
 end
 function P.Decline()
@@ -337,10 +418,16 @@ function P.Leave()
 end
 function P.Ready()
     local c = P.client
-    if c and c.joined and c.model.state == "ready" and context()
-        and not ((c.model.remaining or 0) > 0 and now() >= c.model.deadline) then
-        send("ready", c.id, c.hostKey, {}, 1)
+    if not c or not c.joined or c.model.state~="ready" or c.model.ready or c.model.readyPending or not context()
+        or ((c.model.remaining or 0)>0 and now()>=c.model.deadline) then return false end
+    c.model.readyPending,c.model.readyStatus,c.readyAt=true,nil,now()
+    render(c.model)
+    local packet,why=send("ready",c.id,c.hostKey,{},1,"ready")
+    if not packet then
+        c.model.readyPending,c.model.readyStatus=false,"Could not send ready. Try again or type ready in Party chat."
+        log("Ready was not queued: "..tostring(why));render(c.model)
     end
+    return packet~=nil
 end
 function P.Answer(choice)
     local c = P.client
@@ -352,14 +439,18 @@ function P.RetryAnswer()
     local c = P.client
     if not c or not c.joined or not c.model.selected or c.model.locked or c.model.state ~= "accepting" or now() >= c.model.deadline or not context() then return false end
     c.model.pending, c.model.answerStatus, c.answerAt = true, "Sending...", now()
-    send("answer", c.id, c.hostKey, {index = c.model.index, attempt = c.model.attempt, choice = c.model.selected}, 1)
     render(c.model)
-    return true
+    local packet,why=send("answer", c.id, c.hostKey, {index = c.model.index, attempt = c.model.attempt, choice = c.model.selected}, 1)
+    if not packet then
+        c.model.pending,c.model.answerStatus=false,"Could not send your answer. Retry or use Party chat."
+        log("Answer was not queued: "..tostring(why));render(c.model)
+    end
+    return packet~=nil
 end
 function P.RequestSync()
     P.viewHistory = false
     local c = P.client
-    if c and c.joined then c.syncAt = now(); send("sync", c.id, c.hostKey, {}, 1); render(c.model) end
+    if c and c.joined then c.syncAt = now(); send("sync", c.id, c.hostKey, {earlyQuestions=true}, 1); render(c.model) end
 end
 -- Decoded saved Party games, newest first, for the History tab.
 function P.SavedResults()
@@ -441,10 +532,11 @@ function P.Receive(m, sender, person)
                 or P.declined[m.id] and "Already declined" or "Another lobby or match is active"
             return
         end
-        if c and c.id == m.id then c.lastSeen=now();if P.renderError then render(c.model) end;return end
-        if c and not c.joined and c.hostKey==sender and c.id~=m.id then declined(c.id) end
         if m.id:sub(1,#sender+1) ~= sender..":" then return end
+        if c and c.id == m.id and c.hostKey==sender then P.bus.SetPeer(sender,m.id,m.wireCodec==2);c.lastSeen=now();if P.renderError then render(c.model) end;return end
+        if c and not c.joined and c.hostKey==sender and c.id~=m.id then declined(c.id) end
         if h and h.started and not g:Active() then P.host=nil end
+        P.bus.SetPeer(sender,m.id,m.wireCodec==2)
         P.client = {id=m.id,hostKey=sender,hostName=clean(person.name),seq=0,lastSeen=now(),model={id=m.id,state="invitation",host=clean(person.name),config=m.config,status="Join this Party quiz?"}}
         P.viewHistory=false
         P.client.model.config.categories=clean(P.client.model.config.categories)
@@ -456,16 +548,37 @@ function P.Receive(m, sender, person)
     if h and m.id == h.id then
         local previous=h.allowed[sender]
         local returning=previous and (not previous.guid or not person.guid or previous.guid==person.guid)
-        if m.kind=="sync" and returning then h.joined[sender]=person end
+        local function negotiate()
+            P.bus.SetPeer(sender,m.id,m.wireCodec==2)
+            h.early=h.early or {}
+            if (h.joined[sender] or returning) and earlyQuestions(h) and m.earlyQuestions~=true and g:Active() then
+                g:Pause("A player changed versions. Resume to prepare the question again.")
+            end
+            h.early[sender]=m.earlyQuestions==true
+        end
+        if m.kind=="sync" and returning then
+            negotiate();h.joined[sender]=person
+            local prep=h.preparation
+            if earlyQuestions(h) and prep and not g.questionVisible then prep.pending[sender]=true end
+        end
         if m.kind == "join" then
             local canJoin = returning or not h.started or g.phase == "ready" or g.phase == "ready_announcing"
             if canJoin then
+                negotiate()
                 h.joined[sender],h.allowed[sender] = person,person
                 broadcast("joined", sender); h.dirty = true
             else send("ended", h.id, sender, {reason="Joining has closed. You can still answer in Party chat."}, 1) end
         elseif h.joined[sender] then
-            if m.kind == "leave" then h.joined[sender],h.allowed[sender] = nil,nil; h.dirty = true
+            if m.kind == "leave" then
+                h.joined[sender],h.allowed[sender] = nil,nil
+                if h.early then h.early[sender]=nil end
+                if h.preparation then h.preparation.pending[sender],h.preparation.shown[sender]=nil,nil end
+                h.dirty = true
             elseif m.kind == "ready" then g:Answer(sender,"ready",person.guid); h.dirty = true
+            elseif m.kind=="prepared" and h.preparation and m.index==h.preparation.index and m.attempt==h.preparation.attempt and m.revision==h.preparation.revision then h.preparation.pending[sender]=nil
+            elseif m.kind=="presented" and h.preparation and m.index==h.preparation.index and m.attempt==h.preparation.attempt and m.revision==h.preparation.revision then
+                h.preparation.shown[sender]=true
+                if h.gate and h.gate.revision==m.revision then h.gate.pending[sender]=nil end
             elseif m.kind == "presented" and h.gate and m.index == h.gate.index and m.attempt == h.gate.attempt and m.revision == h.gate.revision then h.gate.pending[sender] = nil
             elseif m.kind == "answer" and integer(m.choice,1,4) and m.index == g.index and m.attempt == g.attempt then
                 local player = g:FindPlayer(sender,person.guid)
@@ -480,15 +593,24 @@ function P.Receive(m, sender, person)
     elseif m.kind == "sync" then
         local entry = history().byId[m.id]
         if entry and type(entry.allowed)=="table" and entry.allowed[sender] then
+            P.bus.SetPeer(sender,m.id,m.wireCodec==2)
             local result = ns.Codec.Decode(entry.text)
             if result then send("result",m.id,sender,{result=result},3) end
         end
     end
     c = P.client
     if not c or sender ~= c.hostKey or m.id ~= c.id then return end
+    P.bus.SetPeer(sender,m.id,m.wireCodec==2)
     c.lastSeen = now()
     if type(ns.db.lastParty)=="table" and ns.db.lastParty.id==c.id then ns.db.lastParty.date=stamp() end
-    if m.kind == "joined" and c.model.state == "joining" then
+    if m.kind=="show" and c.joined and integer(m.index,1,1000) and integer(m.attempt,0,10000)
+        and integer(m.revision,1,1000000000) and m.revision>=(c.model.preparationRevision or 0) then
+        if not showPrepared(c,m.index,m.attempt,m.revision) then
+            if not c.pendingShow or m.revision>=c.pendingShow.revision then
+                c.pendingShow={index=m.index,attempt=m.attempt,revision=m.revision}
+            end
+        end
+    elseif m.kind == "joined" and c.model.state == "joining" then
         if apply(m) then
             c.joined = true
             ns.db.lastParty = {id=c.id,hostKey=c.hostKey,hostName=c.hostName,date=stamp()}
@@ -516,7 +638,7 @@ function P.Receive(m, sender, person)
     elseif m.kind == "clock" and c.joined and m.index == c.model.index and m.attempt == c.model.attempt
         and integer(m.remaining,0,120000) and integer(m.seq,1,1000000000) and m.seq>=c.seq then
         local deadline=now()+m.remaining/1000
-        if m.state=="accepting" and c.model.question and c.model.state=="presenting" then
+        if m.state=="accepting" and c.model.question and (c.model.state=="presenting" or c.model.state=="announcing" or c.model.state=="preparing") then
             c.seq,c.model.state,c.model.deadline=m.seq,"accepting",deadline
             render(c.model)
         elseif c.model.state=="accepting" then c.model.deadline=math.min(c.model.deadline,deadline) end
@@ -603,9 +725,32 @@ function P.Tick()
                 h.lastInvite=now();send("invite",h.id,"*",{config=h.config},2,"invite")
             end
             g.presentationGate = next(h.joined) ~= nil
+            if g.phase=="announcing" then
+                P.PrepareQuestion()
+                local prep=h.preparation
+                if prep then
+                    for key in pairs(prep.pending) do if not h.joined[key] or not roster()[key] then prep.pending[key]=nil end end
+                    if next(prep.pending) and now()>=prep.deadline and not prep.warned then
+                        prep.warned=true
+                        ns.HammerCore.Print("Some addon players could not prepare the question. Continuing with Party chat fallback.")
+                    end
+                end
+            end
             if g.phase == "presenting" and (not h.gate or h.gate.index~=g.index or h.gate.attempt~=g.attempt) then
                 h.gate={index=g.index,attempt=g.attempt,pending=targets(),deadline=now()+12}
-                h.gate.revision=broadcast()
+                local prep=h.preparation
+                if earlyQuestions(h) and prep and prep.index==g.index and prep.attempt==g.attempt then
+                    h.gate.revision,h.gate.preloaded=prep.revision,true
+                    for key in pairs(h.gate.pending) do
+                        if prep.shown[key] then h.gate.pending[key]=nil
+                        elseif prep.pending[key] then
+                            -- Re-send a missing payload, not every successful preload.
+                            broadcast("snapshot",key)
+                        else
+                            send("show",h.id,key,{index=g.index,attempt=g.attempt,revision=prep.revision},1,"show:"..key)
+                        end
+                    end
+                else h.gate.revision=broadcast() end
                 h.lastPhase="presenting"
             end
             if h.gate and g.phase=="presenting" then
@@ -641,15 +786,23 @@ function P.Tick()
         end
         local signature=(h.started and g.phase or "lobby")..":"..tostring(g.index)..":"..tostring(g.attempt)..":"..#g:ReadyPlayers()
         if h.dirty or signature~=h.signature then
-            h.dirty,h.signature=false,signature
             -- The initial presentation snapshot owns the exact ACK revision.
-            if g.phase~="presenting" and g.phase~="opening" and g.phase~="accepting" then broadcast() end
+            -- Keep changes pending until a normal snapshot can carry them.
+            if g.phase~="presenting" and g.phase~="opening" and g.phase~="accepting"
+                and not (g.phase=="announcing" and h.preparation and earlyQuestions(h)) then
+                h.dirty,h.signature=false,signature
+                broadcast()
+            end
             if not h.started then ns.RefreshHost() end
         end
     end
     if c and c.joined then
         if not roster()[c.hostKey] and c.model.state~="finished" then
             c.model.state,c.model.status="disconnected","The host left your Party."
+        end
+        if c.model.state=="ready" and c.model.readyPending and now()-(c.readyAt or now())>5 then
+            c.model.readyPending,c.model.readyStatus=false,"Ready not confirmed. Try again or type ready in Party chat."
+            render(c.model)
         end
         if c.model.pending and now()-(c.answerAt or now())>5 then c.model.pending=false;c.model.answerStatus="Answer not confirmed; retry or use Party chat.";render(c.model) end
         if now()-c.lastSeen>30 and c.model.state~="finished" and c.model.state~="stopped" then
@@ -663,7 +816,7 @@ function P.Tick()
         c.model.state,c.model.status="stopped","This invitation expired. Wait for a new lobby."
         render(c.model)
     elseif c and c.model.state=="joining" and now()-(c.joinAt or now())>5 then
-        if (c.joinRetries or 0)<2 then c.joinAt,c.joinRetries=now(),(c.joinRetries or 0)+1;send("join",c.id,c.hostKey,{},1)
+        if (c.joinRetries or 0)<2 then c.joinAt,c.joinRetries=now(),(c.joinRetries or 0)+1;send("join",c.id,c.hostKey,{earlyQuestions=true},1)
         else c.model.state,c.model.status="disconnected","Join was not confirmed. You can use Party chat.";render(c.model) end
     end
 end
@@ -708,6 +861,7 @@ function P.Initialise()
         return joined,joined
     end)
     ns.game.onEvent=P.GameEvent
+    ns.game.firstLineReady=P.CanPostQuestion
     local frame=CreateFrame("Frame");P.frame=frame
     frame:RegisterEvent("CHAT_MSG_ADDON")
     frame:RegisterEvent("GROUP_ROSTER_UPDATE")

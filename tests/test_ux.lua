@@ -128,6 +128,89 @@ do
     assert(report:find('Questions:',1,true), 'base diagnostics survive Party report failure')
 end
 
+-- The actual idle player's host-chat event reveals a prepared question without
+-- waiting for an addon snapshot; a tiny SHOW is the reordered/missed-chat fallback.
+do
+    local n=load(nil,true)
+    local config={rounds=1,perRound=1,seconds=20,difficulty='mixed',categories='Lore',readyCheck=false}
+    n.Party.Receive({v=1,kind='invite',to='*',id='guest-realm:sync-test',config=config},'guest-realm')
+    local c=n.Party.client
+    c.joined=true;c.model.state='joining'
+    local function payload(seq,revision,attempt)
+        return {v=1,kind='snapshot',id=c.id,to='host-realm',seq=seq,preparationRevision=revision,
+            state='preparing',config=config,index=1,round=1,attempt=attempt,remaining=0,status='',rows={},
+            question='A shared question?',choices={'One','Two','Three','Four'},
+            firstLine='[Loreforge #1] Round 1, question 1 (20s)'..(attempt>1 and (' (restart '..attempt..')') or '')..': A shared question?'}
+    end
+    local first=payload(1,1,1)
+    n.Party.Receive(first,'guest-realm')
+    eq(c.model.state,'preparing','cached question stays hidden')
+    assert(not n.Player.frame.question:IsShown(),'player card has no early reading advantage')
+    n.events.scripts.OnEvent(n.events,'CHAT_MSG_PARTY',first.firstLine,'Third-Realm')
+    eq(c.model.state,'preparing','other party member cannot reveal the cache')
+    n.events.scripts.OnEvent(n.events,'CHAT_MSG_PARTY_LEADER',first.firstLine,'Guest-Realm')
+    eq(c.model.state,'announcing','selected host chat reveals cached question')
+    assert(n.Player.frame.question:IsShown(),'question visible immediately from chat handler')
+    eq(n.Player.frame.question:GetText(),'A shared question?','the prepared text is displayed')
+    assert(not n.Player.frame.answers[1].enabled,'reading still cannot answer')
+    -- A newer snapshot sequence does not replace the stable preparation identity.
+    n.Party.Receive(payload(2,1,1),'guest-realm')
+    eq(c.model.state,'announcing','duplicate prepare cannot hide a shown question')
+    -- SHOW can overtake the fragmented payload, then reveal it on arrival.
+    n.Party.Receive({v=1,kind='show',id=c.id,to='host-realm',index=1,attempt=2,revision=3},'guest-realm')
+    n.Party.Receive(payload(4,3,2),'guest-realm')
+    eq(c.model.state,'announcing','buffered SHOW reveals matching late payload')
+    n.Party.Receive(payload(5,5,3),'guest-realm')
+    eq(c.model.state,'preparing','new attempt starts hidden')
+    n.events.scripts.OnEvent(n.events,'CHAT_MSG_PARTY',first.firstLine,'Guest-Realm')
+    eq(c.model.state,'preparing','old chat cannot expose a later attempt')
+    n.Party.Receive({v=1,kind='show',id=c.id,to='host-realm',index=1,attempt=2,revision=3},'guest-realm')
+    eq(c.model.state,'preparing','old SHOW cannot expose a later attempt')
+    n.events.scripts.OnEvent(n.events,'CHAT_MSG_PARTY',c.model.firstLine,'Guest-Realm')
+    eq(c.model.state,'announcing','current restart chat reveals only current attempt')
+end
+-- Both automatic and secure/manual posting use the same first-line hold.
+do
+    local n=load(nil,true)
+    n.db.readyCheck,n.db.rounds,n.db.perRound=false,1,1
+    assert(n.Party.OpenLobby())
+    n.Party.Receive({v=1,kind='join',id=n.Party.host.id,to='host-realm',earlyQuestions=true},'guest-realm')
+    n.StartGame()
+    local g=n.game
+    local rules=g:NextMessage();g:Sent();g:Echo(rules)
+    eq(g:NextMessage(),nil,'first question is withheld synchronously')
+    g.config.manualSend=true;n.RefreshHost()
+    local f=n.hostFrame
+    assert(not f.question:GetText():find(g.run[1].text,1,true),'host question hidden while waiting')
+    assert(not f.answerButtons[1]:IsShown(),'host choices hidden while waiting')
+    assert(not f.preview:GetText():find(g.run[1].text,1,true),'posting preview cannot leak the question')
+    eq(f.send:GetAttribute('macrotext'),nil,'secure macro has no line before preparation')
+    eq(f.send.enabled,false,'secure button is disabled before preparation')
+    local sequence=n.Party.host.seq
+    for _=1,3 do g:NextMessage();n.RefreshHost() end
+    eq(n.Party.host.seq,sequence,'getters and UI refreshes do not transmit preparation')
+    g:Pause('pause before first public line');n.RefreshHost()
+    assert(not f.question:GetText():find(g.run[1].text,1,true),'pause cannot expose hidden question')
+    assert(not f.answerButtons[1]:IsShown(),'pause cannot expose hidden choices')
+    assert(not f.preview:GetText():find(g.run[1].text,1,true),'pause cannot expose posting preview')
+    assert(g:Resume())
+    while g.cursor<g.questionCursor do local line=g:NextMessage();g:Sent();g:Echo(line) end
+    local prep=n.Party.host.preparation
+    n.Party.Receive({v=1,kind='prepared',id=n.Party.host.id,to='host-realm',index=1,attempt=prep.attempt,revision=prep.revision},'guest-realm')
+    local first=assert(g:NextMessage());n.RefreshHost()
+    assert(f.send:GetAttribute('macrotext'),'manual posting becomes available after preparation')
+    assert(not g.questionVisible,'preparation alone cannot reveal to host')
+    g:Sent();n.events.scripts.OnEvent(n.events,'CHAT_MSG_PARTY',first,'Host-Realm')
+    eq(g.questionVisible,true,'first public echo reveals host question')
+    eq(f.question:GetText(),g.run[1].text,'host card shows the shared current question')
+    n.Party.Receive({v=1,kind='presented',id=n.Party.host.id,to='host-realm',index=1,attempt=prep.attempt,revision=prep.revision},'guest-realm')
+    while g:NextMessage() do local line=g:NextMessage();g:Sent();g:Echo(line) end
+    eq(g.phase,'presenting','answer gate still follows final choice echo')
+    n.Party.Tick()
+    eq(g.phase,'opening','early shown ACK survives into the answer-opening step')
+    eq(g.deadline,nil,'opening announcement still controls the timer')
+end
+
 -- ── Engine: chat output ──
 local ns = load(nil)
 local Game = ns.Game
@@ -338,6 +421,19 @@ for _ = 1, 200 do
     tick(ns, 0.5)
 end
 eq(ns.game.phase, 'finished', 'a short game finishes')
+ns.RefreshHost()
+assert(f.finale:IsShown() and f.finale:GetText() == 'Game complete', 'the host sees a large Game complete')
+eq(f.status:GetText(), '', 'the small header does not repeat it')
+eq(f.winnerLine:GetText(), 'Guest-Realm wins with 1 point.', 'the winner line')
+for i, row in ipairs(f.answerButtons) do assert(not row:IsShown(), 'answer ' .. i .. ' is gone') end
+assert(not f.question:IsShown(), 'the last question is gone')
+if ns.game.config.hostParticipates then
+    eq(f.finalYou:GetText(), "You didn't answer any questions in this game.", 'a host who sat out is told so')
+else
+    assert(not f.finalYou:IsShown(), 'a host who did not play has no result line')
+end
+assert(f.podium[1]:IsShown() and f.podium[1].name:GetText() == 'Guest-Realm' and not f.podium[2]:IsShown(), 'the podium lists players who answered')
+assert(f.scoreTitle:GetText():find('Final standings', 1, true), 'the board is the final standings')
 eq(#ns.db.games.retail, 1, 'finished games are kept')
 eq(ns.db.games.retail[1].rows[1].name, 'Guest-Realm', 'with their standings')
 ns.Party.SavedResults = function()
@@ -380,6 +476,10 @@ eq(P.frame.status:GetText(), 'Next question in 5s.', 'auto-advance counts down')
 P.Render(model('between', { correct = 1, hostPaced = true }))
 eq(P.frame.status:GetText(), 'The host will start the next question.', 'host pacing is explained')
 P.Render(model('finished', { correct = 1, id = 'pg-final' }))
-eq(P.frame.headline:GetText(), 'You won!', 'the finish has a headline')
+eq(P.frame.headline:GetText(), 'Game complete', 'the finish has a large headline')
+eq(P.frame.winner:GetText(), 'Host-Realm wins with 3 points.', 'the winner is named under it')
+eq(P.frame.you:GetText(), 'You won with 3 points', 'and the local result')
+assert(not P.frame.question:IsShown() and not P.frame.answers[1]:IsShown() and not P.frame.reveal:IsShown(),
+    'the last question, choices and reveal are gone')
 eq(sounds[#sounds], 888, 'a win plays the fanfare')
 io.write('loreforge UX tests passed\n')

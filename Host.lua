@@ -278,6 +278,7 @@ function ns.PumpAutomatic()
     end
     local line = g:NextMessage()
     if not line or now < (ns.nextSendAt or 0) then return end
+    if ns.Party and ns.Party.CanPostQuestion and not ns.Party.CanPostQuestion() then return end
     local interval = g.phase == "announcing" and g.questionCursor and g.cursor >= g.questionCursor and 0.35 or 2
     if g.config.localOnly then
         ns.nextSendAt = now + interval
@@ -558,6 +559,27 @@ local function createHost()
     end
     f.readyButton = button(play, "I'm ready", 200, 32, function() ns.SubmitHostAnswer("ready") end, "primary")
 
+    -- Completion view: replaces the last question once the game is over.
+    f.finale = label(play, "GameFontNormalHuge", "flavour", LEFT_W)
+    f.finale:SetPoint("TOPLEFT", 18, -58)
+    f.winnerLine = label(play, "GameFontNormalLarge", "text", LEFT_W)
+    if f.winnerLine.SetWordWrap then f.winnerLine:SetWordWrap(true) end
+    f.finalYou = label(play, "GameFontHighlight", "selected", LEFT_W)
+    if f.finalYou.SetWordWrap then f.finalYou:SetWordWrap(true) end
+    f.podium = {}
+    for i = 1, 3 do
+        local row = CreateFrame("Frame", nil, play)
+        row:SetSize(LEFT_W, 30)
+        row.place = label(row, "GameFontNormalLarge", "flavour", 60)
+        row.place:SetPoint("LEFT", 0, 0)
+        row.name = label(row, "GameFontNormalLarge", "text", LEFT_W - 180)
+        row.name:SetPoint("LEFT", 60, 0)
+        if row.name.SetWordWrap then row.name:SetWordWrap(false) end
+        row.score = label(row, "GameFontHighlight", "muted", 110)
+        row.score:SetPoint("RIGHT", 0, 0); row.score:SetJustifyH("RIGHT")
+        f.podium[i] = row
+    end
+
     f.scoreTitle = label(play, "GameFontNormal", "flavour", RIGHT_W)
     f.scoreTitle:SetPoint("TOPLEFT", RIGHT_X, -196)
     f.scores = {}
@@ -683,7 +705,9 @@ local function drawBoard(f, g, ready, host)
     local offset = ((ns.scorePage or 1) - 1) * BOARD_ROWS
     local answered = count(g.answers)
     local readyCount = #g:ReadyPlayers()
+    local finished = g.phase == "finished"
     f.scoreTitle:SetText(ready and ("Ready check · " .. readyCount .. " of " .. #rows .. " ready")
+        or finished and ("Final standings · " .. #rows .. (#rows == 1 and " player" or " players"))
         or g.phase == "accepting" and ("Players · " .. answered .. " of " .. #rows .. " answered")
         or ("Players · " .. #rows))
     local leader = rows[1] and rows[1].total or 0
@@ -698,8 +722,11 @@ local function drawBoard(f, g, ready, host)
             row.rank:SetText(ready and "" or (p.boardRank .. "."))
             row.name:SetText(p.name .. (mine and " (you)" or ""))
             T.Text(row.name, mine and "selected" or (not ready and leader > 0 and p.total == leader) and "accent" or "text")
+            local streak = finished and p.bestStreak or p.streak
             row.score:SetText(ready and (p.ready and "Ready" or "") or ((p.total == 1 and "1 pt" or (p.total .. " pts"))
-                .. (p.streak >= 2 and (" · streak " .. p.streak) or "")))
+                .. (streak >= 2 and ((finished and " · best " or " · streak ") .. streak) or "")))
+            local medal = finished and not mine and p.total > 0 and ns.MEDALS and ns.MEDALS[p.boardRank]
+            if medal then row.name:SetTextColor(medal[1], medal[2], medal[3]) end
         end
     end
     f.page:SetText(pages > 1 and ("Page " .. (ns.scorePage or 1) .. " of " .. pages) or "")
@@ -710,7 +737,8 @@ local function drawBanner(f, g, pending, ready)
     local stale = pending and GetTime() - pending.sentAt >= 8
     local text, role
     if stale then
-        text, role = "Did this line appear in chat?\n" .. pending.text, "danger"
+        text, role = (not ready and not g.questionVisible) and "Did this line appear in chat? Check the first question line."
+            or ("Did this line appear in chat?\n" .. pending.text), "danger"
     elseif g.phase == "paused" then
         text, role = g.reason or "Paused. Resume when everyone's ready.", "danger"
     elseif ready and ns.lastUnmatched then
@@ -731,20 +759,72 @@ local function drawBanner(f, g, pending, ready)
     return text ~= nil
 end
 
+-- Completion view: winner or shared win, the host's own result when they
+-- played, and the top three. The last question and its choices are gone.
+local function drawFinale(f, g, top, hostPlayer)
+    local standings = g:Standings(false)
+    local best = standings[1] and standings[1].total or 0
+    local winners, ranks, rank, previous = {}, {}, 0, nil
+    for i, p in ipairs(standings) do
+        if p.total ~= previous then rank, previous = i, p.total end
+        ranks[p] = rank
+        if best > 0 and p.total == best then winners[#winners + 1] = p.name end
+    end
+    local function points(n) return n .. (n == 1 and " point" or " points") end
+    f.winnerLine:SetText(#winners == 0 and "No correct answers, so no winner this time."
+        or #winners == 1 and (winners[1] .. " wins with " .. points(best) .. ".")
+        or ("Shared win: " .. table.concat(winners, ", ") .. ", " .. points(best) .. " each."))
+    f.winnerLine:ClearAllPoints(); f.winnerLine:SetPoint("TOPLEFT", 18, top)
+    local y = top - math.ceil(f.winnerLine:GetStringHeight() or 18) - 10
+    local you
+    if g.config.hostParticipates and hostPlayer then
+        if not hostPlayer.entered then you = "You didn't answer any questions in this game."
+        elseif ranks[hostPlayer] == 1 and best > 0 then
+            you = (#winners > 1 and "You shared the win with " or "You won with ") .. points(hostPlayer.total)
+        else
+            you = "You finished " .. ns.Ordinal(ranks[hostPlayer] or 0) .. " of " .. #standings .. " with " .. points(hostPlayer.total)
+        end
+    end
+    f.finalYou:SetShown(you ~= nil)
+    if you then
+        f.finalYou:SetText(you)
+        f.finalYou:ClearAllPoints(); f.finalYou:SetPoint("TOPLEFT", 18, y)
+        y = y - math.ceil(f.finalYou:GetStringHeight() or 14) - 14
+    end
+    y = y - 6
+    for i, row in ipairs(f.podium) do
+        local p = standings[i]
+        row:SetShown(p ~= nil)
+        if p then
+            row:ClearAllPoints(); row:SetPoint("TOPLEFT", 18, y)
+            row.place:SetText(ns.Ordinal(ranks[p]))
+            row.name:SetText(p.name .. (p == hostPlayer and " (you)" or ""))
+            local medal = p.total > 0 and ns.MEDALS and ns.MEDALS[ranks[p]]
+            if medal then row.place:SetTextColor(medal[1], medal[2], medal[3]) else T.Text(row.place, "muted") end
+            T.Text(row.name, p == hostPlayer and "selected" or "text")
+            row.score:SetText(points(p.total) .. (p.bestStreak >= 2 and (" · best " .. p.bestStreak) or ""))
+            y = y - 34
+        end
+    end
+end
+
 local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
-    local item = g.run and g.run[g.index]
     local finished = g.phase == "finished"
-    local revealed = g.phase == "revealing" or g.phase == "between" or (finished and item)
-    local text
-    if ready then text = "Quiz starting soon. Players type ready in chat to check in."
-    elseif finished then
-        local standings = g:Standings(false)
-        local best = standings[1] and standings[1].total or 0
-        local winners = {}
-        for _, p in ipairs(standings) do if p.total == best and best > 0 then winners[#winners + 1] = p.name end end
-        text = #winners == 0 and "No correct answers this time." or (#winners == 1 and (winners[1] .. " wins with " .. best .. (best == 1 and " point." or " points."))
-            or ("Shared win: " .. table.concat(winners, ", ") .. " with " .. best .. "."))
-    else text = item and item.text or "" end
+    f.finale:SetShown(finished); f.winnerLine:SetShown(finished)
+    if finished then
+        f.finale:SetText("Game complete")
+        f.question:Hide(); f.timer:Hide(); f.timer.count:Hide(); f.readyButton:Hide()
+        for _, row in ipairs(f.answerButtons) do row:Hide() end
+        drawFinale(f, g, top, hostPlayer)
+        return
+    end
+    f.finalYou:Hide()
+    for _, row in ipairs(f.podium) do row:Hide() end
+    f.question:Show()
+    local item = g.run and g.run[g.index]
+    local revealed = g.phase == "revealing" or g.phase == "between"
+    local text = ((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready) and "Waiting for the question in chat..."
+        or ready and "Quiz starting soon. Players type ready in chat to check in." or item and item.text or ""
     f.question:ClearAllPoints(); f.question:SetPoint("TOPLEFT", 18, top)
     f.question:SetText(text)
     local y = top - math.ceil(f.question:GetStringHeight() or 16) - 14
@@ -764,7 +844,7 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
         f.readyButton:SetEnabled(hostPlayer ~= nil and not hostPlayer.ready and not ns.Restricted())
         y = y - 42
     end
-    local showChoices = item and not ready and not (finished and not revealed)
+    local showChoices = item and not ready and not ((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready)
     local answering = g.config.hostParticipates and g.phase == "accepting"
     for i, row in ipairs(f.answerButtons) do
         row:SetShown(showChoices and true or false)
@@ -819,7 +899,8 @@ function ns.RefreshHost()
     local restricted = ns.Restricted()
     local pending, message = g.pending, g:NextMessage()
 
-    f.status:SetText(PHASES[g.phase] or g.phase)
+    -- The completion view draws its own large heading.
+    f.status:SetText(g.phase == "finished" and "" or PHASES[g.phase] or g.phase)
     local tags = { config.localOnly and "Practice" or ns.Game.CHANNELS[config.channel].label,
         config.autoMode and "Auto-advance" or "Host-paced" }
     if config.manualSend then tags[#tags + 1] = "Posting manually" end
@@ -848,7 +929,7 @@ function ns.RefreshHost()
     f.rosterRefresh:SetShown(ready)
     f.rosterRefresh:SetEnabled(not restricted)
 
-    f.preview:SetText(pending and ("Checking it posted: " .. pending.text)
+    f.preview:SetText(((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready) and "Waiting for the question in chat..." or pending and ("Checking it posted: " .. pending.text)
         or message and ((config.manualSend and "Next to post: " or "Posting: ") .. message)
         or g.nextQuestionAt and ("Next question in " .. math.max(0, math.ceil(g.nextQuestionAt - GetTime())) .. "s.")
         or g.phase == "accepting" and (selected and ("Your answer is locked: " .. selected .. ") " .. g.run[g.index].choices[selected]
@@ -857,7 +938,8 @@ function ns.RefreshHost()
         or "")
 
     -- Secure macro button: attributes only change out of combat.
-    local prepared = not restricted and config.manualSend and message or nil
+    local prepared = not restricted and config.manualSend and message
+        and (not ns.Party or not ns.Party.CanPostQuestion or ns.Party.CanPostQuestion()) and message or nil
     if ns.preparedMessage ~= prepared then
         ns.preparedMessage = prepared
         f.send:SetAttribute("macrotext", prepared and not config.localOnly and (ns.Game.CHANNELS[config.channel].macro .. prepared) or nil)
@@ -909,6 +991,7 @@ function ns.InitialiseHost()
             if not readable(text) or not readable(sender) or type(text) ~= "string" then return end
             if not readable(guid) then guid = nil end
             local channel = CHAT_CHANNELS[event]
+            if ns.Party and ns.Party.Chat then ns.Party.Chat(text,sender,channel) end
             if not g.config or channel ~= g.config.channel or not g:Active() or ns.Restricted() then return end
             local key, host = ns.Identity(sender), person("player")
             if host and (key == host.key or (guid and host.guid and guid == host.guid)) then

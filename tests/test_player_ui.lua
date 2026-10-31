@@ -123,8 +123,37 @@ P.Render(as(model('ready', { ready = false, remaining = 30000, deadline = now + 
 eq(f.primary:GetText(), "I'm ready", 'ready check asks for readiness')
 wow.Click(f.primary)
 eq(last()[1], 'Ready', "I'm ready reports readiness")
+P.Render(as(model('ready', { ready = false, readyPending = true })))
+eq(f.headline:GetText(),'Ready sent','readiness has prominent immediate feedback')
+eq(f.primary:GetText(),'Ready sent...','pending readiness is visible on the button')
+eq(f.primary.enabled,false,'pending readiness cannot be sent twice')
+local pendingCalls=#calls
+P.Primary()
+eq(#calls,pendingCalls,'pending readiness ignores repeated primary actions')
+P.Render(as(model('ready', { ready = false, readyStatus = 'Ready not confirmed. Try again.' })))
+eq(f.headline:GetText(),'Ready not confirmed','failed readiness is visible')
+eq(f.primary:GetText(),'Try ready again','failed readiness offers retry')
+eq(f.primary.enabled,true,'readiness retry is enabled')
+P.Render(as(model('ready', { readyPending = true, remaining = 1000, deadline = now + 1 })))
+now=now+1.1;P.UpdateTimer()
+eq(f.headline:GetText(),'Starting soon','expired countdown replaces stale pending feedback')
+assert(f.status:GetText():find('Countdown complete',1,true),'expired ready status is consistent')
+now=now-1.1
+
+
 P.Render(as(model('ready', { ready = true })))
 eq(f.primary.enabled, false, 'readiness is not sent twice')
+eq(f.headline:GetText(),"You're ready",'host confirmation replaces the pending headline')
+
+-- An action rejected before submission cannot leave a false sending cue.
+local answerAction=ns.Party.Answer
+ns.Party.Answer=function() return false end
+P.Render(as(question({index=99})))
+P.Choose(2)
+eq(f.headline:GetText(),'Answer not sent','rejected click has explicit failure feedback')
+assert(f.status:GetText():find('Check your Party',1,true),'rejected click does not claim host acknowledgement is pending')
+eq(P.clicked,nil,'rejected action clears the optimistic click fallback')
+ns.Party.Answer=answerAction
 
 -- Every answer row sends its own number once and shows Sending at once.
 for i = 1, 4 do
@@ -137,6 +166,8 @@ for i = 1, 4 do
     wow.Click(f.answers[i % 4 + 1])
     eq(#calls, count, 'a second click is ignored')
     eq(f.answers[i].badge:GetText(), 'Sending...', 'the clicked row responds immediately')
+    eq(f.headline:GetText(),'Answer '..i..' selected','answer click has prominent immediate feedback')
+    assert(f.status:GetText():find('host to lock',1,true),'main prompt reflects pending answer')
     for j, b in ipairs(f.answers) do eq(b.enabled, false, 'choices close after a click ' .. j) end
 end
 
@@ -145,6 +176,7 @@ eq(f.answers[2].badge:GetText(), 'Sending...', 'pending model shows Sending')
 eq(f.primary:IsShown(), false, 'no retry while still sending')
 P.Render(as(question({ index = 5, selected = 2, locked = 2, correct = 3 })))
 eq(f.answers[2].badge:GetText(), 'Locked', 'only host confirmation shows Locked')
+eq(f.headline:GetText(),'Answer 2 locked','host-confirmed answer is prominent')
 eq(f.answers[3].badge:GetText(), '', 'a correct index is ignored before the reveal')
 assert(f.answerStatus:GetText():find('Locked: 2', 1, true), 'locked answer is spelled out')
 P.Render(as(question({ index = 6, selected = 4, pending = false })))
@@ -264,7 +296,12 @@ local final = {
 }
 P.Render(as(model('finished', { rows = final })))
 assert(f:IsShown(), 'final results open once')
+eq(f.headline:GetText(), 'Game complete', 'the finish has a large headline')
+eq(f.winner:GetText(), 'Shared win: Guest-Realm, Chatonly-Realm, 4 points each.', 'a tie is a shared win')
+eq(f.you:GetText(), 'You shared the win with 4 points · best streak 3', 'the local result and best streak')
+assert(not f.question:IsShown() and not f.answers[1]:IsShown() and not f.reveal:IsShown(), 'no stale question, choices or reveal')
 eq(f.standTitle:GetText(), 'Final standings', 'final standings heading')
+assert(f.headline.points[1][5] > f.winner.points[1][5] and f.winner.points[1][5] > f.rows[1].points[1][5], 'headline, winner, then standings')
 assert(f.rows[1].name:GetText():find('Shared win', 1, true) and f.rows[2].name:GetText():find('Shared win', 1, true), 'tied winners share the win')
 assert(f.rows[1].score:GetText():find('best streak 3', 1, true), 'final rows show best streak')
 assert(not f.roundBar:IsShown(), 'no round scores without round data')
@@ -293,6 +330,29 @@ wow.Click(f.roundButtons[2])
 assert(not f.roundRows[1]:IsShown(), 'clicking the open round closes it')
 P.Render(as(model('between', { rows = final, rounds = rounds })))
 assert(not f.roundBar:IsShown(), 'round history is only for finished games')
+eq(f.headline:GetText(), '', 'the completion headline is only for finished games')
+
+-- Single winner, lower places, nobody scoring and pending results.
+local solo = {
+    { key = 'chatonly-realm', name = 'Chatonly-Realm', total = 5, rank = 1, winner = true },
+    { key = 'guest-realm', name = 'Guest-Realm', total = 2, bestStreak = 1, rank = 2 },
+    { key = 'host-realm', name = 'Host-Realm', total = 1, rank = 3 },
+}
+P.Render(as(model('finished', { rows = solo })))
+eq(f.winner:GetText(), 'Chatonly-Realm wins with 5 points.', 'one winner is named')
+eq(f.you:GetText(), 'You finished 2nd of 3 with 2 points', 'a lower place shows rank and score')
+P.Render(as(model('finished', { rows = { { key = 'guest-realm', name = 'Guest-Realm', total = 0, rank = 1 },
+    { key = 'host-realm', name = 'Host-Realm', total = 0, rank = 1 } } })))
+eq(f.winner:GetText(), 'No correct answers, so no winner this time.', 'zero scores have no winner')
+eq(f.you:GetText(), 'You finished 1st of 2 with 0 points', 'a zero score is not a win')
+P.Render(as(model('finished', { rows = { solo[1] } })))
+eq(f.you:GetText(), "You didn't answer any questions in this game.", 'a player who never answered is told so')
+P.Render(as(model('finished', { rows = {}, resultsPending = true })))
+eq(f.winner:GetText(), 'Final scores are on their way.', 'pending results say so')
+eq(f.standTitle:GetText(), '', 'no empty standings heading')
+P.Render(as(model('finished', { rows = { solo[1] }, resultsPending = true })))
+eq(f.you:GetText(), 'Your result arrives with the final scores.', 'the local result waits for the final scores')
+assert(f.standTitle:GetText():find('Results pending', 1, true), 'the standings heading marks pending results')
 P.Render(as(model('finished', { rows = final })))
 assert(not f.leave:IsShown() and not P.restore:IsShown(), 'nothing to leave after the game')
 wow.Click(f.primary)

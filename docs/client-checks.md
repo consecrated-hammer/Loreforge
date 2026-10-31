@@ -81,3 +81,29 @@ Record client build and paired observations separately for open world and
 premade dungeon Party. Only remote acknowledgements and a completed game
 prove dungeon delivery; self-echoes do not. Queued Instance/Raid/Guild/Forever player
 transport and UI are separate checks, with no support claim from this test.
+
+## Staged question-sync and completion checks
+
+Use the same staged development build on both Retail accounts. Open a lobby,
+join and test host-paced and auto-advance, with the host playing along. Watch
+the question card and queued-text preview: neither host nor player should see
+the question before the first question chat line. The prepared player should
+show it as that line arrives, including Party-leader chat. Choices can be read
+while posting, but clicks and keys stay disabled until the answer-opening
+notice. Repeat with manual posting, pause/restart and one missed client.
+A preparation timeout must show the fallback rather than silently claim sync.
+
+Finish a game with a single winner, a tie and no correct answers. Both screens
+should show an obvious Game complete headline, the winner/shared win, your
+result and final standings. The old question/choices must be gone. Check long
+cross-realm names, the host participation toggle, pending results, round-score
+buttons and reopening saved history.
+
+### LibSerialize staged build
+
+- With two updated Retail clients, invite/join, play through prepared questions,
+  answer, reveal and finish. Compare History on both clients, then reload the
+  participant and reopen the result. Check that the host still has no reading lead.
+- Repeat with one older client. Invitations and full play should still work.
+- Open a Party result saved before this build; its scores and round details
+  should be unchanged. Check `/lf probe` independently if native delivery fails.

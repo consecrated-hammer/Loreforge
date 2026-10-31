@@ -13,7 +13,7 @@ return function()
         local args, count = {...}, select("#", ...)
         return nativeXpcall(function() return fn(unpack(args, 1, count)) end, handler)
     end
-    for _, file in ipairs({ "Libs/LibStub/LibStub.lua", "Libs/ChatThrottleLib/ChatThrottleLib.lua", "Libs/LibDeflate/LibDeflate.lua" }) do
+    for _, file in ipairs({ "Libs/LibStub/LibStub.lua", "Libs/ChatThrottleLib/ChatThrottleLib.lua", "Libs/LibDeflate/LibDeflate.lua", "Libs/LibSerialize/LibSerialize.lua" }) do
         assert(loadfile(file))()
     end
 end

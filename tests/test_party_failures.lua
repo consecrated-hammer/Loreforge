@@ -129,4 +129,39 @@ local packets=0;for _ in pairs(P.bus.outgoing)do packets=packets+1 end
 P.Receive({v=1,kind='sync',id=result.id,to='host-realm'},'chat-realm',H.members[3])
 local after=0;for _ in pairs(P.bus.outgoing)do after=after+1 end
 eq(after,packets,'history catch-up requires previous consent')
+-- Click feedback is local; readiness/answer confirmation remains host-owned.
+do
+    local R=assert(loadfile('tests/party-harness.lua'))()
+    local host,client=R.create(1),R.create(2)
+    local A,B,game=host.ns.Party,client.ns.Party,host.ns.game
+    host.ns.db.readySeconds=30
+    assert(A.OpenLobby());R.untilTrue(function()return B.client end,20,'feedback invite')
+    B.Join();R.untilTrue(function()return B.client.joined end,20,'feedback join')
+    assert(game:Start(host.ns.db,'retail',R.members,1));A.HostStarted()
+    R.untilTrue(function()return client.last.state=='ready' end,20,'feedback ready state',true)
+    local send=B.bus.Send
+    B.bus.Send=function(m,...) if m.kind=='ready' then return 'lost-ready-request' end;return send(m,...) end
+    assert(B.Ready())
+    assert(client.last.readyPending,'ready click renders before any host reply')
+    assert(not game.players['guest-realm'].ready,'local pending is not host confirmation')
+    assert(not B.Ready(),'pending readiness cannot be submitted twice')
+    A.host.dirty=true;R.step(2)
+    assert(client.last.readyPending,'unconfirmed snapshots preserve pending feedback')
+    R.step(4)
+    assert(not client.last.readyPending and client.last.readyStatus,'lost readiness offers retry')
+    B.bus.Send=function(m,...) if m.kind=='ready' then return nil,'queue full' end;return send(m,...) end
+    assert(not B.Ready(),'queue failure is reported immediately')
+    assert(not client.last.readyPending and client.last.readyStatus:find('Could not send',1,true),'queue failure is not left pending')
+    B.bus.Send=send;assert(B.Ready())
+    R.untilTrue(function()return client.last.ready==true end,15,'host confirms readiness',true)
+    assert(not client.last.readyPending,'host confirmation clears pending feedback')
+    R.untilTrue(function()return client.last.state=='accepting' end,50,'feedback question',true)
+    B.bus.Send=function(m,...) if m.kind=='answer' then return nil,'queue full' end;return send(m,...) end
+    assert(not B.Answer(2),'answer queue failure is immediate')
+    assert(client.last.selected==2 and not client.last.pending,'failed send keeps chosen answer with retry feedback')
+    assert(not B.Answer(3),'failed send cannot change the original chosen answer')
+    B.bus.Send=send;assert(B.RetryAnswer())
+    assert(client.last.pending and not client.last.locked,'answer retry immediately shows sending')
+    R.untilTrue(function()return client.last.locked==2 end,15,'host confirms retried answer',true)
+end
 io.write('loreforge Party failure/recovery tests passed\n')

@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.3-beta] - 2026-10-31
+
+- Send smaller Party updates between compatible addon clients with LibSerialize. Older clients keep the existing protocol, and saved game history stays compatible.
+- Show immediate Ready sent feedback, host confirmation and retry states. Answer clicks now get a prominent selected/locked heading, and queue failures are shown immediately.
+- Prepare Party questions on updated addon clients before posting begins, then reveal the question on the first host chat message. Hide the host question, choices and posting preview until that same point. Answer timing and scoring still wait for all choices and the authoritative opening notice.
+- Replace the last question on both completion screens with a prominent Game complete heading, winner or shared win, personal result and final standings.
 
 ## [0.3.2-beta] - 2026-10-30
 

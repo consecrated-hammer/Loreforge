@@ -210,9 +210,10 @@ function Game:Question()
     local item = self.run[self.index]
     self.answers, self.deadline, self.phase, self.afterQueue = {}, nil, "announcing", "accepting"
     local q = (self.index - 1) % self.config.perRound + 1
+    self.questionVisible = false
     self.questionCursor = #self.queue + 1
     self:Enqueue("Round " .. self.round .. ", question " .. q .. " (" .. self.config.seconds .. "s)"
-        .. (self.attempt > 1 and " (restarted)" or "") .. ": " .. item.text)
+        .. (self.attempt > 1 and " (restart " .. self.attempt .. ")" or "") .. ": " .. item.text)
     -- Compact games post every choice on one line; every shipped question
     -- fits, but anything that would split falls back to one line each.
     local parts = {}
@@ -223,10 +224,12 @@ function Game:Question()
     else
         for _, text in ipairs(parts) do self:Enqueue(text) end
     end
+    if self.onEvent then self.onEvent("question_queued") end
 end
 
 function Game:NextMessage()
     if self.phase == "paused" or self.pending then return nil end
+    if self.phase=="announcing" and self.cursor==self.questionCursor and self.firstLineReady and not self.firstLineReady() then return nil end
     return self.queue[self.cursor]
 end
 
@@ -237,7 +240,12 @@ end
 
 function Game:Echo(text)
     if self.phase == "paused" or not self.pending or text ~= self.pending.text then return false end
+    local firstQuestionLine = self.phase == "announcing" and self.cursor == self.questionCursor
     self.pending, self.cursor = nil, self.cursor + 1
+    if firstQuestionLine then
+        self.questionVisible = true
+        if self.onEvent then self.onEvent("question_shown") end
+    end
     if self.cursor > #self.queue then
         self.presentationFrom = self.phase
         self.queue, self.cursor, self.phase = {}, 1, self.afterQueue

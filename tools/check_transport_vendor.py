@@ -12,7 +12,7 @@ for name, expected in manifest['sha256'].items():
         raise SystemExit(f'{name}: does not match the pinned upstream file')
 pkgmeta = (root / '.pkgmeta').read_text()
 plain_copy = pkgmeta.split('plain-copy:', 1)[1].split('ignore:', 1)[0]
-for directory in ['Libs/LibStub', 'Libs/ChatThrottleLib', 'Libs/LibDeflate']:
+for directory in ['Libs/LibStub', 'Libs/ChatThrottleLib', 'Libs/LibDeflate', 'Libs/LibSerialize']:
     if f'  - {directory}\n' not in plain_copy:
         raise SystemExit(f'{directory}: missing packager plain-copy protection')
-print('Transport vendor: all four hashes and packaging protections match')
+print(f'Transport vendor: all {len(manifest["sha256"])} hashes and packaging protections match')

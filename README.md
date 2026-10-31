@@ -16,6 +16,7 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 - **Numbered answers.** Each player's first valid `1`, `2`, `3` or `4` locks their attempt. Correct answers earn one point; joint winners share the win.
 - **Round and overall scores**, live streaks, named recaps and personal-best callouts.
 - **Ready checks**, an inactivity pause, and closing records for the top three players.
+- **Clear game results.** A dedicated completion view names the winner or shared win, shows your result and final standings, and keeps the last question out of the way.
 - **History and Hall of Fame.** Every finished game on this client is kept with its standings, including Party games you joined. The Hall of Fame ranks players by wins, with accuracy and best streak.
 - **Sound cues and answer keys.** Optional sounds for invitations, new questions, the last five seconds, results and the finish. Bind **Answer 1** to **Answer 4** under Key Bindings > AddOns > Loreforge.
 - **The same HammerCore interface** as the other Consecrated Hammer addons: settings, commands, minimap button, diagnostics and About page.
@@ -78,6 +79,11 @@ With 0.2.0-beta or later on the host and addon participants, choose Party
 output and **Open lobby**. Players get an invitation near the top of the
 screen with **Join quiz** and **Decline**, then the host clicks **Start game**.
 Use `/lf` to reopen a pending invitation. Invitations appear above the main window and also print a chat notice. `/lf debug` includes Party delivery and window errors if no prompt appears.
+With the staged question-sync update on all addon participants, the current
+question is prepared offscreen before posting and appears as its first chat
+line arrives. The playing host sees it at that same milestone. Mixed older
+clients retain the earlier delivery path. A failed preparation has a bounded
+chat fallback rather than an unlimited wait.
 Joined players get clickable questions, confirmed answer locking, tinted
 reveals, streaks, shared scores and a finish headline. Chat-only players can
 still answer normally. `/lf play` restores a joined game and `/lf history`
@@ -107,4 +113,4 @@ See [development state](docs/development-state.md) for what has and hasn't been 
 
 ## Licence
 
-Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport libraries retain their own public-domain or zlib terms; see [third-party notices](Libs/TRANSPORT-NOTICES.md). Loreforge's host engine and interface are original code. Blizzard's built-in book icon is referenced by its game path. There is no external artwork dependency.
+Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport libraries retain their own public-domain, zlib or MIT terms; see [third-party notices](Libs/TRANSPORT-NOTICES.md). Loreforge's host engine and interface are original code. Blizzard's built-in book icon is referenced by its game path. There is no external artwork dependency.
