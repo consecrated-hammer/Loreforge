@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.4] - 2026-11-01
+
+- First stable release. Same game as 0.3.4-beta, with no feature changes.
+
 ## [0.3.4-beta] - 2026-11-01
 
 - A **What's new** window after updates, shared with any other Consecrated

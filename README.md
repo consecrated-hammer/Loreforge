@@ -4,7 +4,7 @@
 
 _You have considered reading the quest text. Now make everyone else prove it._
 
-Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Instance or Guild output, categories, difficulty, game length and pacing. Other players answer with a number in chat; they don't need the addon.
+Loreforge runs on Retail and WoW Forever. The host picks Party, Raid, Instance or Guild output, categories, difficulty, game length and pacing. Other players answer with a number in chat; they don't need the addon.
 
 ## What it does
 
