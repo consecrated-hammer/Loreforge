@@ -239,6 +239,24 @@ eq(f.status:GetText(), 'Final scores coming up.', 'the last reveal says results 
 P.Render(as(question({ state = 'revealing', index = 5, correct = 1, deadline = nil })))
 assert(f.status:GetText() ~= 'Final scores coming up.', 'other reveals do not')
 
+-- Theme art widens the window; a round intro shows it whole with no question.
+P.Render(as(question({ art = 'goblins' })))
+eq(f:GetWidth(), 460 + f:GetHeight(), 'the window widens by the square art')
+eq(f.art:GetWidth(), f.art:GetHeight(), 'the art is square')
+eq(f.art:GetHeight(), f:GetHeight() - 2, 'at full height')
+eq(f.art.texture, 'Interface\\AddOns\\Loreforge\\Textures\\theme-goblins.tga', 'the question uses its art')
+P.Render(as(question({ art = 'nonsense' })))
+assert(f.art.texture:find('theme-mixed', 1, true), 'an unknown key shows the bell')
+P.Render(as(model('paused', { roundIntro = true, round = 2, theme = 'Murlocs', art = 'murlocs', status = 'x' })))
+eq(f.introRound:GetText(), 'Round 2', 'the intro names the round')
+eq(f.introTheme:GetText(), 'Murlocs', 'and the theme')
+eq(f.detail:IsShown(), false, 'with no other text')
+ns.db.questionArt = false
+P.Render(as(question()))
+eq(f:GetWidth(), 460, 'no art keeps the narrow window')
+eq(f.art:IsShown(), false, 'and hides the painting')
+ns.db.questionArt = nil
+
 -- Content taller than the screen scrolls inside a bounded body, with the
 -- title and the action footer always in place.
 UIParent:SetHeight(600)

@@ -18,6 +18,7 @@ local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 5, 10
 -- actions.  The scroll bar sits in the right-hand margin.
 local HEADER, FOOTER, MIN_BODY, MIN_HEIGHT = 64, 48, 120, 340
 local INNER = WIDTH - PAD * 2
+local NO_ART = { invitation = true, joining = true, history = true, stopped = true }
 -- Question, answers, feedback, score, status and the standings heading.
 local GAME_CARD = 270
 local ACTIVE = { preparing=true, announcing=true, joining = true, lobby = true, ready = true, presenting = true, accepting = true,
@@ -140,6 +141,17 @@ local function create()
     f:SetScale(clampScale(db.playerScale))
     anchor(f, false)
 
+    -- Below the title and close button, which sit on top of the painting.
+    f.art = f:CreateTexture(nil, "BORDER")
+    f.introBand = f:CreateTexture(nil, "BORDER", nil, 1)
+    f.introBand:SetColorTexture(0, 0, 0, 0.7)
+    f.introBand:SetPoint("BOTTOMLEFT", 1, 1)
+    f.introBand:SetPoint("BOTTOMRIGHT", -1, 1)
+    f.introBand:SetHeight(84)
+    f.introRound = UI.FontString(f, "GameFontNormalHuge", "flavour")
+    f.introRound:SetPoint("BOTTOM", 0, 46)
+    f.introTheme = UI.FontString(f, "GameFontHighlightLarge", "text")
+    f.introTheme:SetPoint("BOTTOM", 0, 20)
     f.icon = f:CreateTexture(nil, "ARTWORK")
     f.icon:SetSize(20, 20)
     f.icon:SetPoint("TOPLEFT", PAD, -14)
@@ -622,14 +634,15 @@ end
 function Player.Draw()
     local f, model = Player.frame, Player.model
     if not (f and model) then return end
-    local state = model.state
+    local state = model.roundIntro and "round_intro" or model.state
+    local artKey = ns.db.questionArt ~= false and model.joined and not NO_ART[state] and Player.ArtPath(model) or nil
     local items = {}
     local function add(region, show, gap, height)
         region:SetShown(show and true or false)
         if show then items[#items + 1] = { region, gap, height } end
     end
 
-    f.position:SetText(state == "history" and "" or positionLine(model))
+    f.position:SetText((state == "history" or state == "round_intro") and "" or positionLine(model))
     local headline = headlineText(model)
     f.headline:SetText(headline)
     add(f.headline, headline ~= "", 8)
@@ -650,6 +663,7 @@ function Player.Draw()
     elseif state == "stopped" or state == "disconnected" then
         detail = detail ~= "" and detail or text(model.reason)
     end
+    if state == "round_intro" then detail = "" end
     f.detail:SetText(detail)
     add(f.detail, detail ~= "", 10)
 
@@ -674,7 +688,7 @@ function Player.Draw()
     add(f.status, status ~= "" and (state == "between" or state == "revealing"), 12)
 
     local history = state == "history"
-    local count = (history or QUESTION[state]) and 0 or drawRows(f, model)
+    local count = (history or QUESTION[state] or state == "round_intro") and 0 or drawRows(f, model)
     local heading = ""
     if count > 0 then
         heading = (state == "lobby" or state == "ready" or state == "joining") and "Players"
@@ -729,13 +743,13 @@ function Player.Draw()
     f.primary:ClearAllPoints(); f.primary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD, 16)
     f.secondary:ClearAllPoints()
     f.secondary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", primary and PAD + 180 or PAD, 16)
-    f.leave:ClearAllPoints(); f.leave:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -PAD, 16)
     local footer = (primary or secondary or f.leave:IsShown()) and FOOTER or 16
     local viewHeight = math.min(content, Player.MaxBody(footer))
     f.body:SetHeight(content)
     f.scroll:SetSize(INNER, viewHeight)
     f.bar:SetHeight(viewHeight)
     f:SetHeight(Player.StableHeight(model, HEADER + viewHeight + footer))
+    Player.DrawArt(f, model, artKey, state == "round_intro")
     -- A new question or phase starts at the top; ticks keep the position.
     local key = tostring(model.id) .. ":" .. tostring(state) .. ":" .. tostring(model.index)
     if key ~= Player.scrollKey then Player.scrollKey, Player.scrollOffset = key, 0 end
@@ -743,6 +757,54 @@ function Player.Draw()
     f.bar:SetShown(Player.scrollRange > 0)
     Player.ScrollTo(Player.scrollOffset or 0)
     Player.UpdateTimer()
+end
+
+function Player.ArtPath(model)
+    local key = text(model.art)
+    if key ~= "mixed" then
+        local known = false
+        for _, category in ipairs(ns.Game and ns.Game.CATEGORIES or {}) do
+            if category[1] == key then known = true end
+        end
+        if not known then key = "mixed" end
+    end
+    return "Interface\\AddOns\\Loreforge\\Textures\\theme-" .. key .. ".tga"
+end
+
+-- The square paintings are never cropped: the window widens by the panel's full
+-- height. A window too tall for the screen's width keeps a smaller square, in
+-- the middle of the panel. A round intro centres it across the whole window.
+function Player.DrawArt(f, model, path, intro)
+    local height = f:GetHeight() - 2
+    local side = height
+    if path then
+        local screen = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
+        local scale = f:GetScale() or 1
+        if screen and screen > 0 and scale > 0 then
+            side = math.max(1, math.min(side, math.floor(screen * 0.95 / scale) - WIDTH - 2))
+        end
+    end
+    f:SetWidth(path and WIDTH + side + 2 or WIDTH)
+    local rightGap = path and side + 1 or 0
+    f.position:ClearAllPoints()
+    f.position:SetPoint("TOPRIGHT", path and -(rightGap + PAD) or -40, -18)
+    f.leave:ClearAllPoints(); f.leave:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(PAD + rightGap), 16)
+    f.art:SetShown(path ~= nil)
+    f.art:ClearAllPoints()
+    if path then
+        f.art:SetTexture(path)
+        f.art:SetSize(side, side)
+        if intro then f.art:SetPoint("CENTER")
+        else f.art:SetPoint("RIGHT", -1, 0) end
+        f.art:SetTexCoord(0, 1, 0, 1)
+    end
+    f.introBand:SetShown(intro)
+    f.introRound:SetShown(intro)
+    f.introTheme:SetShown(intro)
+    if intro then
+        f.introRound:SetText("Round " .. (tonumber(model.round) or 1))
+        f.introTheme:SetText(text(model.theme) ~= "" and model.theme or "A bit of everything")
+    end
 end
 
 -- A game's window holds its height: it starts tall enough for the card plus
@@ -932,7 +994,10 @@ function Player.Cue(previous, model)
     if not ns.Sound or not model.joined then return end
     local key = tostring(model.id) .. ":" .. tostring(model.index) .. ":" .. tostring(model.attempt)
     local state = model.state
-    if state == "accepting" and Player.cueQuestion ~= key then
+    if model.roundIntro and Player.cueIntro ~= key then
+        Player.cueIntro = key
+        ns.Sound("invite")
+    elseif state == "accepting" and Player.cueQuestion ~= key then
         Player.cueQuestion, Player.lastTick = key, nil
         ns.Sound("question")
     elseif (state == "revealing" or state == "between") and Player.cueReveal ~= key and tonumber(model.correct) then

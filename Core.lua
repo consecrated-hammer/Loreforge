@@ -7,7 +7,7 @@ local function partyReport()
 end
 ns.DEFAULTS = { rounds = 1, perRound = 15, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
     autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 30, hostParticipates = true,
-    compactChoices = false, hostAutoMinimise = true, sound = true, hostScale = 1, playerScale = 1 }
+    compactChoices = false, hostAutoMinimise = true, questionArt = true, roundIntro = true, sound = true, hostScale = 1, playerScale = 1 }
 -- Setup ranges. The engine and Party protocol accept wider values from older
 -- clients; the setup controls offer what makes a sensible game.
 ns.LIMITS = { rounds = { 1, 10, 1 }, perRound = { 1, 50, 1 }, seconds = { 5, 60, 5 }, questionGap = { 3, 30, 1 },

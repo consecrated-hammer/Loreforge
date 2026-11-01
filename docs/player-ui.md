@@ -149,3 +149,16 @@ tall enough for a question card and the standings it will show, and only grows
 from there, up to the screen cap. Long content past the cap scrolls. The window
 is pinned by its top edge (`playerLeft`, `playerTop`), so growth only moves the
 bottom. A new game id starts again, and the history view isn't held.
+
+## Theme art
+
+Game screens widen for a square painting at the window's full height, never
+cropped, so the width follows the height. The painting is chosen by the model's
+`art` key: the round's theme, or the question's first ticked
+category, or `mixed`. Unknown keys fall back to `mixed`. `tools/build_art.py`
+makes the 512 pixel TGAs in `Textures/` from the source PNGs.
+
+With `roundIntro` set, the engine holds a `round_intro` phase for five seconds
+before each themed round's first question, and the window shows the whole
+painting with the round and theme. It reaches clients as `paused` with
+`roundIntro = true` and no question, so older clients show a short pause.

@@ -35,7 +35,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         local loader
         for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
         loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
-        ns.db.hostAutoMinimise = false
+        ns.db.hostAutoMinimise = false; ns.db.roundIntro = false
         ns.db.channel, ns.db.rounds, ns.db.perRound, ns.db.seconds = channel, 2, 2, 5
         ns.db.readyCheck = false
         ns.db.hostParticipates = false -- these games score other players only

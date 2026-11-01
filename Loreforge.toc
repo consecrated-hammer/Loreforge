@@ -1,7 +1,7 @@
 ## Interface: 120105
 ## Title: Loreforge
 ## Author: consecrated-hammer
-## Version: 0.3.4
+## Version: 1.0.0
 ## X-ReleaseDate: 2026-11-01
 ## Notes: Host group and guild trivia with manual or automatic rounds, scores and records.
 ## SavedVariables: LoreforgeDB

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0] - 2026-11-01
+
+- Every category has its own painting beside the question, with a bell for
+  mixed games. Turn it off with **Theme art** on Interface.
+- Themed rounds open with a few seconds of their art and name. Turn it off with
+  **Round intros** on Interface.
+
 ## [0.3.4] - 2026-11-01
 
 - First stable release. Same game as 0.3.4-beta, with no feature changes.

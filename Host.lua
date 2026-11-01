@@ -191,6 +191,7 @@ function ns.StartGame(practice)
     for key, value in pairs(ns.db) do config[key] = value end
     config.localOnly = localOnly == true
     if practice then config.hostParticipates = true end
+    config.roundIntro = ns.db.roundIntro ~= false
     ok, err = ns.game:Start(config, ns.era, roster, serial)
     if not ok then failed(err); return end
     ns.setupError, ns.readyNotice, ns.lastUnmatched = nil, nil, nil
@@ -329,7 +330,7 @@ local BOARD_ROWS = 10
 local AMBER = { 1, 0.69, 0.2, 1 }
 ns.HostLayout = { width = W, height = H, leftWidth = LEFT_W, rightX = RIGHT_X, rightWidth = RIGHT_W }
 local TABS = { { "play", "Play" }, { "history", "History" }, { "records", "Hall of Fame" } }
-local PHASES = { ready_announcing = "Posting the ready check", ready = "Ready check", announcing = "Posting the question",
+local PHASES = { ready_announcing = "Posting the ready check", ready = "Ready check", round_intro = "Round starting", announcing = "Posting the question",
     presenting = "Sending the question to addon players", opening = "Opening answers", accepting = "Answers open",
     revealing = "Posting results", between = "Between questions", paused = "Paused", finished = "Game complete",
     stopped = "Game stopped" }
@@ -888,7 +889,7 @@ end
 -- minimised, this window also carries the host's next step. A Party game they've joined or been invited to comes first.
 
 local HOST_STATES = { ready_announcing = "ready", ready = "ready", presenting = "preparing", opening = "presenting",
-    accepting = "accepting", revealing = "revealing", between = "between", paused = "paused" }
+    accepting = "accepting", revealing = "revealing", between = "between", paused = "paused", round_intro = "paused" }
 local HOST_HANDLERS = {
     Answer = function(index) return ns.SubmitHostAnswer(tostring(index)) end,
     Ready = function() return ns.SubmitHostAnswer("ready") end,
@@ -928,7 +929,7 @@ local function hostModel(g, host, hostPlayer)
     local question = state ~= "ready" and state ~= "preparing" and state ~= "paused" and item or nil
     return { id = "host-" .. tostring(g.serial), state = state, handlers = HOST_HANDLERS, host = host.name,
         config = g.config, joined = true, me = hostPlayer.key, rows = rows, ready = hostPlayer.ready,
-        theme = g:Theme(), index = g.index, round = g.round, totalQuestions = #g.run, attempt = g.attempt,
+        theme = g:Theme(), art = g:ArtKey(), roundIntro = g.phase == "round_intro" or nil, index = g.index, round = g.round, totalQuestions = #g.run, attempt = g.attempt,
         question = question and question.text or nil, choices = question and question.choices or nil,
         deadline = readyDeadline or (state == "accepting" and g.deadline) or nil,
         remaining = readyDeadline and math.max(0, readyDeadline - GetTime()) * 1000 or nil,

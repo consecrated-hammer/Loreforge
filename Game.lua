@@ -22,6 +22,7 @@ Game.CATEGORIES = {
 }
 
 Game.RECAP_EVERY = 5
+Game.ROUND_INTRO_SECONDS = 5
 
 local function integer(value, low, high)
     return type(value) == "number" and value == math.floor(value) and value >= low and value <= high
@@ -157,7 +158,8 @@ function Game:Start(config, era, roster, serial)
         idleLimit = config.idleLimit == nil and 3 or config.idleLimit,
         readyCheck = config.readyCheck ~= false, readySeconds = config.readySeconds or 30,
         hostParticipates = config.hostParticipates == true, localOnly = config.localOnly == true,
-        manualSend = config.manualSend == true, compactChoices = config.compactChoices == true }
+        manualSend = config.manualSend == true, compactChoices = config.compactChoices == true,
+        roundIntro = config.roundIntro == true }
     self.players, self.run, self.serial = players, {}, serial
     self.presentationGate, self.presentationFrom = false, nil
     self.themes = {}
@@ -180,7 +182,11 @@ function Game:Start(config, era, roster, serial)
         end
         local correct
         for i, choice in ipairs(choices) do if choice == entry[2] then correct = i end end
-        self.run[#self.run + 1] = { text = entry[1], choices = choices, correct = correct, id = entry.id }
+        local category
+        for _, tag in ipairs(Game.Categories(entry)) do
+            if config.categories[tag] then category = tag; break end
+        end
+        self.run[#self.run + 1] = { text = entry[1], choices = choices, correct = correct, id = entry.id, category = category }
     end
     self.index, self.round, self.attempt = 1, 1, 1
     self.recorded = false
@@ -193,7 +199,7 @@ function Game:Start(config, era, roster, serial)
     self.rulesConfirmed = false
     self.rulesText = Game.RulesText(config)
     if self.config.readyCheck then self:ReadyCheck()
-    else self:Enqueue(self.rulesText .. " Answer 1-4."); self:Question() end
+    else self:BeginQuestion(self.rulesText .. " Answer 1-4.") end
     return true
 end
 
@@ -257,6 +263,27 @@ function Game:FindPlayer(key, guid)
             if candidate.guid == guid then return candidate end
         end
     end
+end
+
+-- A themed round opens with a few seconds for its intro. Nothing is posted
+-- meanwhile, so an opening line waits until the question.
+function Game:BeginQuestion(firstLine)
+    if self.config.roundIntro and self.config.rounds > 1 and (self.index - 1) % self.config.perRound == 0 then
+        self.phase, self.introLine, self.afterQueue = "round_intro", firstLine, nil
+        self.introUntil = self.clock() + Game.ROUND_INTRO_SECONDS
+        return
+    end
+    if firstLine then self:Enqueue(firstLine) end
+    self:Question()
+end
+
+function Game:ArtKey()
+    if self.phase == "ready" or self.phase == "ready_announcing" then return "mixed" end
+    local theme = self.themes and self.themes[self.round]
+    if theme then return theme.key end
+    if self.phase == "round_intro" then return "mixed" end
+    local item = self.run and self.run[self.index]
+    return item and item.category or "mixed"
 end
 
 function Game:Question()
@@ -496,9 +523,16 @@ function Game:RecordResults()
 end
 
 function Game:Next()
+    if self.phase == "round_intro" then
+        local line = self.introLine
+        self.introLine, self.introUntil = nil, nil
+        if line then self:Enqueue(line) end
+        self:Question()
+        return true
+    end
     if self.phase == "ready" then
         self.readyDeadline = nil
-        self:Question()
+        self:BeginQuestion()
         return true
     end
     if self.phase ~= "between" then return false end
@@ -509,12 +543,13 @@ function Game:Next()
         self.round = round
         for _, player in pairs(self.players) do player.round = 0 end
     end
-    self:Question()
+    self:BeginQuestion()
     return true
 end
 
 function Game:Tick()
     if self.phase == "ready" and self.clock() >= self.readyDeadline then self:Next() end
+    if self.phase == "round_intro" and self.clock() >= self.introUntil then self:Next() end
     if self.phase == "accepting" and self.clock() >= self.deadline then self:Close() end
     if self.phase == "between" and self.config.autoMode and self.nextQuestionAt
         and self.clock() >= self.nextQuestionAt then self:Next() end
@@ -530,8 +565,10 @@ function Game:Pause(reason, preservePending)
     if self.phase == "ready" or self.phase == "ready_announcing" then
         self.resumePhase = "readyRestart"
         self.queue, self.cursor = {}, 1
-    elseif self.phase == "accepting" or self.phase == "announcing" or self.phase == "presenting" or self.phase == "opening" then
+    elseif self.phase == "accepting" or self.phase == "announcing" or self.phase == "presenting" or self.phase == "opening"
+        or self.phase == "round_intro" then
         self.resumePhase = "question"
+        self.introLine, self.introUntil = nil, nil
         self.queue, self.cursor, self.answers = {}, 1, {}
         self.attempt = self.attempt + 1
     end

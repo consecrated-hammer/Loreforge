@@ -149,12 +149,15 @@ end
 local function snapshot()
     local h, g = P.host, ns.game
     local state = h.started and g.phase or "lobby"
+    -- Older clients read a round intro as a short pause, with no question.
+    local roundIntro = state == "round_intro"
+    if roundIntro then state = "paused" end
     if state == "ready_announcing" then state = "ready" elseif state == "opening" then state = "presenting" end
     if state == "announcing" and h.preparation and earlyQuestions(h) and not g.questionVisible then state="preparing" end
     local m = {state = state, host = clean(me().name), config = h.config, index = g.index or 0, round = g.round or 0,
-        theme = h.started and g.Theme and g:Theme() or nil,
+        theme = h.started and g.Theme and g:Theme() or nil, art = h.started and g:ArtKey() or nil, roundIntro = roundIntro or nil,
         attempt = g.attempt or 0, totalQuestions = h.config.rounds * h.config.perRound, rows = rows(h.started and g or nil),
-        status = state == "lobby" and "The host is setting up the game." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
+        status = state == "lobby" and "The host is setting up the game." or roundIntro and "The next round is starting." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
     -- Between questions, players see a countdown with auto-advance, or that
     -- the host starts the next one. Older clients ignore both fields.
     if state == "between" and g.config then
@@ -256,6 +259,8 @@ local function apply(m)
     if m.nextIn~=nil and not integer(m.nextIn,0,120000) then return end
     if m.hostPaced~=nil and type(m.hostPaced)~="boolean" then return end
     if m.theme~=nil and (type(m.theme)~="string" or #m.theme>80) then return end
+    if m.art~=nil and (type(m.art)~="string" or #m.art>20) then return end
+    if m.roundIntro~=nil and m.roundIntro~=true then return end
     m.status=clean(m.status);m.config.categories=clean(m.config.categories)
     if m.correctText~=nil then
         if type(m.correctText)~="string" or #m.correctText>2048 or not m.correct then return end

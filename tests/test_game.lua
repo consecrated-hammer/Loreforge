@@ -227,4 +227,23 @@ eq(mixed.themes[3], nil, "and that round mixes")
 local plain = themedGame(1, 3)
 eq(plain:Theme(), nil, "a single round has no theme")
 assert(plain.queue[plain.questionCursor]:find("Question 1 of 3", 1, true), "a plain game counts questions")
+
+-- Round intros hold the first question of each themed round.
+local intro = Game.New(themedBank, function() return time end, function(n) return n end, {})
+assert(intro:Start({ rounds = 2, perRound = 2, seconds = 10, channel = "GUILD", readyCheck = false, difficulty = "mixed",
+    compactChoices = true, roundIntro = true, categories = { lore = true, items = true } }, "retail", roster, 21))
+eq(intro.phase, "round_intro", "a themed game opens with its intro")
+eq(intro:NextMessage(), nil, "nothing posts during an intro")
+eq(intro:ArtKey(), intro.themes[1].key, "the intro uses the round theme")
+time = time + Game.ROUND_INTRO_SECONDS
+intro:Tick()
+eq(intro.phase, "announcing", "the question follows the intro")
+assert(intro:NextMessage():find("Answer 1-4", 1, true), "the rules line waited for the question")
+flush(intro); intro:Close(); flush(intro)
+assert(intro:Next()); eq(intro.phase, "announcing", "the second question has no intro")
+flush(intro); intro:Close(); flush(intro)
+assert(intro:Next()); eq(intro.phase, "round_intro", "the next round has an intro")
+intro:Pause("test"); assert(intro:Resume()); eq(intro.phase, "announcing", "a pause during an intro resumes at the question")
+local plainArt = themedGame(1, 3)
+assert(plainArt:ArtKey() == "lore" or plainArt:ArtKey() == "items", "a plain game uses the question category")
 io.write("loreforge game tests passed\n")

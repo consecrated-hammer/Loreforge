@@ -4,6 +4,10 @@ local addonName, ns = ...
 -- player-facing lines for releases worth announcing; routine fixes stay in
 -- CHANGELOG.md. A `page` adds a button that opens that settings page.
 ns.WHATS_NEW = {
+    { version = "1.0.0", items = {
+        "Every category now has its own painting beside the question.",
+        "Themed rounds open with their art and name.",
+    } },
     { version = "0.3.4", items = {
         { text = "What's new: this window, shown once after an update that adds something worth knowing, with news from any other Consecrated Hammer addons you use. Reopen it with /lf whatsnew or from About, or turn it off on Visibility.",
             page = "Visibility" },
