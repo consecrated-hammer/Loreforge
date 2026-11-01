@@ -51,7 +51,9 @@ eq(g:Answer("a-r", "1", "imposter"), false, "GUID mismatch")
 eq(g:Answer("a-r", "1 please", "guidA"), false, "strict number")
 local right = tostring(g.run[g.index].correct)
 assert(g:Answer("a-r", " " .. right .. " ", "guidA"))
-eq(g:Answer("a-r", "2", "guidA"), false, "first answer locks")
+eq(g:Answer("a-r", tostring(g.run[g.index].correct % 4 + 1), "guidA"), true, "an answer can be changed")
+eq(g.answers["a-r"], g.run[g.index].correct % 4 + 1, "the last answer counts")
+assert(g:Answer("a-r", right, "guidA"))
 assert(g:Answer("b-r", right, "guidB"))
 time = 110
 assert(not g:Answer("b-r", right, "guidB"))
@@ -198,4 +200,31 @@ eq(ready.deadline, time + 5, "question has its own complete answer window")
 ready:Stop()
 assert(ready:Start(readyConfig, "retail", roster, 12)); flush(ready)
 assert(ready:Next()); eq(ready.phase, "announcing", "host can start before ready countdown ends")
+
+-- Themed rounds: each round keeps to one category, and mixes if none can fill it.
+local themedBank = {}
+for i = 1, 6 do themedBank[#themedBank + 1] = { "Lore " .. i, "a", "b", "c", "d", id = "l" .. i, categories = { "lore" } } end
+for i = 1, 6 do themedBank[#themedBank + 1] = { "Item " .. i, "a", "b", "c", "d", id = "i" .. i, categories = { "items" } } end
+local function themedGame(rounds, perRound)
+    local tg = Game.New(themedBank, function() return time end, function(n) return n end, {})
+    assert(tg:Start({ rounds = rounds, perRound = perRound, seconds = 10, channel = "GUILD", readyCheck = false,
+        difficulty = "mixed", compactChoices = true, categories = { lore = true, items = true } }, "retail", roster, 20))
+    return tg
+end
+local tg = themedGame(2, 3)
+assert(tg.themes[1] and tg.themes[2], "each round has a theme")
+assert(tg.themes[1].key ~= tg.themes[2].key, "themes repeat only when they run out")
+for i, entry in ipairs(tg.run) do
+    local theme = tg.themes[math.ceil(i / 3)]
+    assert(entry.text:find(theme.key == "lore" and "Lore" or "Item", 1, true), "question " .. i .. " belongs to its round's theme")
+end
+assert(tg.queue[tg.questionCursor]:find("Round 1: " .. tg:Theme(), 1, true), "the question line names the theme")
+local full = themedGame(2, 6)
+eq(#full.run, 12, "two themes can each fill a round")
+local mixed = themedGame(3, 4)
+eq(#mixed.run, 12, "a round still fills when no category can")
+eq(mixed.themes[3], nil, "and that round mixes")
+local plain = themedGame(1, 3)
+eq(plain:Theme(), nil, "a single round has no theme")
+assert(plain.queue[plain.questionCursor]:find("Question 1 of 3", 1, true), "a plain game counts questions")
 io.write("loreforge game tests passed\n")

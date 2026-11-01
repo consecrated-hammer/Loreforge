@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.4-beta] - 2026-11-01
+
+- A **What's new** window after updates, shared with any other Consecrated
+  Hammer addons you use. It never opens on a fresh install or in combat. Turn
+  it off with **Show what's new after updates** on Visibility, and reopen it
+  with `/lf whatsnew` or the About page.
+- The player window now follows the lore quiz on About: the question, four
+  plain answers, a thin timer bar, a one-line result and one score line, with
+  standings between questions. Invitations, the lobby and results use the same
+  frame.
+- A host playing along now answers in that same window, and the host console
+  keeps the posting controls and scoreboard. Results stay on the console.
+  **Minimise** hides the console while you play: the quiz window offers your
+  next step, and the console opens again for the results.
+- One **Questions** count replaces rounds, with optional **Themed rounds**
+  where each round sticks to one category. Plain games post scores every five
+  questions. Saved multi-round settings become the same number of questions.
+- Change your answer any time before the countdown ends, by clicking another
+  choice or typing another number. The last one counts.
+- A host playing along is minimised automatically as the game starts. Turn it
+  off with **Minimise when playing along** on Interface.
+- The game window holds its height through a game and is pinned by its top
+  edge, so it no longer jumps around. It goes back to its default spot once.
+- The last question says final scores are coming while they post, and practice
+  games post their results faster.
+- The transport probe's commands are now buttons on Troubleshooting.
+- Updated the bundled HammerCore library.
+
 ## [0.3.3-beta] - 2026-10-31
 
 - Send smaller Party updates between compatible addon clients with LibSerialize. Older clients keep the existing protocol, and saved game history stays compatible.

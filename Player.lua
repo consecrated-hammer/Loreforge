@@ -5,22 +5,34 @@ local UI, T = HC.UI, HC.Theme
 -- The player's quiz window: invitation, lobby, question card, reveal, results
 -- and saved games.  It only draws the validated model the Party layer hands
 -- to Render and calls ns.Party actions; scores and rules live with the host.
+-- A host playing along gets the same window: their model comes from Host.lua
+-- and carries `handlers`, which take the place of the ns.Party actions.
+-- It follows the look of HammerCore's lore quiz (HammerCore/src/Quiz.lua).
 
 local Player = { offered = {}, dismissed = {}, opened = {}, results = {} }
 ns.Player = Player
 
-local WIDTH, PAD, MAX_ROWS, MAX_HISTORY = 500, 16, 5, 20
-local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 6, 10
--- The body scrolls between a fixed title bar and a fixed footer of actions.
-local SCROLLBAR, HEADER, FOOTER, MIN_BODY = 10, 44, 48, 120
-local INNER = WIDTH - PAD * 2 - SCROLLBAR
-local BADGE = 96
+local WIDTH, PAD, MAX_ROWS, MAX_HISTORY = 460, 16, 5, 20
+local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 5, 10
+-- The body scrolls between a fixed title bar and timer, and a fixed footer of
+-- actions.  The scroll bar sits in the right-hand margin.
+local HEADER, FOOTER, MIN_BODY, MIN_HEIGHT = 64, 48, 120, 340
+local INNER = WIDTH - PAD * 2
+-- Question, answers, feedback, score, status and the standings heading.
+local GAME_CARD = 270
 local ACTIVE = { preparing=true, announcing=true, joining = true, lobby = true, ready = true, presenting = true, accepting = true,
     revealing = true, between = true, paused = true, disconnected = true }
 local REVEALED = { revealing = true, between = true, finished = true }
+-- The quiz card: question, answers, one feedback line and one score line.
+local QUESTION = { announcing = true, presenting = true, accepting = true, revealing = true }
 local NOT_CONFIRMED = "Answer not confirmed; use Party chat"
 
 local function act(name, ...)
+    local handlers = Player.model and Player.model.handlers
+    if handlers then
+        if handlers[name] then return handlers[name](...) end
+        return
+    end
     local party = ns.Party
     local fn = party and party[name]
     if type(fn) == "function" then return fn(...) end
@@ -60,27 +72,18 @@ local function label(parent, font, role, width)
 end
 
 local function button(parent, width, run, variant)
-    local b = UI.Button(parent, width, 26, variant)
+    local b = UI.Button(parent, width, 24, variant)
     b:SetScript("OnClick", run)
     return b
 end
 
 local function answerButton(parent, index)
-    local b = UI.Button(parent, INNER, 34)
+    local b = UI.Button(parent, INNER, 30)
     b:RegisterForClicks("LeftButtonUp")
-    -- Reveal tint behind the text: green for the answer, red for a wrong pick.
-    b.tint = b:CreateTexture(nil, "BORDER")
-    b.tint:SetPoint("TOPLEFT", 1, -1); b.tint:SetPoint("BOTTOMRIGHT", -1, 1)
-    b.tint:Hide()
     b.Text:ClearAllPoints()
-    b.Text:SetPoint("TOPLEFT", 12, -8)
-    b.Text:SetWidth(INNER - 24 - BADGE)
-    b.Text:SetJustifyH("LEFT")
+    b.Text:SetPoint("CENTER")
+    b.Text:SetWidth(INNER - 24)
     if b.Text.SetWordWrap then b.Text:SetWordWrap(true) end
-    b.badge = UI.FontString(b, "GameFontHighlightSmall", "muted")
-    b.badge:SetPoint("RIGHT", -12, 0)
-    b.badge:SetWidth(BADGE)
-    b.badge:SetJustifyH("RIGHT")
     b.index = index
     b:SetScript("OnClick", function() Player.Choose(index) end)
     return b
@@ -104,17 +107,17 @@ local function anchor(frame, invitation)
     if invitation then
         -- Invitations sit near the top of the screen, out of the way.
         frame:SetPoint("TOP", UIParent, "TOP", 0, -110)
-    elseif type(db.playerX) == "number" and type(db.playerY) == "number" then
-        frame:SetPoint("CENTER", UIParent, "CENTER", db.playerX, db.playerY)
+    elseif type(db.playerLeft) == "number" and type(db.playerTop) == "number" then
+        -- Pinned by its top edge, so a change of height only moves the bottom.
+        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", db.playerLeft, db.playerTop)
     else
-        frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+        frame:SetPoint("TOP", UIParent, "TOP", 0, -140)
     end
 end
 
 local function savePosition(frame)
     if not ns.db then return end
-    local _, _, _, x, y = frame:GetPoint()
-    ns.db.playerX, ns.db.playerY = x, y
+    ns.db.playerLeft, ns.db.playerTop = frame:GetLeft(), frame:GetTop()
 end
 
 local function create()
@@ -137,17 +140,30 @@ local function create()
     f:SetScale(clampScale(db.playerScale))
     anchor(f, false)
 
-    f.title = label(f, "GameFontNormalLarge", "accent")
-    f.title:SetPoint("TOPLEFT", PAD, -14)
+    f.icon = f:CreateTexture(nil, "ARTWORK")
+    f.icon:SetSize(20, 20)
+    f.icon:SetPoint("TOPLEFT", PAD, -14)
+    f.icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+    f.title = UI.FontString(f, "GameFontNormalLarge")
+    f.title:SetPoint("LEFT", f.icon, "RIGHT", 6, 0)
     f.title:SetText("Loreforge")
-    f.hide = button(f, 64, function() Player.Hide() end)
-    f.hide:SetPoint("TOPRIGHT", -12, -10)
-    f.hide:SetText("Hide")
+    f.hide = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    f.hide:SetPoint("TOPRIGHT", -5, -5)
+    f.hide:SetScript("OnClick", function() Player.Hide() end)
     UI.AttachHint(f.hide, "Hide", "You stay in the game. Click the Loreforge quiz button to come back.")
-    f.position = label(f, "GameFontHighlightSmall", "muted", 220)
-    f.position:SetPoint("RIGHT", f.hide, "LEFT", -10, 0)
+    f.position = UI.FontString(f, "GameFontHighlightSmall", "muted")
+    f.position:SetPoint("TOPRIGHT", -40, -18)
+    f.position:SetWidth(300)
     f.position:SetJustifyH("RIGHT")
     if f.position.SetWordWrap then f.position:SetWordWrap(false) end
+
+    f.timer = CreateFrame("Frame", nil, f)
+    f.timer:SetSize(INNER, 4)
+    f.timer:SetPoint("TOPLEFT", PAD, -46)
+    T.Fill(f.timer:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
+    f.timer.fill = T.Fill(f.timer:CreateTexture(nil, "ARTWORK"), "selected")
+    f.timer.fill:SetPoint("TOPLEFT")
+    f.timer.fill:SetPoint("BOTTOMLEFT")
 
     f.scroll = CreateFrame("ScrollFrame", nil, f)
     f.scroll:SetPoint("TOPLEFT", f, "TOPLEFT", PAD, -HEADER)
@@ -161,7 +177,7 @@ local function create()
     f.bar = CreateFrame("Slider", nil, f)
     f.bar:SetOrientation("VERTICAL")
     f.bar:SetSize(6, MIN_BODY)
-    f.bar:SetPoint("TOPLEFT", f.scroll, "TOPRIGHT", 3, 0)
+    f.bar:SetPoint("TOPLEFT", f.scroll, "TOPRIGHT", 5, 0)
     T.Fill(f.bar:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
     local thumb = T.Fill(f.bar:CreateTexture(nil, "ARTWORK"), "selected")
     thumb:SetSize(6, 28)
@@ -170,26 +186,17 @@ local function create()
         if not Player.syncingBar then Player.ScrollTo(value) end
     end)
 
-    -- Completion view: a large headline, the winner line and your result.
-    f.headline = label(body, "GameFontNormalHuge", "flavour", INNER)
-    f.winner = label(body, "GameFontNormalLarge", "text", INNER)
+    -- Completion view: a headline, the winner line and your result.
+    f.headline = label(body, "GameFontNormalLarge", "flavour", INNER)
+    f.winner = label(body, "GameFontHighlight", "text", INNER)
     f.status = label(body, "GameFontHighlight", "text", INNER)
     f.detail = label(body, "GameFontHighlightSmall", "muted", INNER)
-    f.timer = CreateFrame("Frame", nil, body)
-    f.timer:SetSize(INNER - 44, 6)
-    T.Fill(f.timer:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
-    f.timer.fill = T.Fill(f.timer:CreateTexture(nil, "ARTWORK"), "selected")
-    f.timer.fill:SetPoint("TOPLEFT")
-    f.timer.fill:SetPoint("BOTTOMLEFT")
-    f.timer.count = label(body, "GameFontHighlightSmall", "text", 40)
-    f.timer.count:SetJustifyH("RIGHT")
-    f.timer.count:SetPoint("LEFT", f.timer, "RIGHT", 4, 0)
-    f.question = label(body, "GameFontNormalLarge", "text", INNER)
+    f.question = label(body, "GameFontHighlight", "text", INNER)
     f.answers = {}
     for i = 1, 4 do f.answers[i] = answerButton(body, i) end
-    f.answerStatus = label(body, "GameFontHighlightSmall", "accent", INNER)
-    f.reveal = label(body, "GameFontHighlight", "flavour", INNER)
-    f.you = label(body, "GameFontHighlight", "text", INNER)
+    f.feedback = label(body, "GameFontNormal", "flavour", INNER)
+    f.feedback:SetJustifyH("CENTER")
+    f.you = label(body, "GameFontHighlightSmall", "muted", INNER)
     f.standTitle = label(body, "GameFontNormal", "accent", INNER)
     f.rows = {}
     for i = 1, MAX_ROWS + 1 do f.rows[i] = standingRow(body) end
@@ -309,18 +316,9 @@ local STATUS = {
         return m.readyStatus or "Ready check: are you ready?"
     end,
     preparing = function() return "Preparing the next question for everyone." end,
-    announcing = function() return "Read the question. Answers open after the choices post." end,
-    presenting = function() return "Get ready. Answers open in a moment." end,
-    accepting = function(m)
-        local choice,confirm=chosen(m)
-        if choice then
-            if confirm=="locked" then return "Your answer is locked. Waiting for the result." end
-            if confirm=="pending" then return "Waiting for the host to lock your answer." end
-            return text(m.answerStatus)~="" and m.answerStatus or NOT_CONFIRMED
-        end
-        return text(m.answerStatus)~="" and m.answerStatus or "Pick an answer. Your first click counts."
+    revealing = function(m)
+        if tonumber(m.index) and m.index == tonumber(m.totalQuestions) then return "Final scores coming up." end
     end,
-    revealing = function() return "Answer revealed." end,
     between = function(m)
         if type(m.nextAt) == "number" then
             return "Next question in " .. math.max(0, math.ceil(m.nextAt - now())) .. "s."
@@ -355,18 +353,21 @@ local function positionLine(model)
     local parts = {}
     local config = type(model.config) == "table" and model.config or {}
     -- Same numbering as the host: the question within its round.
-    if model.round and config.rounds then parts[#parts + 1] = "Round " .. model.round .. " of " .. config.rounds end
+    local rounds = tonumber(config.rounds) or 1
+    if model.round and rounds > 1 then
+        parts[#parts + 1] = "Round " .. model.round .. (text(model.theme) ~= "" and (": " .. model.theme) or (" of " .. rounds))
+    end
     local per = tonumber(config.perRound)
     if tonumber(model.index) and model.index > 0 and per and per > 0 then
-        parts[#parts + 1] = "Question " .. ((model.index - 1) % per + 1) .. " of " .. per
+        parts[#parts + 1] = ((model.index - 1) % per + 1) .. " of " .. per
     end
     return table.concat(parts, " · ")
 end
 
-local function scoreText(row, state)
+local function scoreText(row, state, rounds)
     local total = tonumber(row.total) or 0
     local parts = { plural(total, "point") }
-    if state == "between" or state == "revealing" then
+    if rounds > 1 and (state == "between" or state == "revealing") then
         local round = tonumber(row.round)
         if round and round > 0 then parts[#parts + 1] = "+" .. round .. " this round" end
     end
@@ -406,74 +407,55 @@ local function drawRows(f, model)
             if row == me then T.Text(widget.name, "selected")
             elseif medal then widget.name:SetTextColor(medal[1], medal[2], medal[3])
             else T.Text(widget.name, "text") end
-            widget.score:SetText(lobby and "" or scoreText(row, model.state))
+            widget.score:SetText(lobby and "" or scoreText(row, model.state, tonumber(type(model.config) == "table" and model.config.rounds) or 1))
         end
     end
     return #shown
 end
 
+-- The quiz's look: plain rows, with borders doing the talking.  Returns the
+-- feedback line under them.
 local function drawAnswers(f, model)
     local state = model.state
     local choice, confirm = chosen(model)
     local left = remaining(model)
-    local open = state == "accepting" and not choice and (left == nil or left > 0)
+    -- Open until time's up: another click changes the answer.
+    local open = state == "accepting" and (left == nil or left > 0)
     local correct = REVEALED[state] and tonumber(model.correct) or nil
     for i, b in ipairs(f.answers) do
-        b:SetText(i .. "   " .. choiceText(model, i))
-        local badge, border, role, tint = "", "edge", "text", nil
+        b:SetText(choiceText(model, i))
+        local border, role = "edge", "text"
         if correct then
-            if i == correct then badge, border, tint = "Correct answer", "accent", "accent" end
-            if i == choice then
-                badge = i == correct and "Your answer · Correct" or "Your answer"
-                border = i == correct and "accent" or "danger"
-                tint = border
-            end
-            if i ~= correct and i ~= choice then role = "muted" end
+            if i == correct then border = "accent"
+            elseif i == choice then border = "danger"
+            else role = "muted" end
         elseif i == choice then
-            border, tint = "selected", "selected"
-            badge = confirm == "locked" and "Locked" or confirm == "pending" and "Sending..." or "Not confirmed"
-        elseif choice or not open then
+            border = "selected"
+        elseif not open then
             role = "muted"
-        else
-            local key = ns.AnswerKey and ns.AnswerKey(i)
-            if key then badge = "Key " .. key end
         end
-        b.badge:SetText(badge)
         T.Border(b, border)
-        if tint then
-            T.Fill(b.tint, tint); b.tint:SetAlpha(tint == "selected" and 0.18 or 0.28); b.tint:Show()
-        else b.tint:Hide() end
         T.Text(b.Text, role)
         b:SetEnabled(open)
         local height = b.Text.GetStringHeight and b.Text:GetStringHeight() or 14
-        b:SetHeight(math.max(34, math.ceil(height) + 16))
+        b:SetHeight(math.max(30, math.ceil(height) + 16))
     end
+    if correct then
+        if choice == correct then
+            local me = myRow(model)
+            local streak = me and tonumber(me.streak) or 0
+            return streak >= 2 and ("Correct! Streak " .. streak .. ".") or "Correct!"
+        end
+        if choice then return "Not quite." end
+        return model.joined and "Out of time!" or ""
+    end
+    if state == "announcing" or state == "presenting" then return "Answers open in a moment." end
     if state ~= "accepting" then return "" end
-    if confirm == "locked" then return "Locked: " .. choice .. " · " .. choiceText(model, choice) end
-    if confirm == "pending" then return "Sending your answer..." end
+    if confirm == "locked" then return "Answer in. Click another to change it." end
+    if confirm == "pending" then return "Sending..." end
     if confirm == "unconfirmed" then return text(model.answerStatus) ~= "" and model.answerStatus or NOT_CONFIRMED end
-    if left and left <= 0 then return "Time's up. Waiting for the answer." end
+    if left and left <= 0 then return "Out of time!" end
     return text(model.answerStatus)
-end
-
-local function revealText(model)
-    local correct = tonumber(model.correct)
-    if not correct then return "" end
-    local lines = { "Answer: " .. correct .. " · " .. (text(model.correctText) ~= "" and model.correctText or choiceText(model, correct)) }
-    local choice = chosen(model)
-    local me = myRow(model)
-    if model.state ~= "finished" or model.question then
-        if choice then
-            lines[#lines + 1] = "You chose " .. choice .. " · " .. choiceText(model, choice)
-                .. (choice == correct and ". Correct!" or ". Not this time.")
-        elseif model.joined then
-            lines[#lines + 1] = "You didn't answer this one."
-        end
-        if me and (tonumber(me.streak) or 0) >= 2 and choice == correct then
-            lines[#lines + 1] = "Streak " .. me.streak .. "."
-        end
-    end
-    return table.concat(lines, "\n")
 end
 
 -- Top scorers of a finished game: names of everyone sharing the best total
@@ -495,18 +477,7 @@ end
 
 -- Completion view: "Game complete", then the winner or a shared win.
 local function headlineText(model)
-    if model.state=="finished" then return "Game complete" end
-    if model.state=="ready" then
-        if (model.remaining or 0)>0 and (remaining(model) or 0)<=0 then return "Starting soon" end
-        if model.ready then return "You're ready" end
-        if model.readyPending then return "Ready sent" end
-        if model.readyStatus then return "Ready not confirmed" end
-    elseif model.state=="accepting" then
-        local choice,confirm=chosen(model)
-        if choice then return "Answer "..choice..(confirm=="locked" and " locked" or confirm=="pending" and " selected" or " not confirmed") end
-        if text(model.answerStatus)~="" then return "Answer not sent" end
-    end
-    return ""
+    return model.state == "finished" and "Game complete" or ""
 end
 
 local function winnerText(model)
@@ -549,6 +520,7 @@ local function youText(model)
     local parts = { "You: " .. plural(tonumber(me.total) or 0, "point") }
     if (tonumber(me.streak) or 0) >= 1 and model.state ~= "finished" then parts[#parts + 1] = "streak " .. me.streak end
     if me.rank then parts[#parts + 1] = ordinal(tonumber(me.rank) or 0) end
+    if model.state == "accepting" and model.answeredCount then parts[#parts + 1] = model.answeredCount .. " answered" end
     return table.concat(parts, " · ")
 end
 
@@ -564,7 +536,7 @@ local function historyText(entry)
 end
 
 local function roundEntries(model)
-    if model.state ~= "finished" or type(model.rounds) ~= "table" then return {} end
+    if model.state ~= "finished" or type(model.rounds) ~= "table" or #model.rounds < 2 then return {} end
     local entries = {}
     for i = 1, math.min(#model.rounds, MAX_ROUNDS) do
         if type(model.rounds[i]) == "table" then entries[#entries + 1] = model.rounds[i] end
@@ -603,6 +575,16 @@ local function drawRoundRows(f, model, entry)
 end
 
 local function actions(model)
+    if model.handlers then
+        local step = model.hostStep
+        -- The console button stays out of the way on the quiz card.
+        local console = model.consoleHidden and not QUESTION[model.state] and "Host console" or nil
+        if step then return step.label, true, not step.console and console or nil end
+        if model.state == "ready" and not model.ready then
+            return (remaining(model) or 1) > 0 and "I'm ready" or "Starting...", (remaining(model) or 1) > 0, console
+        end
+        return nil, false, console
+    end
     if model.activeMatch then return "Return to match",true,"Close" end
     local state = model.state
     if state == "invitation" then return "Join quiz", true, "Decline" end
@@ -654,9 +636,11 @@ function Player.Draw()
     local winner = winnerText(model)
     f.winner:SetText(winner)
     add(f.winner, winner ~= "", 6)
-    local status = STATUS[state] and STATUS[state](model) or ""
+    -- On the quiz card the feedback line speaks for the state; between
+    -- questions the status follows the score line instead.
+    local status = (not QUESTION[state] or state == "revealing") and STATUS[state] and STATUS[state](model) or ""
     f.status:SetText(status)
-    add(f.status, status ~= "", 4)
+    add(f.status, status ~= "" and state ~= "between" and state ~= "revealing", 4)
     local detail = text(model.status)
     if state == "history" and (type(model.history) ~= "table" or #model.history == 0) then
         detail = "No saved games yet. Finished games you play in appear here."
@@ -669,41 +653,37 @@ function Player.Draw()
     f.detail:SetText(detail)
     add(f.detail, detail ~= "", 10)
 
-    local timed = (state == "accepting" or (state == "ready" and (model.remaining or 0) > 0))
-        and type(model.deadline) == "number"
-    add(f.timer, timed, 12, 6)
-    f.timer.count:SetShown(timed)
-    -- The completion view leaves the last question, choices and reveal behind.
+    f.timer:SetShown((state == "accepting" or (state == "ready" and (model.remaining or 0) > 0))
+        and type(model.deadline) == "number")
+    -- The completion view leaves the last question and choices behind.
     local finished = state == "finished"
-    local question = not finished and (state == "announcing" or state == "presenting" or state == "accepting" or REVEALED[state]) and text(model.question) or ""
+    local question = not finished and (QUESTION[state] or REVEALED[state]) and text(model.question) or ""
     f.question:SetText(question)
-    add(f.question, question ~= "", 12)
+    add(f.question, question ~= "", 14)
     local hasChoices = question ~= "" and type(model.choices) == "table"
-    local answerStatus = hasChoices and drawAnswers(f, model) or ""
+    local feedback = hasChoices and drawAnswers(f, model) or ""
     for _, b in ipairs(f.answers) do add(b, hasChoices, 6, b:GetHeight()) end
-    f.answerStatus:SetText(answerStatus)
-    add(f.answerStatus, answerStatus ~= "", 10)
-    local reveal = REVEALED[state] and not finished and revealText(model) or ""
-    f.reveal:SetText(reveal)
-    add(f.reveal, reveal ~= "", 10)
+    f.feedback:SetText(feedback)
+    add(f.feedback, feedback ~= "", 10)
 
     local you = (ACTIVE[state] and state ~= "joining" or finished) and youText(model) or ""
     f.you:SetText(you)
-    T.Text(f.you, finished and "selected" or "text")
+    if f.you.SetFontObject then f.you:SetFontObject(finished and "GameFontHighlight" or "GameFontHighlightSmall") end
+    T.Text(f.you, finished and "selected" or "muted")
     add(f.you, you ~= "", finished and 16 or 12)
+    add(f.status, status ~= "" and (state == "between" or state == "revealing"), 12)
 
     local history = state == "history"
-    local count = history and 0 or drawRows(f, model)
+    local count = (history or QUESTION[state]) and 0 or drawRows(f, model)
     local heading = ""
     if count > 0 then
         heading = (state == "lobby" or state == "ready" or state == "joining") and "Players"
             or state == "finished" and "Final standings" or "Standings"
-        if state == "accepting" and model.answeredCount then heading = heading .. " · " .. model.answeredCount .. " answered" end
         if model.resultsPending then heading = heading .. " · Results pending" end
     end
     f.standTitle:SetText(heading)
     add(f.standTitle, heading ~= "", 6)
-    for i, row in ipairs(f.rows) do add(row, not history and i <= count, finished and 4 or 2, finished and 22 or 20) end
+    for i, row in ipairs(f.rows) do add(row, i <= count, finished and 4 or 2, finished and 22 or 20) end
 
     local rounds = roundEntries(model)
     local view = Player.roundView
@@ -736,21 +716,26 @@ function Player.Draw()
     end
     local primary, enabled, secondary = actions(model)
     f.primary:SetShown(primary ~= nil)
-    if primary then f.primary:SetText(primary); f.primary:SetEnabled(enabled) end
+    if primary then
+        f.primary:SetText(primary); f.primary:SetEnabled(enabled)
+        -- A waiting label ("Ready", "Joining...") mustn't look clickable.
+        T.Border(f.primary, enabled and "accent" or "edge")
+        T.Text(f.primary.Text, enabled and "text" or "muted")
+    end
     f.secondary:SetShown(secondary ~= nil)
     if secondary then f.secondary:SetText(secondary) end
-    f.leave:SetShown(model.joined and ACTIVE[state] or false)
+    f.leave:SetShown(model.joined and ACTIVE[state] and not QUESTION[state] and not model.handlers or false)
     local content = math.max(1, -layout(f.body, items))
-    f.primary:ClearAllPoints(); f.primary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD, 12)
+    f.primary:ClearAllPoints(); f.primary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD, 16)
     f.secondary:ClearAllPoints()
-    f.secondary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", primary and PAD + 180 or PAD, 12)
-    f.leave:ClearAllPoints(); f.leave:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -PAD, 12)
-    local footer = (primary or secondary or f.leave:IsShown()) and FOOTER or 12
+    f.secondary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", primary and PAD + 180 or PAD, 16)
+    f.leave:ClearAllPoints(); f.leave:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -PAD, 16)
+    local footer = (primary or secondary or f.leave:IsShown()) and FOOTER or 16
     local viewHeight = math.min(content, Player.MaxBody(footer))
     f.body:SetHeight(content)
     f.scroll:SetSize(INNER, viewHeight)
     f.bar:SetHeight(viewHeight)
-    f:SetHeight(HEADER + viewHeight + footer)
+    f:SetHeight(Player.StableHeight(model, HEADER + viewHeight + footer))
     -- A new question or phase starts at the top; ticks keep the position.
     local key = tostring(model.id) .. ":" .. tostring(state) .. ":" .. tostring(model.index)
     if key ~= Player.scrollKey then Player.scrollKey, Player.scrollOffset = key, 0 end
@@ -758,6 +743,22 @@ function Player.Draw()
     f.bar:SetShown(Player.scrollRange > 0)
     Player.ScrollTo(Player.scrollOffset or 0)
     Player.UpdateTimer()
+end
+
+-- A game's window holds its height: it starts tall enough for the card plus
+-- the standings it will show, and after that only ever grows.
+function Player.StableHeight(model, wanted)
+    local height = MIN_HEIGHT
+    if model.joined and model.id then
+        if Player.heightFor ~= model.id then Player.heightFor, Player.heldHeight = model.id, nil end
+        local rows = type(model.rows) == "table" and math.min(#model.rows, MAX_ROWS + 1) or 0
+        height = math.max(height, HEADER + GAME_CARD + rows * 22 + FOOTER)
+        height = math.max(height, Player.heldHeight or 0, wanted)
+        height = math.min(height, math.max(wanted, HEADER + Player.MaxBody(FOOTER) + FOOTER))
+        Player.heldHeight = height
+        return height
+    end
+    return math.max(height, wanted)
 end
 
 -- The tallest body that keeps the window, title and footer on screen at the
@@ -804,10 +805,9 @@ function Player.UpdateTimer()
         and (model.config.readySeconds or (model.remaining or 0) / 1000) or model.config.seconds) or nil
     local fraction = seconds and seconds > 0 and math.min(1, left / seconds) or 0
     f.timer.fill:SetShown(fraction > 0)
-    f.timer.fill:SetWidth(math.max(1, (INNER - 44) * fraction))
+    f.timer.fill:SetWidth(math.max(1, INNER * fraction))
     if ns.TimerColour then ns.TimerColour(f.timer.fill, left, seconds) end
-    f.timer.count:SetText(math.ceil(left) .. "s")
-    T.Text(f.timer.count, left <= 5 and "danger" or "text")
+    if model.state == "ready" then f.position:SetText("Starting in " .. math.ceil(left) .. "s") end
     -- A soft tick for each of the last five seconds, until this player answers.
     local whole = math.ceil(left)
     if model.state == "accepting" and whole >= 1 and whole <= 5 and whole ~= Player.lastTick and not chosen(model) then
@@ -969,7 +969,7 @@ function Player.Choose(index)
     if restricted() then return end
     local model = Player.model
     if not (model and model.state == "accepting") then return end
-    if chosen(model) then return end -- one click is final, as in chat
+    if chosen(model) == index then return end
     local left = remaining(model)
     if left and left <= 0 then return end
     Player.clicked = { id = model.id, index = model.index, attempt = model.attempt, choice = index, at = now() }
@@ -986,6 +986,10 @@ function Player.Primary()
     local model = Player.model
     if not model then return end
     if model.activeMatch then act("RequestSync");Player.Show();return end
+    if model.hostStep then
+        act(model.hostStep.console and "Console" or "Advance")
+        return
+    end
     local state = model.state
     if restricted() and (state=="invitation" or state=="ready" or state=="accepting" or state=="disconnected") then return end
     if state == "invitation" then
@@ -1003,6 +1007,7 @@ end
 function Player.Secondary()
     local model = Player.model
     if not model then return end
+    if model.handlers then act("Console"); return end
     local state = model.state
     if state == "invitation" or state == "finished" or state == "stopped" or state == "history" then
         if model.id then Player.dismissed[model.id] = true end

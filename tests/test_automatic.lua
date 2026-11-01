@@ -35,6 +35,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         local loader
         for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
         loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
+        ns.db.hostAutoMinimise = false
         ns.db.channel, ns.db.rounds, ns.db.perRound, ns.db.seconds = channel, 2, 2, 5
         ns.db.readyCheck = false
         ns.db.hostParticipates = false -- these games score other players only
@@ -182,9 +183,9 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         manualFlush()
         eq(next(ns.game.answers), nil, 'announcement echoes cannot become Game Master answers')
         local right = ns.game.run[1].correct
-        chat(tostring(right), 'Host-Realm')
         chat(tostring(right % 4 + 1), 'Host-Realm')
-        eq(ns.game.answers['host-realm'], right, 'Game Master chat answer locks first attempt')
+        chat(tostring(right), 'Host-Realm')
+        eq(ns.game.answers['host-realm'], right, 'Game Master chat answer can be changed')
         tick(5); manualFlush()
         eq(ns.db.records[ns.era]['host-realm'].wins, 1, 'Game Master earns a normal win')
         -- With no group or guild, local testing uses no outbound chat API.
@@ -201,14 +202,16 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
                 if ns.game.phase == 'finished' then break end
                 if ns.game.config.manualSend then manualFlush() end
                 if ns.game.phase == 'ready' then
-                    ns.hostFrame.readyButton.scripts.OnClick()
+                    ns.Player.frame.primary.scripts.OnClick()
                     eq(#ns.game:ReadyPlayers(), 1, 'host can check in by button')
                     ns.hostFrame.next.scripts.OnClick()
                 elseif ns.game.phase == 'accepting' then
-                    ns.hostFrame.answerButtons[ns.game.run[1].correct].scripts.OnClick()
-                    assert(ns.hostFrame.preview:GetText():find('Your answer is locked:', 1, true), 'click gives immediate locked feedback')
-                    eq(ns.hostFrame.answerButtons[ns.game.run[1].correct].enabled, false, 'first answer disables further choices')
-                    assert(not ns.SubmitHostAnswer(tostring(ns.game.run[1].correct % 4 + 1)), 'Game Master cannot change a locked answer')
+                    ns.Player.frame.answers[ns.game.run[1].correct].scripts.OnClick()
+                    assert(ns.hostFrame.preview:GetText():find('Your answer:', 1, true), 'click gives immediate locked feedback')
+                    local other = ns.game.run[1].correct % 4 + 1
+                    ns.Player.frame.answers[other].scripts.OnClick()
+                    eq(ns.game.answers[ns.Person('player').key], other, 'the host can change their answer')
+                    ns.Player.frame.answers[ns.game.run[1].correct].scripts.OnClick()
                 end
                 eq(ns.hostFrame.send:GetAttribute('macrotext'), nil, 'local mode never arms an outbound macro')
                 tick(0.25)

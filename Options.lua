@@ -23,6 +23,8 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Sound and window size. 
     _, y = UI.Header(panel, 'Interface', y)
     _, y = UI.Check(panel, 'Sound cues', 'Invitations, new questions, the last five seconds, results and the finish.', y,
         function() return ns.db.sound ~= false end, function(value) ns.db.sound = value end)
+    _, y = UI.Check(panel, 'Minimise when playing along', 'Hide the main window when a game you play in starts. It comes back for the results.', y,
+        function() return ns.db.hostAutoMinimise ~= false end, function(value) ns.db.hostAutoMinimise = value end)
     _, y = UI.Slider(panel, 'Main window size', 'Scales the host window.', y, 0.7, 1.5, 0.05,
         function() return ns.db.hostScale or 1 end, function(value) ns.db.hostScale = value; ns.ApplyHostScale() end, scale)
     _, y = UI.Slider(panel, 'Player window size', 'Scales the window you answer in when you join a Party game.', y, 0.7, 1.5, 0.05,

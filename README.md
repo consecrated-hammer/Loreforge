@@ -13,8 +13,9 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 - **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Host-paced games wait at **Ask next question**; auto-advance continues after a short gap. The pacing switch changes mode mid-game.
 - **The host plays along** by default, answering by click, chat or an answer key. **Practice solo** runs a private game that posts nothing to chat.
 - **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** under Advanced options enables the compact layout.
-- **Numbered answers.** Each player's first valid `1`, `2`, `3` or `4` locks their attempt. Correct answers earn one point; joint winners share the win.
-- **Round and overall scores**, live streaks, named recaps and personal-best callouts.
+- **Numbered answers.** Each player's last valid `1`, `2`, `3` or `4` before time's up counts, so a mis-click can be fixed. Correct answers earn one point; joint winners share the win.
+- **Optional themed rounds**, where each round sticks to one category.
+- **Live scores**, recaps every five questions in a plain game, streaks, named recaps and personal-best callouts.
 - **Ready checks**, an inactivity pause, and closing records for the top three players.
 - **Clear game results.** A dedicated completion view names the winner or shared win, shows your result and final standings, and keeps the last question out of the way.
 - **History and Hall of Fame.** Every finished game on this client is kept with its standings, including Party games you joined. The Hall of Fame ranks players by wins, with accuracy and best streak.
@@ -24,7 +25,7 @@ Loreforge is in beta for Retail and WoW Forever. The host picks Party, Raid, Ins
 ## Getting started
 
 1. Join a party, raid, instance group or guild and open `/lf`. Ungrouped, the main button is **Practice solo**.
-2. Pick a preset or set the rounds, questions and answer time yourself, then choose categories and difficulty. Fresh settings select your current group's channel. If the channel doesn't match your group, the banner says so and **Use current group** fixes it. For Guild, **Refresh guild roster** updates the cached players.
+2. Pick a preset or set the questions, themed rounds and answer time yourself, then choose categories and difficulty. Fresh settings select your current group's channel. If the channel doesn't match your group, the banner says so and **Use current group** fixes it. For Guild, **Refresh guild roster** updates the cached players.
 3. Click **Start game**. With Party output in Retail, the button is **Open lobby** first: players with Loreforge can join, the lobby shows who has, and **Start game** begins.
 4. The start countdown defaults to 30 seconds. Set **Start countdown** from 5 to 60 seconds, or disable **Countdown before starting** to skip it. The ready check posts. Players can type `ready`, `ready!`, `rdy` or `I'm ready`. **Start questions now** starts early. **Refresh players** adds anyone who joined the group since; enrolment is fixed once questions begin.
 5. Each question posts with its choices. Players answer `1` to `4` in chat. The board shows who has answered, and the timer turns amber and then red as time runs out.

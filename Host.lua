@@ -240,8 +240,7 @@ function ns.SubmitHostAnswer(text)
     local accepted = host and ns.game:Answer(host.key, text, host.guid)
     if not accepted and ns.game.phase ~= "ready" and ns.game.phase ~= "ready_announcing" then
         local player = host and ns.game:FindPlayer(host.key, host.guid)
-        if player and ns.game.answers[player.key] then HC.Print("Your first answer is already locked for this question.")
-        elseif ns.game.phase ~= "accepting" then HC.Print("The answer window has closed. Wait for the next question.")
+        if ns.game.phase ~= "accepting" then HC.Print("The answer window has closed. Wait for the next question.")
         else HC.Print("You're not on the player list. Turn on Host plays along before starting.") end
     end
     ns.RefreshHost()
@@ -281,7 +280,8 @@ function ns.PumpAutomatic()
     if ns.Party and ns.Party.CanPostQuestion and not ns.Party.CanPostQuestion() then return end
     local interval = g.phase == "announcing" and g.questionCursor and g.cursor >= g.questionCursor and 0.35 or 2
     if g.config.localOnly then
-        ns.nextSendAt = now + interval
+        -- Nobody is waiting on chat in practice, so results don't need its pace.
+        ns.nextSendAt = now + (g.phase == "revealing" and 0.75 or interval)
         ns.SendLocalLine()
         return
     end
@@ -500,6 +500,16 @@ local function createHost()
     close:SetPoint("TOPRIGHT", -16, -12)
     local rule = T.Fill(f:CreateTexture(nil, "ARTWORK"), "edge")
     rule:SetPoint("TOPLEFT", 16, -50); rule:SetSize(W - 32, 1)
+
+    -- A host playing along can run the game from the quiz window alone.
+    f.minimise = button(f, "Minimise", 96, 26, function()
+        if InCombatLockdown() then return end
+        ns.hostMinimised = true
+        f:Hide()
+        ns.RefreshHostPlayer()
+    end)
+    f.minimise:SetPoint("TOPRIGHT", -16, -58)
+    UI.AttachHint(f.minimise, "Minimise", "Hide this window and keep playing. The quiz window has the next step, and this opens again for the results.")
 
     -- Shared heading area for setup and play.
     f.status = label(f, "GameFontNormalLarge", "flavour", W - 200)
@@ -836,7 +846,7 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
         f.timer:SetTime(math.max(0, deadline - GetTime()), g.phase == "ready" and g.config.readySeconds or g.config.seconds)
         y = y - 30
     end
-    local checkingIn = g.config.hostParticipates and ready
+    local checkingIn = g.config.hostParticipates and ready and not hostPlayer
     f.readyButton:SetShown(checkingIn)
     if checkingIn then
         f.readyButton:ClearAllPoints(); f.readyButton:SetPoint("TOPLEFT", 18, y)
@@ -844,7 +854,10 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
         f.readyButton:SetEnabled(hostPlayer ~= nil and not hostPlayer.ready and not ns.Restricted())
         y = y - 42
     end
-    local showChoices = item and not ready and not ((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready)
+    -- A host playing along answers in the quiz window, so the console doesn't
+    -- show them the choices or the result.
+    local showChoices = item and not ready and not (g.config.hostParticipates and hostPlayer)
+        and not ((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready)
     local answering = g.config.hostParticipates and g.phase == "accepting"
     for i, row in ipairs(f.answerButtons) do
         row:SetShown(showChoices and true or false)
@@ -868,7 +881,99 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
     end
 end
 
+-- ── The host's own quiz window ─────────────────────────────────────────────
+-- A host playing along answers in the same window as Party players, drawn
+-- from the game itself. Results stay on the console, so the window closes when
+-- the game ends, and a minimised console opens again for them. With the console
+-- minimised, this window also carries the host's next step. A Party game they've joined or been invited to comes first.
+
+local HOST_STATES = { ready_announcing = "ready", ready = "ready", presenting = "preparing", opening = "presenting",
+    accepting = "accepting", revealing = "revealing", between = "between", paused = "paused" }
+local HOST_HANDLERS = {
+    Answer = function(index) return ns.SubmitHostAnswer(tostring(index)) end,
+    Ready = function() return ns.SubmitHostAnswer("ready") end,
+    Console = function()
+        ns.hostMinimised = nil
+        ns.OpenHost("play")
+    end,
+    Advance = function()
+        if ns.Restricted() then return end
+        ns.game:Next()
+        ns.RefreshHost()
+    end,
+}
+
+-- What the host does next: { label, console = true } when only the console can
+-- do it, such as the secure post button or a pause that needs explaining.
+local function hostStep(g, state, hostPlayer)
+    if g.phase == "paused" or (g.config.manualSend and (g:NextMessage() or g.pending)) then
+        return { label = "Open host console", console = true }
+    end
+    if g.phase == "ready" and hostPlayer.ready then return { label = "Start questions now" } end
+    if g.phase == "between" and not g.config.autoMode then return { label = "Ask next question" } end
+end
+
+local function hostModel(g, host, hostPlayer)
+    local state = HOST_STATES[g.phase]
+    if g.phase == "announcing" then state = g.questionVisible and "announcing" or "preparing" end
+    if not state then return nil end
+    local item = g.run and g.run[g.index]
+    local revealed = state == "revealing" or state == "between"
+    local rows = {}
+    for i, p in ipairs(boardRows(g, state == "ready")) do
+        rows[i] = { key = p.key, name = p.name, total = p.total, round = p.round, streak = p.streak,
+            bestStreak = p.bestStreak, rank = p.boardRank }
+    end
+    local readyDeadline = state == "ready" and g.readyDeadline or nil
+    local question = state ~= "ready" and state ~= "preparing" and state ~= "paused" and item or nil
+    return { id = "host-" .. tostring(g.serial), state = state, handlers = HOST_HANDLERS, host = host.name,
+        config = g.config, joined = true, me = hostPlayer.key, rows = rows, ready = hostPlayer.ready,
+        theme = g:Theme(), index = g.index, round = g.round, totalQuestions = #g.run, attempt = g.attempt,
+        question = question and question.text or nil, choices = question and question.choices or nil,
+        deadline = readyDeadline or (state == "accepting" and g.deadline) or nil,
+        remaining = readyDeadline and math.max(0, readyDeadline - GetTime()) * 1000 or nil,
+        locked = g.answers[hostPlayer.key], answeredCount = count(g.answers),
+        correct = revealed and item and item.correct or nil, nextAt = g.nextQuestionAt,
+        hostPaced = not g.config.autoMode, hostStep = hostStep(g, state, hostPlayer),
+        consoleHidden = not (ns.hostFrame and ns.hostFrame:IsShown()) }
+end
+
+function ns.RefreshHostPlayer()
+    local player, party, g = ns.Player, ns.Party, ns.game
+    if not (player and player.Render and g) then return end
+    local showing = player.model and player.model.handlers
+    local model
+    if g:Active() and g.config and g.config.hostParticipates then
+        local host = person("player")
+        local hostPlayer = host and g:FindPlayer(host.key, host.guid)
+        if hostPlayer then model = hostModel(g, host, hostPlayer) end
+    end
+    if not model then
+        if showing then player.Render(nil) end
+        if ns.hostMinimised then
+            ns.hostMinimised = nil
+            if g.phase == "finished" then ns.OpenHost("play") end
+        end
+        return
+    end
+    if party and party.viewHistory then return end
+    local client = party and party.client and party.client.model
+    if client and client.state ~= "finished" and client.state ~= "stopped" then return end
+    -- Once per game, the console steps aside as play starts.
+    if ns.hostAutoMinimised ~= model.id then
+        ns.hostAutoMinimised = model.id
+        local console = ns.hostFrame
+        if ns.db.hostAutoMinimise and console and console:IsShown() and not InCombatLockdown() then
+            ns.hostMinimised = true
+            console:Hide()
+            model.consoleHidden = true
+        end
+    end
+    player.Render(model)
+end
+
 function ns.RefreshHost()
+    ns.RefreshHostPlayer()
     local f, g = ns.hostFrame, ns.game
     if not f or not g or not f:IsShown() then return end
     if InCombatLockdown() then return end
@@ -883,6 +988,7 @@ function ns.RefreshHost()
     f.setup:SetShown(tab == "play" and setup)
     f.play:SetShown(tab == "play" and not setup)
     f.status:SetShown(tab == "play"); f.tags:SetShown(tab == "play")
+    f.minimise:SetShown(false)
     if tab == "history" then f.history.Refresh(); return end
     if tab == "records" then f.records.Refresh(); return end
     if setup then f.setup.Refresh(); return end
@@ -905,7 +1011,10 @@ function ns.RefreshHost()
         config.autoMode and "Auto-advance" or "Host-paced" }
     if config.manualSend then tags[#tags + 1] = "Posting manually" end
     if not ready and g.phase ~= "finished" then
-        tags[#tags + 1] = "Round " .. g.round .. " of " .. config.rounds
+        if config.rounds > 1 then
+            local theme = g:Theme()
+            tags[#tags + 1] = "Round " .. g.round .. (theme and (": " .. theme) or (" of " .. config.rounds))
+        end
         tags[#tags + 1] = "Question " .. perRound(g) .. " of " .. config.perRound
     end
     f.tags:SetText(table.concat(tags, "  ·  "))
@@ -932,9 +1041,9 @@ function ns.RefreshHost()
     f.preview:SetText(((g.phase=="announcing" or g.phase=="paused") and not g.questionVisible and not ready) and "Waiting for the question in chat..." or pending and ("Checking it posted: " .. pending.text)
         or message and ((config.manualSend and "Next to post: " or "Posting: ") .. message)
         or g.nextQuestionAt and ("Next question in " .. math.max(0, math.ceil(g.nextQuestionAt - GetTime())) .. "s.")
-        or g.phase == "accepting" and (selected and ("Your answer is locked: " .. selected .. ") " .. g.run[g.index].choices[selected]
-            .. ". Results post when time runs out.")
-            or config.hostParticipates and "Click an answer or type 1 to 4 in chat. Your first answer locks." or "")
+        or g.phase == "accepting" and (selected and ("Your answer: " .. selected .. ") " .. g.run[g.index].choices[selected]
+            .. ". You can change it until time runs out.")
+            or config.hostParticipates and "Answer in the quiz window or type 1 to 4 in chat. You can change it until time runs out." or "")
         or "")
 
     -- Secure macro button: attributes only change out of combat.
@@ -973,6 +1082,7 @@ function ns.RefreshHost()
         T.Text(b.Text, on and "selected" or "muted")
     end
     f.newGame:SetShown(active); f.newGame:SetEnabled(true)
+    f.minimise:SetShown(active and config.hostParticipates and hostPlayer ~= nil or false)
     f.pause:SetShown(active and g.phase ~= "paused")
     f.pause:SetEnabled(not restricted and active)
 end

@@ -18,6 +18,18 @@ in [player UI design review](player-ui-design-review.md).
 - `Show()` reopens the window for the current model. `Hide()` hides it and
   leaves the player in the game.
 
+A model with `handlers` uses those functions instead of `ns.Party`. That's the
+host playing along: `ns.RefreshHostPlayer` in `Host.lua` builds a model from
+the game on every host refresh and closes the window when the game ends, since
+results stay on the console. A Party game the host has joined or been invited
+to takes priority, as does browsing history.
+
+**Minimise** on the console hides it during the game. The model's `hostStep`
+then puts the host's next step on the footer: **Start questions now**, **Ask
+next question**, or **Open host console** when only the console can do it
+(manual posting and pauses). `consoleHidden` adds a **Host console** button off
+the quiz card. A minimised console opens again when the game finishes.
+
 The window is built on the first render that needs it. Clicks call
 `ns.Party.Join`, `Decline`, `Ready`, `Answer(choice)`, `RetryAnswer`, `Leave`,
 `RequestSync`, `ShowHistory` and `OpenHistory(id)` as plain functions, looked
@@ -50,8 +62,12 @@ read in `revealing`, `between` and `finished`, so a stray value during
 
 ## Layout
 
-The title bar (with **Hide**) and the footer of actions are fixed. Everything
-between them sits in a scrolling body. The body grows with its content until
+The window follows HammerCore's lore quiz (`src/Quiz.lua`): the quest icon and
+title, the position top right, a close X (which hides, as above), and a thin
+timer bar under the title. Those and the footer of actions are fixed.
+Everything between them sits in a scrolling body. The window is at least 340
+tall, so moving from the lobby to a question doesn't change its shape. The
+body grows with its content until
 the whole window would take more than 85% of the screen height at the
 window's scale. Past that, the mouse wheel or the thin bar on the right
 scrolls it. A new question or phase starts at the top, and renders within
@@ -59,19 +75,25 @@ the same question keep the position.
 
 ## Answering
 
-Four full-width numbered rows grow with wrapped text and push later content
-down rather than overlapping. A click sends `Answer(n)` and the row shows
-**Sending...** straight away. Every other row closes, and later clicks are
-ignored, matching chat's first-answer rule. **Locked** only appears when the
-model sets `locked`. If `selected` is set with `pending` false and nothing
-locked, the row shows **Not confirmed**, the status reads `answerStatus` (or
-"Answer not confirmed; use Party chat") and **Retry answer** calls
-`RetryAnswer()` with no choice. The timer bar counts down from the model's
-`deadline`, and the rows close when it runs out, even between renders.
+Four plain full-width rows grow with wrapped text and push later content down
+rather than overlapping. A click sends `Answer(n)`, the row takes the selected
+border and the feedback line under the rows reads **Sending...** straight
+away. Rows stay open until time's up: clicking another row changes the answer,
+matching chat, where the last number typed counts. Clicking the same row does
+nothing. **Answer in. Click another to change it.** only appears when the model
+sets `locked`.
+If `selected` is set with `pending` false and nothing locked, the feedback
+reads `answerStatus` (or "Answer not confirmed; use Party chat") and **Retry
+answer** calls `RetryAnswer()` with no choice. The timer bar counts down from
+the model's `deadline`, and the rows close when it runs out, even between
+renders. One muted line under the feedback gives the player's points, place
+and how many have answered.
 
-The reveal names the correct answer, the player's choice and result, any
-streak of two or more, and the scores. Standings show up to five rows in model
-order, and the local player is pinned underneath when they're further down.
+The reveal gives the correct row the accent border and a wrong pick the danger
+border, and the feedback reads **Correct!** (with any streak of two or more),
+**Not quite.** or **Out of time!**. Standings wait until `between`: up to five
+rows in model order, with the local player pinned underneath when they're
+further down.
 Chat-only players are listed like anyone else. Tied winners read **Shared
 win**.
 
@@ -96,15 +118,15 @@ position. `ns.db.sound` turns the cues below off.
 
 ## Cues and finish
 
-The position line uses the host's numbering: the question within its round.
+The position line uses the host's numbering: the question and total, with the
+round and its theme in front for a themed game.
 Between questions, a model with `nextAt` counts down; `hostPaced` says the
 host starts the next one. The timer bar turns amber under 30% and red for the
 last five seconds, with a soft tick each second until the player answers.
 Sounds play for an invitation, a new question, a correct or wrong reveal and
-the finish (a fanfare for a win). Reveals tint the correct row green and a
-wrong pick red. Finished games show a headline (**You won!**, **Shared win!**
-or the place) and gold, silver and bronze names for the top three. **Leave**
-asks first. Answer key bindings show as **Key F2** style badges on open rows.
+the finish (a fanfare for a win). Finished games show a headline (**You won!**, **Shared win!**
+or the place) and gold, silver and bronze names for the top three. **Leave** asks first, and isn't offered on the quiz card. Answer key bindings
+still work but aren't shown on the rows.
 History lists up to 20 games; **Your games** opens the main window's History
 tab out of combat.
 
@@ -119,3 +141,11 @@ footer, round scores, hide/restore and Escape, pinned standings, shared
 winners, history, Leave, missing actions and no keyboard focus. The harness
 reports fixed text heights unless a test overrides them, so in-game wrapping
 and clipping still need checking in both clients.
+
+## Window height
+
+A game's window holds its height so it doesn't jump between screens. It starts
+tall enough for a question card and the standings it will show, and only grows
+from there, up to the screen cap. Long content past the cap scrolls. The window
+is pinned by its top edge (`playerLeft`, `playerTop`), so growth only moves the
+bottom. A new game id starts again, and the history view isn't held.

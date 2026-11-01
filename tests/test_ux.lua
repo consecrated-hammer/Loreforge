@@ -39,6 +39,7 @@ local function load(db, partyEnabled)
     local loader
     for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
     loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
+    ns.db.hostAutoMinimise = false
     sent = {}
     C_ChatInfo.InChatMessagingLockdown = function() return false end
     C_ChatInfo.SendChatMessage = function(text, channel)
@@ -215,10 +216,10 @@ end
 local ns = load(nil)
 local Game = ns.Game
 eq(Game.RulesText({ rounds = 1, perRound = 5, categories = { lore = true, murlocs = true } }),
-    '1 round x 5 questions, General lore, Murlocs and Mischief.', 'opening line names a few categories')
+    '5 questions, General lore, Murlocs and Mischief.', 'opening line names a few categories')
 local all = {}
 for _, c in ipairs(Game.CATEGORIES) do all[c[1]] = true end
-eq(Game.RulesText({ rounds = 3, perRound = 5, categories = all }), '3 rounds x 5 questions, all categories.', 'all categories')
+eq(Game.RulesText({ rounds = 3, perRound = 5, categories = all }), '3 themed rounds x 5 questions, all categories.', 'all categories')
 
 local bank = {}
 for i = 1, 8 do bank[i] = { 'Question ' .. i, 'Right', 'Wrong A', 'Wrong B', 'Wrong C', categories = { 'lore' }, id = 'q' .. i } end
@@ -267,11 +268,16 @@ ns = load({readySeconds=45})
 eq(ns.db.readySeconds, 45, 'custom countdown preserved')
 
 -- ── Upgrade: old wider settings are clamped, not reset ──
-ns = load({ rounds = 20, perRound = 50, seconds = 120, questionGap = 3 })
+ns = load({ rounds = 20, perRound = 99, seconds = 120, questionGap = 3, themedRoundsMigrated = true })
 eq(ns.db.rounds, 10, 'rounds clamp to the new maximum')
-eq(ns.db.perRound, 15, 'questions per round clamp')
+eq(ns.db.perRound, 50, 'questions per round clamp')
 eq(ns.db.seconds, 60, 'answer time clamps')
 eq(ns.db.questionGap, 3, 'in-range values are kept')
+ns = load({ rounds = 3, perRound = 5 })
+eq(ns.db.rounds, 1, 'old plain rounds become one game')
+eq(ns.db.perRound, 15, 'with the same number of questions')
+ns = load({ rounds = 3, perRound = 5, themedRoundsMigrated = true })
+eq(ns.db.rounds, 3, 'themed rounds survive a reload')
 
 -- ── Setup ──
 ns = load(nil)
@@ -295,8 +301,17 @@ ns.db.readyCheck = true; setup.Refresh()
 local registered = false
 for _, name in ipairs(UISpecialFrames) do if name == 'LoreforgeHostTable' then registered = true end end
 assert(registered, 'Escape closes the main window')
+eq(setup.questions.Title:GetText(), 'Questions', 'plain games ask for questions')
+ns.db.rounds = 3; setup.Refresh()
+eq(setup.questions.Title:GetText(), 'Questions per round', 'themed games ask per round')
+assert(setup.pool:GetText():find('themes repeat', 1, true) == nil or ns.db.rounds > 1, 'the repeat note needs rounds')
+local savedCategories = ns.db.categories
+ns.db.categories = { lore = true }; setup.Refresh()
+assert(setup.pool:GetText():find('themes repeat', 1, true), 'too few categories for the rounds says so')
+ns.db.categories = savedCategories
+ns.db.rounds = 1; setup.Refresh()
 wow.Click(setup.presets[3])
-eq(ns.db.rounds, 5, 'Marathon sets rounds'); eq(ns.db.perRound, 10, 'Marathon sets questions')
+eq(ns.db.rounds, 1, 'Marathon sets one round'); eq(ns.db.perRound, 50, 'Marathon sets questions')
 assert(f.tags:GetText():find('50 questions', 1, true), 'summary shows the question count')
 assert(f.tags:GetText():find('about %d+ minutes'), 'summary estimates the length')
 wow.Click(setup.presets[1])
@@ -350,6 +365,7 @@ ns.Party.host = nil; setup.Refresh()
 -- ── Live host table ──
 ns.db.readyCheck, ns.db.rounds, ns.db.perRound, ns.db.seconds = false, 1, 2, 20
 ns.db.autoMode = false
+ns.db.hostAutoMinimise = false
 ns.StartGame()
 eq(ns.game.config.compactChoices, false, 'separate choices reach the game')
 for _ = 1, 40 do if ns.game.phase == 'accepting' then break end; tick(ns, 0.5) end
@@ -366,12 +382,19 @@ for i = 1, 4 do
 end
 assert(ns.db.activeGame and ns.db.activeGame.done == 0, 'a live game is tracked for interruption')
 assert(f.timer:IsShown(), 'the host sees a timer bar')
-eq(f.answerButtons[2].badge:GetText(), 'Key F2', 'bound answer keys are shown')
+-- A host playing along answers in the quiz window, not on the console.
+local P = ns.Player
+assert(P.frame and P.frame:IsShown(), 'the host gets the quiz window')
+eq(P.frame.question:GetText(), ns.game.run[1].text, 'it shows the question')
+eq(P.frame.answers[2].Text:GetText(), ns.game.run[1].choices[2], 'and the choices')
+assert(not f.answerButtons[1]:IsShown(), 'the console leaves the choices to it')
+assert(not P.frame.leave:IsShown(), 'a host has nothing to leave')
 eq(f.status:GetText(), 'Answers open', 'the phase is the heading')
 assert(f.tags:GetText():find('Question 1 of 2', 1, true), 'progress uses the round numbering')
 LoreforgeAnswer(ns.game.run[1].correct)
 local host = ns.Person('player')
 eq(ns.game.answers[host.key], ns.game.run[1].correct, 'the answer key binding answers for the host')
+eq(P.frame.feedback:GetText(), 'Answer in. Click another to change it.', 'the quiz window shows the locked answer')
 chat(ns, '1', 'Guest-Realm', 'party1-GUID')
 assert(f.scoreTitle:GetText():find('2 of 3 answered', 1, true), 'the board counts answers')
 now = now + 16; f.timer:SetTime(4, 20)
@@ -379,7 +402,16 @@ eq(f.timer.count.textColour[1], ns.HammerCore.Theme.Colour('danger')[1], 'the la
 for _ = 1, 80 do if ns.game.phase == 'between' then break end; tick(ns, 0.5) end
 eq(ns.game.phase, 'between', 'results posted')
 eq(ns.db.activeGame.done, 1, 'tracking follows each reveal')
-eq(f.answerButtons[ns.game.run[1].correct].tint:IsShown(), true, 'the correct answer is tinted')
+eq(P.frame.feedback:GetText(), 'Correct!', 'the quiz window shows the result')
+-- Minimised, the quiz window carries the host's next step.
+assert(f.minimise:IsShown(), 'a playing host can minimise the console')
+wow.Click(f.minimise)
+assert(not f:IsShown(), 'minimising hides the console')
+eq(P.frame.primary:GetText(), 'Ask next question', 'the next step moves to the quiz window')
+eq(P.frame.secondary:GetText(), 'Host console', 'and the console is a click away')
+wow.Click(P.frame.secondary)
+assert(f:IsShown(), 'Host console brings it back')
+assert(not P.frame.secondary:IsShown(), 'and the button goes')
 wow.Click(f.pacingAuto)
 eq(ns.game.config.autoMode, true, 'the pacing switch changes mode')
 wow.Click(f.pacingHost)
@@ -398,6 +430,7 @@ eq(ns.game.pending, nil, 'Post again prepares the line again')
 assert(f.send:IsShown() and f.send:GetAttribute('macrotext'), 'the line is ready to post by hand')
 C_ChatInfo.SendChatMessage = echo
 ns.game:Stop(); ns.RefreshHost()
+assert(not P.frame:IsShown() and not P.restore:IsShown(), 'the quiz window closes with the game')
 
 -- ── Interrupted game ──
 local saved = LoreforgeDB
@@ -414,13 +447,17 @@ eq(f.setup.banner:IsShown(), false, 'the banner goes')
 -- ── History and Hall of Fame ──
 ns.db.readyCheck, ns.db.rounds, ns.db.perRound, ns.db.seconds = false, 1, 1, 5
 ns.db.autoMode, ns.db.replayRecords = true, true
+ns.db.hostAutoMinimise = true
 ns.StartGame()
+assert(not f:IsShown(), 'a host playing along is minimised as the game starts')
 for _ = 1, 200 do
     if ns.game.phase == 'finished' then break end
     if ns.game.phase == 'accepting' and not ns.game.answers['guest-realm'] then chat(ns, tostring(ns.game.run[1].correct), 'Guest-Realm', 'party1-GUID') end
     tick(ns, 0.5)
 end
 eq(ns.game.phase, 'finished', 'a short game finishes')
+assert(f:IsShown(), 'a minimised console opens again for the results')
+eq(ns.hostMinimised, nil, 'and is no longer minimised')
 ns.RefreshHost()
 assert(f.finale:IsShown() and f.finale:GetText() == 'Game complete', 'the host sees a large Game complete')
 eq(f.status:GetText(), '', 'the small header does not repeat it')
@@ -468,9 +505,8 @@ P.Render(model('invitation', { id = 'inv', joined = false }))
 eq(P.frame.secondary:GetText(), 'Decline', 'invitations say Decline')
 eq(sounds[#sounds], 880, 'an invitation plays a sound')
 P.Render(model('accepting', { deadline = now + 20 }))
-eq(P.frame.position:GetText(), 'Round 2 of 2 · Question 2 of 3', 'the player uses the host numbering')
+eq(P.frame.position:GetText(), 'Round 2 of 2 · 2 of 3', 'the player uses the host numbering')
 eq(sounds[#sounds], 875, 'a new question plays a sound')
-eq(P.frame.answers[2].badge:GetText(), 'Key F2', 'the player sees answer keys')
 P.Render(model('between', { correct = 1, nextIn = 5000, nextAt = now + 5 }))
 eq(P.frame.status:GetText(), 'Next question in 5s.', 'auto-advance counts down')
 P.Render(model('between', { correct = 1, hostPaced = true }))
@@ -479,7 +515,14 @@ P.Render(model('finished', { correct = 1, id = 'pg-final' }))
 eq(P.frame.headline:GetText(), 'Game complete', 'the finish has a large headline')
 eq(P.frame.winner:GetText(), 'Host-Realm wins with 3 points.', 'the winner is named under it')
 eq(P.frame.you:GetText(), 'You won with 3 points', 'and the local result')
-assert(not P.frame.question:IsShown() and not P.frame.answers[1]:IsShown() and not P.frame.reveal:IsShown(),
+assert(not P.frame.question:IsShown() and not P.frame.answers[1]:IsShown() and not P.frame.feedback:IsShown(),
     'the last question, choices and reveal are gone')
 eq(sounds[#sounds], 888, 'a win plays the fanfare')
+-- Probe commands are on Troubleshooting too.
+local probePanel = CreateFrame('Frame')
+assert(ns.HammerCore.spec.troubleshooting(probePanel, -10) < -10, 'probe buttons take up room')
+ns.Probe.Listen = function() ns.probeListened = true end
+wow.Click(ns.Probe.buttons.listen)
+assert(ns.probeListened, 'the Listen button runs the probe command')
+for _, word in ipairs({ 'report', 'stop', 'party', 'raid', 'instance', 'guild' }) do assert(ns.Probe.buttons[word], word .. ' button') end
 io.write('loreforge UX tests passed\n')

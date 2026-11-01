@@ -110,9 +110,9 @@ assert(f.rows[3]:IsShown() and f.rows[3].name:GetText():find('Chatonly', 1, true
 -- Ready check.
 P.Render(as(model('ready', { ready = false, remaining = 30000, deadline = now + 30 })))
 assert(f.timer:IsShown(), 'ready countdown is visible to the player')
-eq(f.timer.count:GetText(), '30s', 'player starts with thirty seconds')
+eq(f.position:GetText(), 'Starting in 30s', 'player starts with thirty seconds')
 now = now + 29; P.UpdateTimer()
-eq(f.timer.count:GetText(), '1s', 'player countdown ticks without a redraw')
+eq(f.position:GetText(), 'Starting in 1s', 'player countdown ticks without a redraw')
 now = now + 1; P.UpdateTimer()
 eq(f.primary.enabled, false, 'readiness closes after the countdown expires')
 local readyCalls = #calls
@@ -124,34 +124,33 @@ eq(f.primary:GetText(), "I'm ready", 'ready check asks for readiness')
 wow.Click(f.primary)
 eq(last()[1], 'Ready', "I'm ready reports readiness")
 P.Render(as(model('ready', { ready = false, readyPending = true })))
-eq(f.headline:GetText(),'Ready sent','readiness has prominent immediate feedback')
+assert(f.status:GetText():find('Ready sent',1,true),'readiness has immediate feedback')
 eq(f.primary:GetText(),'Ready sent...','pending readiness is visible on the button')
 eq(f.primary.enabled,false,'pending readiness cannot be sent twice')
 local pendingCalls=#calls
 P.Primary()
 eq(#calls,pendingCalls,'pending readiness ignores repeated primary actions')
 P.Render(as(model('ready', { ready = false, readyStatus = 'Ready not confirmed. Try again.' })))
-eq(f.headline:GetText(),'Ready not confirmed','failed readiness is visible')
+eq(f.status:GetText(),'Ready not confirmed. Try again.','failed readiness is visible')
 eq(f.primary:GetText(),'Try ready again','failed readiness offers retry')
 eq(f.primary.enabled,true,'readiness retry is enabled')
 P.Render(as(model('ready', { readyPending = true, remaining = 1000, deadline = now + 1 })))
 now=now+1.1;P.UpdateTimer()
-eq(f.headline:GetText(),'Starting soon','expired countdown replaces stale pending feedback')
 assert(f.status:GetText():find('Countdown complete',1,true),'expired ready status is consistent')
 now=now-1.1
 
 
 P.Render(as(model('ready', { ready = true })))
 eq(f.primary.enabled, false, 'readiness is not sent twice')
-eq(f.headline:GetText(),"You're ready",'host confirmation replaces the pending headline')
+eq(f.primary.Text.textColour[1], ns.HammerCore.Theme.Colour('muted')[1], 'a disabled action looks disabled')
+assert(f.status:GetText():find("You're ready",1,true),'host confirmation replaces the pending status')
 
 -- An action rejected before submission cannot leave a false sending cue.
 local answerAction=ns.Party.Answer
 ns.Party.Answer=function() return false end
 P.Render(as(question({index=99})))
 P.Choose(2)
-eq(f.headline:GetText(),'Answer not sent','rejected click has explicit failure feedback')
-assert(f.status:GetText():find('Check your Party',1,true),'rejected click does not claim host acknowledgement is pending')
+assert(f.feedback:GetText():find('Check your Party',1,true),'rejected click has explicit failure feedback')
 eq(P.clicked,nil,'rejected action clears the optimistic click fallback')
 ns.Party.Answer=answerAction
 
@@ -159,43 +158,39 @@ ns.Party.Answer=answerAction
 for i = 1, 4 do
     P.Render(as(question({ index = i, attempt = 1 })))
     for _, b in ipairs(f.answers) do assert(b:IsShown() and b.enabled, 'choices open while accepting') end
-    eq(f.answers[i].Text:GetText():sub(1, 1), tostring(i), 'rows are numbered')
+    eq(f.answers[i].Text:GetText(), ({ 'Anasterian', 'Kael', "Lor'themar", 'Sylvanas' })[i], 'rows are plain, like the lore quiz')
     wow.Click(f.answers[i])
     eq(last()[1], 'Answer', 'click sends an answer'); eq(last()[2], i, 'click sends its own choice')
     local count = #calls
+    wow.Click(f.answers[i])
+    eq(#calls, count, 'the same click is ignored')
+    eq(f.feedback:GetText(), 'Sending...', 'the click responds immediately')
+    for j, b in ipairs(f.answers) do eq(b.enabled, true, 'choices stay open to change ' .. j) end
     wow.Click(f.answers[i % 4 + 1])
-    eq(#calls, count, 'a second click is ignored')
-    eq(f.answers[i].badge:GetText(), 'Sending...', 'the clicked row responds immediately')
-    eq(f.headline:GetText(),'Answer '..i..' selected','answer click has prominent immediate feedback')
-    assert(f.status:GetText():find('host to lock',1,true),'main prompt reflects pending answer')
-    for j, b in ipairs(f.answers) do eq(b.enabled, false, 'choices close after a click ' .. j) end
+    eq(last()[2], i % 4 + 1, 'another click changes the answer')
 end
 
 P.Render(as(question({ index = 5, selected = 2, pending = true })))
-eq(f.answers[2].badge:GetText(), 'Sending...', 'pending model shows Sending')
+eq(f.feedback:GetText(), 'Sending...', 'pending model shows Sending')
 eq(f.primary:IsShown(), false, 'no retry while still sending')
 P.Render(as(question({ index = 5, selected = 2, locked = 2, correct = 3 })))
-eq(f.answers[2].badge:GetText(), 'Locked', 'only host confirmation shows Locked')
-eq(f.headline:GetText(),'Answer 2 locked','host-confirmed answer is prominent')
-eq(f.answers[3].badge:GetText(), '', 'a correct index is ignored before the reveal')
-assert(f.answerStatus:GetText():find('Locked: 2', 1, true), 'locked answer is spelled out')
+eq(f.feedback:GetText(), 'Answer in. Click another to change it.', 'only host confirmation shows Locked')
+eq(f.feedback:GetText():find('Correct', 1, true), nil, 'a correct index is ignored before the reveal')
 P.Render(as(question({ index = 6, selected = 4, pending = false })))
-eq(f.answers[4].badge:GetText(), 'Not confirmed', 'unconfirmed answer is marked')
-eq(f.answerStatus:GetText(), 'Answer not confirmed; use Party chat', 'timeout points to Party chat')
+eq(f.feedback:GetText(), 'Answer not confirmed; use Party chat', 'timeout points to Party chat')
 eq(f.primary:GetText(), 'Retry answer', 'timeout offers a retry')
 wow.Click(f.primary)
 eq(last()[1], 'RetryAnswer', 'retry resends the same answer')
 eq(last()[2], nil, 'retry never picks a new answer')
-for _, b in ipairs(f.answers) do eq(b.enabled, false, 'choices stay closed while retrying') end
 
 -- The deadline closes the choices without a model change.
 P.Render(as(question({ index = 7, deadline = now + 2 })))
 assert(f.answers[1].enabled, 'open before the deadline')
-eq(f.timer.count:GetText(), '2s', 'timer shows seconds left')
+assert(f.timer:IsShown(), 'the timer bar runs while answering')
 now = now + 3
 f.scripts.OnUpdate(f, 0.2)
 eq(f.answers[1].enabled, false, 'choices close at the deadline')
-eq(f.answerStatus:GetText(), "Time's up. Waiting for the answer.", 'deadline explains the wait')
+eq(f.feedback:GetText(), 'Out of time!', 'deadline explains the wait')
 local count = #calls
 wow.Click(f.answers[1])
 eq(#calls, count, 'a late click sends nothing')
@@ -204,12 +199,17 @@ eq(#calls, count, 'a late click sends nothing')
 rows[2].total, rows[2].streak, rows[2].round, rows[2].rank = 3, 2, 1, 1
 rows[1].total, rows[1].rank = 1, 2
 P.Render(as(question({ state = 'revealing', index = 7, selected = 2, locked = 2, correct = 2, correctText = 'Kael' })))
-assert(f.reveal:GetText():find('Answer: 2 · Kael', 1, true), 'reveal names the correct answer')
-assert(f.reveal:GetText():find('You chose 2', 1, true) and f.reveal:GetText():find('Correct!', 1, true), 'reveal shows the result')
-assert(f.reveal:GetText():find('Streak 2', 1, true), 'reveal shows the streak')
-eq(f.answers[2].badge:GetText(), 'Your answer · Correct', 'reveal marks the chosen correct row')
+eq(f.feedback:GetText(), 'Correct! Streak 2.', 'reveal shows the result and streak')
 assert(f.you:GetText():find('3 points', 1, true), 'personal score shows')
+assert(not f.rows[1]:IsShown(), 'standings wait until between questions')
+P.Render(as(question({ state = 'revealing', index = 7, selected = 1, locked = 1, correct = 2 })))
+eq(f.feedback:GetText(), 'Not quite.', 'a wrong pick is told so')
+P.Render(as(question({ state = 'revealing', index = 7, correct = 2 })))
+eq(f.feedback:GetText(), 'Out of time!', 'no answer is out of time')
+P.Render(as(question({ state = 'between', index = 7, selected = 2, locked = 2, correct = 2, nextAt = now + 5 })))
 assert(f.rows[2].score:GetText():find('+1 this round', 1, true), 'standings show round points')
+assert(f.status:GetText():find('Next question in 5s', 1, true), 'between questions counts down')
+assert(f.status.points[1][5] < f.you.points[1][5], 'the countdown follows the score line')
 
 -- Long text grows the rows instead of overlapping them.
 local long = string.rep('A very long answer that wraps ', 6)
@@ -219,12 +219,25 @@ for _, b in ipairs(f.answers) do rawset(b.Text, 'GetStringHeight', function() re
 rawset(f.question, 'GetStringHeight', function() return 48 end)
 P.Render(as(question({ index = 8, choices = { long, long, long, long }, question = string.rep('Long question ', 12) })))
 eq(f.answers[1]:GetHeight(), 76, 'answer rows grow with wrapped text')
-assert(f:GetHeight() > short + 150, 'the window grows to fit long content')
+assert(f:GetHeight() >= 64 + 48 + 4 * 76 + 48, 'the window grows to fit long content')
+local grown = f:GetHeight()
+for _, b in ipairs(f.answers) do rawset(b.Text, 'GetStringHeight', function() return 14 end) end
+rawset(f.question, 'GetStringHeight', function() return 16 end)
+P.Render(as(question({ index = 9 })))
+eq(f:GetHeight(), grown, 'a shorter question keeps the height')
+for _, b in ipairs(f.answers) do rawset(b.Text, 'GetStringHeight', function() return 60 end) end
+rawset(f.question, 'GetStringHeight', function() return 48 end)
+P.Render(as(question({ index = 8, choices = { long, long, long, long }, question = string.rep('Long question ', 12) })))
 for i = 1, 3 do
     local top, nextTop = f.answers[i].points[1][5], f.answers[i + 1].points[1][5]
     assert(nextTop <= top - f.answers[i]:GetHeight(), 'answer rows never overlap ' .. i)
 end
 assert(f.answers[1].points[1][5] <= f.question.points[1][5] - 48, 'choices start below the question')
+
+P.Render(as(question({ state = 'revealing', index = 6, correct = 1, deadline = nil })))
+eq(f.status:GetText(), 'Final scores coming up.', 'the last reveal says results are coming')
+P.Render(as(question({ state = 'revealing', index = 5, correct = 1, deadline = nil })))
+assert(f.status:GetText() ~= 'Final scores coming up.', 'other reveals do not')
 
 -- Content taller than the screen scrolls inside a bounded body, with the
 -- title and the action footer always in place.
@@ -234,7 +247,7 @@ local tall = as(question({ index = 9, selected = 1, pending = false, choices = {
 P.Render(tall)
 assert(f:GetHeight() <= 510, 'the window fits 85% of a 600px screen: ' .. f:GetHeight())
 assert(P.scrollRange > 0 and f.bar:IsShown(), 'overflowing content scrolls')
-eq(f.scroll:GetHeight() + 44 + 48, f:GetHeight(), 'body, title and footer make up the window')
+eq(f.scroll:GetHeight() + 64 + 48, f:GetHeight(), 'body, title and footer make up the window')
 eq(f.body:GetHeight() - f.scroll:GetHeight(), P.scrollRange, 'scroll range covers the hidden content')
 eq(f.primary:GetText(), 'Retry answer', 'the footer action is still there')
 eq(f.primary.points[1][1], 'BOTTOMLEFT', 'footer actions are pinned to the window bottom')
@@ -299,7 +312,7 @@ assert(f:IsShown(), 'final results open once')
 eq(f.headline:GetText(), 'Game complete', 'the finish has a large headline')
 eq(f.winner:GetText(), 'Shared win: Guest-Realm, Chatonly-Realm, 4 points each.', 'a tie is a shared win')
 eq(f.you:GetText(), 'You shared the win with 4 points · best streak 3', 'the local result and best streak')
-assert(not f.question:IsShown() and not f.answers[1]:IsShown() and not f.reveal:IsShown(), 'no stale question, choices or reveal')
+assert(not f.question:IsShown() and not f.answers[1]:IsShown() and not f.feedback:IsShown(), 'no stale question, choices or reveal')
 eq(f.standTitle:GetText(), 'Final standings', 'final standings heading')
 assert(f.headline.points[1][5] > f.winner.points[1][5] and f.winner.points[1][5] > f.rows[1].points[1][5], 'headline, winner, then standings')
 assert(f.rows[1].name:GetText():find('Shared win', 1, true) and f.rows[2].name:GetText():find('Shared win', 1, true), 'tied winners share the win')

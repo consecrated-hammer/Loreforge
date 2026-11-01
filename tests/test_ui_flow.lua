@@ -31,6 +31,7 @@ for _, forever in ipairs({ false, true }) do
     local loader
     for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
     loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
+    ns.db.hostAutoMinimise = false
     eq(ns.db.channel, 'INSTANCE_CHAT', 'fresh setup selects active instance group')
     local hostName, guestName = GetUnitName('player'), GetUnitName('party1')
     local guestKey = ns.Identity(guestName)
@@ -73,7 +74,7 @@ for _, forever in ipairs({ false, true }) do
         error('never reached ' .. phase .. '; actual ' .. ns.game.phase)
     end
     ns.StartGame()
-    ns.hostFrame.readyButton.scripts.OnClick()
+    ns.Player.frame.primary.scripts.OnClick()
     eq(#ns.game:ReadyPlayers(), 1, 'Game Master ready button works before the notice finishes')
     chat("I'm ready!", 'Different Chat Formatting', 'party1-GUID')
     eq(#ns.game:ReadyPlayers(), 2, 'GUID fallback accepts natural ready replies despite different sender formatting')

@@ -6,9 +6,9 @@ local T = HC.Theme
 -- Presets cover most games; Advanced options stay folded away.
 
 local PRESETS = {
-    { name = 'Quick', hint = '1 round of 5 questions, 20 seconds each.', rounds = 1, perRound = 5, seconds = 20 },
-    { name = 'Standard', hint = '3 rounds of 5 questions, 20 seconds each.', rounds = 3, perRound = 5, seconds = 20 },
-    { name = 'Marathon', hint = '5 rounds of 10 questions, 25 seconds each.', rounds = 5, perRound = 10, seconds = 25 },
+    { name = 'Quick', hint = '5 questions, 20 seconds each.', rounds = 1, perRound = 5, seconds = 20 },
+    { name = 'Standard', hint = '15 questions, 20 seconds each.', rounds = 1, perRound = 15, seconds = 20 },
+    { name = 'Marathon', hint = '50 questions, 25 seconds each.', rounds = 1, perRound = 50, seconds = 25 },
 }
 local LOBBY_ROWS = 5
 
@@ -24,6 +24,8 @@ function ns.EstimateMinutes(db)
     return math.max(1, math.floor(total / 60 + 0.5))
 end
 
+local MAX_THEMED_ROUND = 15
+
 -- A labelled minus/value/plus control. The mouse wheel steps it too.
 local function stepper(panel, labelText, hint, y, key, format, width)
     local limits = ns.LIMITS[key]
@@ -34,19 +36,30 @@ local function stepper(panel, labelText, hint, y, key, format, width)
     value:SetPoint('LEFT', minus, 'RIGHT', 0, 0); value:SetWidth(90); value:SetJustifyH('CENTER')
     local plus = UI.Button(row, 28, 24)
     plus:SetPoint('LEFT', value, 'RIGHT', 0, 0); plus:SetText('+')
+    -- A themed round stays short enough for a category to fill it.
+    local function upper()
+        if key == 'perRound' and ns.db.rounds > 1 then return MAX_THEMED_ROUND end
+        return limits[2]
+    end
     local function render()
         local v = ns.db[key]
         value:SetText(format and format(v) or tostring(v))
         local enabled = key ~= "readySeconds" or ns.db.readyCheck
-        minus:SetEnabled(enabled and v > limits[1]); plus:SetEnabled(enabled and v < limits[2])
+        minus:SetEnabled(enabled and v > limits[1]); plus:SetEnabled(enabled and v < upper())
         T.Text(value, enabled and "text" or "muted")
     end
     local function change(direction)
         if key == "readySeconds" and not ns.db.readyCheck then return end
         local step = limits[3]
         local v = math.floor((ns.db[key] + direction * step) / step + 0.5) * step
-        v = math.max(limits[1], math.min(limits[2], v))
+        v = math.max(limits[1], math.min(upper(), v))
         if v ~= ns.db[key] then
+            -- Keep the game a similar length when themed rounds go on or off.
+            if key == 'rounds' and ns.db[key] == 1 then
+                ns.db.perRound = math.min(MAX_THEMED_ROUND, math.max(1, math.floor(ns.db.perRound / v)))
+            elseif key == 'rounds' and v == 1 then
+                ns.db.perRound = math.min(ns.LIMITS.perRound[2], ns.db.rounds * ns.db.perRound)
+            end
             ns.db[key] = v
             if panel.hcRefreshAll then panel.hcRefreshAll() end
         end
@@ -149,8 +162,9 @@ function ns.BuildSetup(host)
     _, y = UI.Check(left, 'Host plays along', 'You answer and score like everyone else.', y,
         function() return ns.db.hostParticipates end, function(value) ns.db.hostParticipates = value end, 400)
     y = section(left, 'Length', y - 6)
-    _, y = stepper(left, 'Rounds', nil, y, 'rounds', nil, 400)
-    _, y = stepper(left, 'Questions per round', nil, y, 'perRound', nil, 400)
+    _, y = stepper(left, 'Themed rounds', 'Each round draws from one of your categories, named as it starts. Off mixes them all.', y, 'rounds',
+        function(v) return v == 1 and 'Off' or tostring(v) end, 400)
+    setup.questions, y = stepper(left, 'Questions', nil, y, 'perRound', nil, 400)
     _, y = stepper(left, 'Answer time', nil, y, 'seconds', seconds, 400)
     _, y = UI.Check(left, 'Countdown before starting', 'Players can join and type ready before the first question.', y,
         function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, 400)
@@ -296,6 +310,7 @@ function ns.BuildSetup(host)
     local function refreshAll()
         if InCombatLockdown() then return end
         refresh(left); refresh(advanced); refresh(right)
+        setup.questions.Title:SetText(ns.db.rounds > 1 and 'Questions per round' or 'Questions')
         local available = #ns.Game.Pool(HC.QUIZ, ns.db, ns.era)
         local restricted = ns.Restricted()
         local rosterRows, err, localOnly = {}, nil, false
@@ -312,7 +327,10 @@ function ns.BuildSetup(host)
         host.tags:SetText(plural(needed, 'question') .. '  ·  about ' .. plural(ns.EstimateMinutes(ns.db), 'minute')
             .. '  ·  ' .. (localOnly and 'Practice, no group' or plural(math.max(0, #rosterRows - (ns.db.hostParticipates and 1 or 0)), 'other player')
                 .. ' in ' .. ns.Game.CHANNELS[ns.db.channel].label))
-        setup.pool:SetText(available .. ' questions available for these categories and difficulty.')
+        local ticked = 0
+        for _, category in ipairs(ns.Game.CATEGORIES) do if ns.db.categories[category[1]] then ticked = ticked + 1 end end
+        setup.pool:SetText(available .. ' questions available for these categories and difficulty.'
+            .. (ns.db.rounds > ticked and ticked > 0 and ' Fewer categories than rounds, so themes repeat.' or ''))
 
         for i, preset in ipairs(PRESETS) do
             local on = ns.db.rounds == preset.rounds and ns.db.perRound == preset.perRound and ns.db.seconds == preset.seconds

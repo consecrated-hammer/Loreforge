@@ -159,9 +159,10 @@ do
     B.bus.Send=function(m,...) if m.kind=='answer' then return nil,'queue full' end;return send(m,...) end
     assert(not B.Answer(2),'answer queue failure is immediate')
     assert(client.last.selected==2 and not client.last.pending,'failed send keeps chosen answer with retry feedback')
-    assert(not B.Answer(3),'failed send cannot change the original chosen answer')
+    assert(not B.Answer(3),'a second failed send is reported too')
+    assert(client.last.selected==3,'the latest choice is the one retried')
     B.bus.Send=send;assert(B.RetryAnswer())
     assert(client.last.pending and not client.last.locked,'answer retry immediately shows sending')
-    R.untilTrue(function()return client.last.locked==2 end,15,'host confirms retried answer',true)
+    R.untilTrue(function()return client.last.locked==3 end,15,'host confirms retried answer',true)
 end
 io.write('loreforge Party failure/recovery tests passed\n')

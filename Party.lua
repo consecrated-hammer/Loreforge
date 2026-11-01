@@ -152,6 +152,7 @@ local function snapshot()
     if state == "ready_announcing" then state = "ready" elseif state == "opening" then state = "presenting" end
     if state == "announcing" and h.preparation and earlyQuestions(h) and not g.questionVisible then state="preparing" end
     local m = {state = state, host = clean(me().name), config = h.config, index = g.index or 0, round = g.round or 0,
+        theme = h.started and g.Theme and g:Theme() or nil,
         attempt = g.attempt or 0, totalQuestions = h.config.rounds * h.config.perRound, rows = rows(h.started and g or nil),
         status = state == "lobby" and "The host is setting up the game." or g.reason or "", remaining = math.floor(math.max(0, (g.deadline or g.readyDeadline or now()) - now()) * 1000)}
     -- Between questions, players see a countdown with auto-advance, or that
@@ -254,6 +255,7 @@ local function apply(m)
     if type(m.status)~="string" or #m.status>512 then return end
     if m.nextIn~=nil and not integer(m.nextIn,0,120000) then return end
     if m.hostPaced~=nil and type(m.hostPaced)~="boolean" then return end
+    if m.theme~=nil and (type(m.theme)~="string" or #m.theme>80) then return end
     m.status=clean(m.status);m.config.categories=clean(m.config.categories)
     if m.correctText~=nil then
         if type(m.correctText)~="string" or #m.correctText>2048 or not m.correct then return end
@@ -431,8 +433,9 @@ function P.Ready()
 end
 function P.Answer(choice)
     local c = P.client
-    if not c or not c.joined or not integer(choice, 1, 4) or c.model.state ~= "accepting" or c.model.selected or now() >= c.model.deadline or not context() then return false end
-    c.model.selected = choice
+    if not c or not c.joined or not integer(choice, 1, 4) or c.model.state ~= "accepting" or c.model.selected == choice or now() >= c.model.deadline or not context() then return false end
+    -- Changing an answer needs the host to confirm the new one.
+    c.model.selected, c.model.locked = choice, nil
     return P.RetryAnswer()
 end
 function P.RetryAnswer()
@@ -583,8 +586,8 @@ function P.Receive(m, sender, person)
             elseif m.kind == "answer" and integer(m.choice,1,4) and m.index == g.index and m.attempt == g.attempt then
                 local player = g:FindPlayer(sender,person.guid)
                 local existing = player and g.answers[player.key]
-                if existing then lockFor(sender,existing)
-                elseif g:Answer(sender,tostring(m.choice),person.guid) then lockFor(sender,m.choice)
+                if g:Answer(sender,tostring(m.choice),person.guid) then lockFor(sender,m.choice)
+                elseif existing then lockFor(sender,existing)
                 else lockFor(sender,nil,"Answer not accepted. Use Party chat if the question is still open.") end
             elseif m.kind == "sync" then
                 if h.result then send("result",h.id,sender,{result=h.result},3) else broadcast("snapshot",sender) end

@@ -19,6 +19,7 @@ local DEFAULTS = {
     minimap = true,
     minimapAngle = 225,
     theme = "modern",
+    whatsNew = true,
 }
 
 function HC.GetMetadata(key)
@@ -62,6 +63,8 @@ end
 --   railButton               { label = string|fn, run = fn, active = fn? }
 --   hideInCombat             true hides settings, reports and the minimap
 --                            button in combat and refuses to open settings
+--   whatsNew                 { { version = "1.8.0", items = { { text, page? } } } }
+--                            post-update highlights (see WhatsNew.lua)
 function HC:Init(spec)
     assert(type(spec) == "table", "HammerCore:Init needs a spec")
     assert(type(spec.name) == "string", "HammerCore:Init needs a name")
@@ -83,6 +86,9 @@ function HC.State()
     if type(db) ~= "table" then return nil end
     if type(db.hammerCore) ~= "table" then
         local state = {}
+        -- A brand-new profile, as far as HammerCore can tell. What's new uses
+        -- it to stay quiet on a fresh install.
+        local adopted = false
         -- legacy values are an old key name, or { key = "old", invert = true }
         -- for an old setting stored the other way round (hide_minimap).
         for key, legacy in pairs(HC.spec.legacy or {}) do
@@ -92,8 +98,10 @@ function HC.State()
                 if type(legacy) == "table" and legacy.invert then value = not value end
                 state[key] = value
                 db[oldKey] = nil
+                adopted = true
             end
         end
+        HC.freshState = not adopted
         db.hammerCore = state
     end
     local state = db.hammerCore
@@ -129,6 +137,7 @@ local function hideForCombat()
     if HC.Settings then HC.Settings:Hide() end
     if HC.Copy and HC.Copy.frame then HC.Copy.frame:Hide() end
     if HC.Minimap and HC.Minimap.button then HC.Minimap.button:Hide() end
+    if HC.WhatsNew then HC.WhatsNew:Hide() end
 end
 
 -- Called by the addon once its saved variables are ready.
@@ -147,6 +156,7 @@ function HC:Start()
     if self.Minimap then self.Minimap:Create() end
     if self.Settings then self.Settings:CreateLauncher() end
     if state and state.startupMessage then print(HC.LoginMessage(true)) end
+    if self.WhatsNew then self.WhatsNew:Check() end
 end
 
 function HC.SetStartupMessage(enabled)

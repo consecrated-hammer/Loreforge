@@ -31,6 +31,12 @@ Pages.visibility.build = function(panel, y)
     _, y = UI.Check(panel, "Show startup message", "Print the loaded version when you log in.", y,
         function() return HC.State().startupMessage end,
         function(value) HC.State().startupMessage = value end)
+    if HC.WhatsNew and HC.WhatsNew.Enabled() then
+        _, y = UI.Check(panel, "Show what's new after updates",
+            "Open a short list of new features the first time you log in after an update.", y,
+            function() return HC.State().whatsNew ~= false end,
+            function(value) HC.State().whatsNew = value end)
+    end
     return y
 end
 
@@ -186,6 +192,14 @@ about.build = function(panel, y)
         field("CurseForge", meta("X-CurseForge") or ""),
         field("Source", meta("X-Website") or ""),
     }, "\n"))
+    if HC.WhatsNew and HC.WhatsNew.Enabled() then
+        local whatsNew = UI.Button(card, 110, 22)
+        whatsNew:SetPoint("TOPRIGHT", -14, -14)
+        whatsNew:SetText("What's new")
+        UI.AttachHint(whatsNew, "What's new", "Show the highlights of recent releases.")
+        whatsNew:SetScript("OnClick", function() HC.WhatsNew:Show() end)
+        Pages.whatsNewButton = whatsNew
+    end
 
     if spec.tips and #spec.tips > 0 then
         local function row(headingText, subtext, iconTexture, onClick, hintTitle, hintText)

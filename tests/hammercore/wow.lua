@@ -136,6 +136,8 @@ function wow.Install(metadata)
     ReloadUI = function() wow.reloads = wow.reloads + 1 end
     GetCursorPosition = function() return 0, 0 end
     InCombatLockdown = function() return false end
+    -- The one global HammerCore copies share: the after-update What's new.
+    ConsecratedHammerWhatsNew = nil
     Settings, SettingsPanel, InterfaceOptions_AddCategory = nil, nil, nil
     C_AddOns = { GetAddOnMetadata = function(addon, key)
         local values = metadata[addon]

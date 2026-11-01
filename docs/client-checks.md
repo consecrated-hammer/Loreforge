@@ -14,7 +14,7 @@ cannot prove client rendering, chat permissions or server event delivery.
 9. Verify no blanket refusal solely from the outgoing-addon realm flag. Combat and actual messaging lockdown must pause sending. Ending the restriction must leave the game paused until **Resume game**. An interrupted question is re-announced with a fresh answer timer; a role update alone must not interrupt it.
 10. If sending is refused or no echo arrives, one banner must ask whether the line appeared. **Yes, it posted** confirms exactly one visibly posted line. **Post again** prepares the line for the manual post button and its line counter. **Retry automatic posting** must explicitly retry automatic delivery, with no repeating failure loop.
 11. Stop during final announcements. Confirm Stop game shows a warning; Cancel must leave the game active. Confirming stop must discard pending records. Completed records survive reload and reset settings. Clearing test records in general settings requires separate confirmation and preserves the other client's records.
-12. With **Host plays along** on, test chat, clicked and key-bound answers, immediate Locked feedback, first-answer locking, scores and records. With it off, host answers are ignored. **Practice solo**, grouped or not, must use no outbound API or macro in either pacing mode and must not be reported as interrupted after a reload.
+12. With **Host plays along** on, test chat, clicked and key-bound answers, immediate feedback, changing an answer, scores and records. With it off, host answers are ignored. **Practice solo**, grouped or not, must use no outbound API or macro in either pacing mode and must not be reported as interrupted after a reload.
 13. Check ties, zero-correct games, missed/wrong streak breaks, optional closing records and inactivity pauses. Ready-only players and bystanders must receive no records. A final silent question should finish instead of entering an inactivity pause.
 14. Reload during a live group game. Setup must report where it stopped; **Post standings** posts one line to the original channel and **Dismiss** clears it. Finished games appear in History with standings, and the Hall of Fame ranks by wins with accuracy.
 15. Check sound cues with the setting on and off, and the timer bar turning amber then red.
@@ -31,7 +31,7 @@ cannot prove client rendering, chat permissions or server event delivery.
     `/lf probe report` and copy the report. Run it on Retail and Forever, in
     an open-world party, a premade party inside a dungeon, a queued Instance
     group, a raid and guild, and include a Forever character with a surname.
-    Your own echo never counts as a pass. `/lf probe stop` cancels.
+    Your own echo never counts as a pass. `/lf probe stop` cancels. The Troubleshooting page has the same commands as buttons.
 
 Report the version, client/build, channel, pacing, delivery state, current primary
 action and any BugGrabber error. In dev7 the user reproduced an immediate
@@ -62,8 +62,8 @@ include this interface.
    readiness and participant names are correct, including cross-realm names.
 4. Check full question/choice wrapping and scrolling at normal and small scales.
    Buttons stay disabled during presentation and open after the chat notice.
-5. Race a click against a chat answer from the same player. Only the first
-   host-accepted choice locks. Retry never changes it. Let one answer time out.
+5. Race a click against a chat answer from the same player. The last choice the
+   host receives counts, and the window shows it. Change an answer by clicking another. Let one answer time out.
 6. Check the correct answer reveal, your selected answer, streak changes, both
    players' scores, chat-only participation and tied final winners.
 7. Hide/restore, pause/resume, change the roster and briefly enter combat.

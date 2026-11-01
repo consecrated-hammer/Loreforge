@@ -39,9 +39,11 @@ ready-check rules.
 Joined players get the current question with four wrapped, clickable choices.
 The first click immediately highlights the choice and shows a prominent
 **Answer N selected** heading with **Sending...**. Only the host's receipt changes that to
-**Locked**. A missing receipt offers a retry of the same choice or Party-chat
-fallback. A chat answer winning the race stays authoritative; a later click
-cannot replace it. Correct answers, streaks and party scores appear after
+**Locked**. A missing receipt offers a retry of the latest choice or Party-chat
+fallback. Until time's up a player can change their answer by clicking another
+choice or typing another number, and the last one the host receives counts. An
+older host keeps the first answer and its receipt says so, which the window
+shows. Correct answers, streaks and party scores appear after
 reveal. Tied scores share rank and wins, and chat-only players stay in the
 same game engine and standings.
 

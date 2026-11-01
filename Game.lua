@@ -21,6 +21,8 @@ Game.CATEGORIES = {
     { "items", "Things You Probably Vendored" },
 }
 
+Game.RECAP_EVERY = 5
+
 local function integer(value, low, high)
     return type(value) == "number" and value == math.floor(value) and value >= low and value <= high
 end
@@ -31,6 +33,45 @@ function Game.Categories(entry)
     if entry.race then return { "race" } end
     if entry[1]:find("zone", 1, true) or entry[1]:find("lies", 1, true) then return { "geography" } end
     return { "lore" }
+end
+
+local function hasTag(entry, tag)
+    for _, value in ipairs(Game.Categories(entry)) do
+        if value == tag then return true end
+    end
+    return false
+end
+
+-- A ticked category with enough questions left for a whole round, favouring
+-- one not used yet. Nil when no category can fill a round: that round mixes.
+function Game.PickTheme(pool, config, used, random)
+    local fresh, repeats = {}, {}
+    for _, category in ipairs(Game.CATEGORIES) do
+        if config.categories[category[1]] then
+            local left = 0
+            for _, entry in ipairs(pool) do if hasTag(entry, category[1]) then left = left + 1 end end
+            if left >= config.perRound then
+                local seen = false
+                for _, theme in pairs(used) do if theme.key == category[1] then seen = true end end
+                local list = seen and repeats or fresh
+                list[#list + 1] = { key = category[1], label = category[2] }
+            end
+        end
+    end
+    local list = #fresh > 0 and fresh or repeats
+    return #list > 0 and list[random(#list)] or nil
+end
+
+function Game.DrawThemed(pool, theme, random)
+    if not theme then return table.remove(pool, random(#pool)) end
+    local matching = {}
+    for index, entry in ipairs(pool) do if hasTag(entry, theme.key) then matching[#matching + 1] = index end end
+    return table.remove(pool, matching[random(#matching)])
+end
+
+function Game:Theme()
+    local theme = self.themes and self.themes[self.round]
+    return theme and theme.label or nil
 end
 
 function Game.Pool(bank, config, era)
@@ -119,8 +160,19 @@ function Game:Start(config, era, roster, serial)
         manualSend = config.manualSend == true, compactChoices = config.compactChoices == true }
     self.players, self.run, self.serial = players, {}, serial
     self.presentationGate, self.presentationFrom = false, nil
-    for _ = 1, count do
-        local entry = table.remove(pool, self.random(#pool))
+    self.themes = {}
+    for index = 1, count do
+        local entry
+        if config.rounds > 1 then
+            -- Themed rounds: each round draws from one category.
+            local round = math.floor((index - 1) / config.perRound) + 1
+            if index % config.perRound == 1 or config.perRound == 1 then
+                self.themes[round] = Game.PickTheme(pool, config, self.themes, self.random)
+            end
+            entry = Game.DrawThemed(pool, self.themes[round], self.random)
+        else
+            entry = table.remove(pool, self.random(#pool))
+        end
         local choices = { entry[2], entry[3], entry[4], entry[5] }
         for i = 4, 2, -1 do
             local j = self.random(i)
@@ -154,8 +206,9 @@ function Game.RulesText(config)
     end
     local topics = #names == total and "all categories" or #names > 3 and (#names .. " categories")
         or table.concat(names, ", ")
-    return (config.rounds == 1 and "1 round" or (config.rounds .. " rounds")) .. " x " .. config.perRound
-        .. (config.perRound == 1 and " question" or " questions") .. (topics ~= "" and (", " .. topics) or "") .. "."
+    local length = config.rounds == 1 and (config.perRound .. (config.perRound == 1 and " question" or " questions"))
+        or (config.rounds .. " themed rounds x " .. config.perRound .. (config.perRound == 1 and " question" or " questions"))
+    return length .. (topics ~= "" and (", " .. topics) or "") .. "."
 end
 
 function Game:ReadyCheck()
@@ -212,7 +265,11 @@ function Game:Question()
     local q = (self.index - 1) % self.config.perRound + 1
     self.questionVisible = false
     self.questionCursor = #self.queue + 1
-    self:Enqueue("Round " .. self.round .. ", question " .. q .. " (" .. self.config.seconds .. "s)"
+    local theme = self:Theme()
+    local position = self.config.rounds > 1
+        and ("Round " .. self.round .. (theme and (": " .. theme) or "") .. ", question " .. q)
+        or ("Question " .. self.index .. " of " .. #self.run)
+    self:Enqueue(position .. " (" .. self.config.seconds .. "s)"
         .. (self.attempt > 1 and " (restart " .. self.attempt .. ")" or "") .. ": " .. item.text)
     -- Compact games post every choice on one line; every shipped question
     -- fits, but anything that would split falls back to one line each.
@@ -289,9 +346,9 @@ function Game:Answer(key, text, guid)
     local player = self:FindPlayer(key, guid)
     if not player then return false end
     key = player.key
-    if self.answers[key] then return false end
     local answer = text:match("^%s*([1-4])%s*$")
     if not answer then return false end
+    -- The last answer before time's up counts, so a mis-click can be fixed.
     self.answers[key] = tonumber(answer)
     player.entered = true
     return true
@@ -366,6 +423,12 @@ function Game:Close()
     end
     -- A one-round game's round result would repeat the final result.
     if self.index % self.config.perRound == 0 and self.config.rounds > 1 then self:Results(true) end
+    -- Without rounds, chat players still get the scores every so often.
+    if self.config.rounds == 1 and self.index % Game.RECAP_EVERY == 0 and self.index < #self.run then
+        local scores = {}
+        for _, player in ipairs(self:Standings()) do scores[#scores + 1] = player.name .. " " .. player.total end
+        if #scores > 0 then self:Enqueue("Scores after " .. self.index .. ": " .. table.concat(scores, "; ")) end
+    end
     if self.onEvent then self.onEvent("reveal") end
     if self.index == #self.run then
         self:Results(false)

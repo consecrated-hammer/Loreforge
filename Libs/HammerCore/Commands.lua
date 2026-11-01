@@ -71,6 +71,12 @@ function Commands:RegisterCore()
         run = function() HC.Print(Commands.VersionText()) end })
     self:Add({ name = "about", section = CORE, help = "Open the About page",
         run = function() HC.Settings:Show("About") end })
+    if type(spec.whatsNew) == "table" and #spec.whatsNew > 0 then
+        self:Add({ name = "whatsnew", section = CORE, help = "Show what's new",
+            run = function()
+                if not HC.WhatsNew:Show() then HC.Print("nothing new to show") end
+            end })
+    end
     self:Add({ name = "debug", section = CORE, help = "Open a copyable diagnostic report",
         run = function() HC.Copy:Show(HC.name .. " diagnostics", HC.DiagnosticReport()) end })
     self:Add({ name = "startup", args = "[on|off]", section = CORE, help = "Show the startup message",
@@ -237,6 +243,10 @@ function HC.DiagnosticReport()
         "Minimap button: " .. (state.minimap and "shown" or "hidden"),
         "Theme: " .. tostring(state.theme),
     }
+    if HC.WhatsNew and HC.WhatsNew.Enabled() then
+        lines[#lines + 1] = "What's new: " .. (state.whatsNew == false and "off" or "on")
+            .. ", last seen " .. tostring(state.whatsNewSeen or "none")
+    end
     if HC.Settings.errors then
         for name, err in pairs(HC.Settings.errors) do
             lines[#lines + 1] = "Settings page failed: " .. name .. ": " .. err

@@ -287,6 +287,34 @@ function Probe.Report()
     return text
 end
 
+-- The same commands as buttons, on the Troubleshooting page.
+local PROBE_BUTTONS = {
+    { { "Listen", "listen", "Answer one probe from the host, for 10 minutes. Everyone else does this first." },
+      { "Report", "report", "Open the last results to copy." },
+      { "Stop", "stop", "Cancel the running probe." } },
+    { { "Party", "party", "Run a probe on Party." },
+      { "Raid", "raid", "Run a probe on Raid." },
+      { "Instance", "instance", "Run a probe on Instance." },
+      { "Guild", "guild", "Run a probe on Guild." } },
+}
+function Probe.Troubleshooting(panel, y)
+    local UI = HC.UI
+    _, y = UI.Header(panel, "Transport probe", y)
+    Probe.buttons = {}
+    for _, row in ipairs(PROBE_BUTTONS) do
+        for index, spec in ipairs(row) do
+            local button = UI.Button(panel, 90, 24)
+            button:SetPoint("TOPLEFT", UI.PAD + (index - 1) * 96, y)
+            button:SetText(spec[1])
+            UI.AttachHint(button, spec[1], spec[3])
+            button:SetScript("OnClick", function() HC.Commands:Dispatch("probe " .. spec[2]) end)
+            Probe.buttons[spec[2]] = button
+        end
+        y = y - 30
+    end
+    return y
+end
+
 HC.Commands:Add({ name = "probe", args = "<party|raid|instance|guild|listen|report|stop>", section = "Trivia", hidden = true,
     help = "Development transport probe",
     run = function(args)

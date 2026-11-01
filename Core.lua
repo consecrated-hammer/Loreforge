@@ -5,16 +5,17 @@ local function partyReport()
     local ok, report = pcall(ns.Party.Report)
     return "\n\n" .. (ok and report or ("Party diagnostics failed: " .. tostring(report)))
 end
-ns.DEFAULTS = { rounds = 3, perRound = 5, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
+ns.DEFAULTS = { rounds = 1, perRound = 15, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
     autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 30, hostParticipates = true,
-    compactChoices = false, sound = true, hostScale = 1, playerScale = 1 }
+    compactChoices = false, hostAutoMinimise = true, sound = true, hostScale = 1, playerScale = 1 }
 -- Setup ranges. The engine and Party protocol accept wider values from older
 -- clients; the setup controls offer what makes a sensible game.
-ns.LIMITS = { rounds = { 1, 10, 1 }, perRound = { 1, 15, 1 }, seconds = { 5, 60, 5 }, questionGap = { 3, 30, 1 },
+ns.LIMITS = { rounds = { 1, 10, 1 }, perRound = { 1, 50, 1 }, seconds = { 5, 60, 5 }, questionGap = { 3, 30, 1 },
     idleLimit = { 0, 10, 1 }, readySeconds = { 5, 60, 5 } }
 HC:Init({
     name = "Loreforge", command = "loreforge", aliases = { "lf" }, savedVariable = "LoreforgeDB",
     icon = "Interface\\Icons\\INV_Misc_Book_09", db = function() return ns.db end,
+    whatsNew = ns.WHATS_NEW,
     resetSettings = function()
         local records, serial = ns.db.records, ns.db.gameSerial
         LoreforgeDB = { records = records, gameSerial = serial, matches = ns.db.matches, partySerial = ns.db.partySerial,
@@ -31,6 +32,7 @@ HC:Init({
         .. "\nLast unmatched quiz sender: " .. (ns.lastUnmatched or "None")
         .. partyReport() end,
     status = function() return ns.game and ("Game: " .. ns.game.phase) or "Ready to host" end,
+    troubleshooting = function(panel, y) return ns.Probe.Troubleshooting(panel, y) end,
     about = { note = "AT THE TAVERN", action = "Open the book", tips = {
         "Have you considered reading the quest text?", "The real loot was knowing who dropped it.",
         "Someone in this party has memorised every boss line.", "The Headless Horseman has requested a rematch." } },
@@ -82,6 +84,12 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     if type(LoreforgeDB) ~= "table" then LoreforgeDB = {} end
     ns.db = LoreforgeDB
     local newChannel = ns.db.channel == nil
+    -- Rounds used to only divide the game up; now they're themed, so an old
+    -- 3 x 5 game becomes a plain 15.
+    if ns.db.rounds and ns.db.perRound and not ns.db.themedRoundsMigrated and ns.db.rounds > 1 then
+        ns.db.perRound, ns.db.rounds = math.min(50, ns.db.rounds * ns.db.perRound), 1
+    end
+    ns.db.themedRoundsMigrated = true
     for key, value in pairs(ns.DEFAULTS) do if type(ns.db[key]) ~= type(value) then ns.db[key] = value end end
     -- Restore the separate-choice layout on upgrade from the compact default.
     if ns.db.choiceLayoutVersion ~= 1 then
