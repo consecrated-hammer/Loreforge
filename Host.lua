@@ -27,6 +27,22 @@ function ns.Identity(name, server)
     local full = character .. "-" .. world
     return full:lower(), full
 end
+-- A name for labels: players on your realm without the realm. Forever's
+-- realm names are long ("CAMWOWAU | Realm | ..."), so the stored key's
+-- suffix only clutters the list. Other realms keep theirs.
+function ns.DisplayName(full)
+    if type(full) ~= "string" then return tostring(full or "?") end
+    local own = "-" .. realm():lower()
+    local lower = full:gsub("%s", ""):lower()
+    if #lower > #own and lower:sub(-#own) == own then
+        -- The realm suffix is the part after the last hyphen whose rest
+        -- matches ours; Forever surnames may hold hyphens of their own.
+        for i = #full, 1, -1 do
+            if full:sub(i, i) == "-" and full:sub(i):gsub("%s", ""):lower() == own then return full:sub(1, i - 1) end
+        end
+    end
+    return full
+end
 local function person(unit)
     local name, server
     if ns.era == "classic" then
@@ -321,11 +337,13 @@ function ns.ShowRecords()
 end
 
 -- ── Main window ────────────────────────────────────────────────────────────
--- One window with three tabs: Play (setup, lobby and the live game), History
--- and Hall of Fame. Settings stay in the shared HammerCore window.
+-- One window with three tabs across the header: Play (setup, lobby and the
+-- live game), History and Hall of Fame. Settings stay in the shared
+-- HammerCore window. Sized for its own content rather than the other
+-- addons' windows; 920 x 640 fits a 1080p screen at scale 1 with room spare.
 
-local W, H = 780, 620
-local LEFT_W, RIGHT_X, RIGHT_W = 470, 508, 254
+local W, H = 920, 640
+local LEFT_W, RIGHT_X, RIGHT_W = 560, 612, 290
 local BOARD_ROWS = 10
 local AMBER = { 1, 0.69, 0.2, 1 }
 ns.HostLayout = { width = W, height = H, leftWidth = LEFT_W, rightX = RIGHT_X, rightWidth = RIGHT_W }
@@ -371,6 +389,13 @@ local function timerBar(parent, width)
         ns.TimerColour(self.fill, left, total)
         self.count:SetText(math.ceil(left) .. "s")
         T.Text(self.count, left <= 5 and "danger" or "text")
+        self:Pulse(left > 0 and left <= 5)
+    end
+    -- Lively animations: the bar and count pulse through the last five seconds.
+    bar.Pulse = function(self, on)
+        local owner = self.owner or parent
+        ns.Flair.Pulse(owner, self, on)
+        ns.Flair.Pulse(owner, self.count, on)
     end
     return bar
 end
@@ -426,7 +451,7 @@ local function boardRow(parent, width)
     return row
 end
 
--- A plain scrolling region with a thin bar, shared by the setup, History and
+-- A plain scrolling region with HammerCore's thin bar, shared by the setup, History and
 -- Hall of Fame views. Returns the scroll frame, its content frame and a
 -- function that sets the content height.
 function ns.ScrollArea(parent, x, y, width, height)
@@ -435,10 +460,10 @@ function ns.ScrollArea(parent, x, y, width, height)
     local child = CreateFrame("Frame", nil, scroll)
     child:SetSize(width, 1); scroll:SetScrollChild(child)
     local bar = CreateFrame("Slider", nil, parent)
-    bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, 0); bar:SetSize(6, height); bar:SetOrientation("VERTICAL")
-    T.Fill(bar:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
-    local thumb = T.Fill(bar:CreateTexture(nil, "ARTWORK"), "selected")
-    thumb:SetSize(6, 28)
+    bar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 5, 0); bar:SetSize(4, height); bar:SetOrientation("VERTICAL")
+    T.Fill(bar:CreateTexture(nil, "BACKGROUND"), "edge"):SetAllPoints()
+    local thumb = T.Fill(bar:CreateTexture(nil, "ARTWORK"), "accent")
+    thumb:SetSize(4, 36)
     if bar.SetThumbTexture then bar:SetThumbTexture(thumb) end
     local range = 0
     bar:SetScript("OnValueChanged", function(_, value)
@@ -460,6 +485,158 @@ function ns.ScrollArea(parent, x, y, width, height)
     return scroll, child, setHeight
 end
 
+-- ── Window look ────────────────────────────────────────────────────────────
+-- Every Loreforge window shares HammerCore's window look: an edged surface,
+-- a header bar with the title and a close button, dragged by the bar.
+
+local BAR = 40
+ns.WINDOW_BAR = BAR
+local windows = {}
+
+-- The theme's "outer" colour is slightly see-through, so the backdrop keeps
+-- only its edge and a separate body texture carries the fill. Its alpha is
+-- the Window opacity; text and controls never fade.
+local function applyOpacity(win)
+    local r, g, b = T.Unpack("content")
+    win.hcBody:SetColorTexture(r, g, b, ns.GetWindowOpacity and ns.GetWindowOpacity() or 1)
+    local br, bg, bb = T.Unpack("outer")
+    if win.SetBackdropColor then win:SetBackdropColor(br, bg, bb, 0) end
+    if win.lfParchment then
+        local tint = ns.Flair.PARCHMENT
+        win.lfParchment:SetColorTexture(tint[1], tint[2], tint[3], tint[4] * (ns.GetWindowOpacity and ns.GetWindowOpacity() or 1))
+    end
+end
+
+function ns.ApplyWindowOpacity()
+    for _, win in ipairs(windows) do applyOpacity(win) end
+end
+
+-- Storybook on or off: header icons, title face and the parchment tint.
+-- Turning Lively animations off stops anything still playing.
+function ns.ApplyFlair()
+    for _, win in ipairs(windows) do
+        ns.Flair.ApplyChrome(win)
+        if not ns.Flair.On("lively") then ns.Flair.StopAll(win) end
+    end
+end
+
+-- spec: title, icon (shown with Storybook style), close (click handler),
+-- movable (optional check before a drag) and moved (after a drag). Sets
+-- win.header, win.title, win.closeButton and win.inset, the edge width the
+-- body sits inside.
+function ns.WindowChrome(win, spec)
+    T.Surface(win, "outer", "edge")
+    local framed = T.Active().surfaces and T.Active().surfaces.outer
+    local inset = framed and framed.inset or 1
+    local body = win:CreateTexture(nil, "BACKGROUND")
+    body:SetPoint("TOPLEFT", inset, -inset)
+    body:SetPoint("BOTTOMRIGHT", -inset, inset)
+    win.hcBody, win.inset = body, inset
+    -- Storybook's warm parchment sits just above the body fill, under all text.
+    local parchment = win:CreateTexture(nil, "BACKGROUND", nil, 1)
+    parchment:SetPoint("TOPLEFT", inset, -inset - BAR)
+    parchment:SetPoint("BOTTOMRIGHT", -inset, inset)
+    win.lfParchment = parchment
+    windows[#windows + 1] = win
+    applyOpacity(win)
+
+    local header = CreateFrame("Frame", nil, win)
+    header:SetPoint("TOPLEFT", inset, -inset)
+    header:SetPoint("TOPRIGHT", -inset, -inset)
+    header:SetHeight(BAR)
+    T.Fill(header:CreateTexture(nil, "BACKGROUND"), "header"):SetAllPoints()
+    header:EnableMouse(true)
+    header:RegisterForDrag("LeftButton")
+    header:SetScript("OnDragStart", function()
+        if not spec.movable or spec.movable() then win.hcMoving = true; win:StartMoving() end
+    end)
+    header:SetScript("OnDragStop", function()
+        if not win.hcMoving or (spec.movable and not spec.movable()) then return end
+        win.hcMoving = nil
+        win:StopMovingOrSizing()
+        if spec.moved then spec.moved(win) end
+    end)
+    if spec.icon then
+        local icon = header:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(24, 24); icon:SetPoint("LEFT", 12, 0)
+        icon:SetTexture(spec.icon)
+        if spec.crop and icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        win.lfIcon = icon
+    end
+    local title = T.Font(UI.FontString(header, "GameFontNormalLarge", "text"), 16)
+    title:SetPoint("LEFT", 16, 0)
+    title:SetText(spec.title or "Loreforge")
+    local close = UI.CloseButton(header, spec.close or function() win:Hide() end, 24)
+    close:SetPoint("RIGHT", -8, 0)
+    win.header, win.title, win.closeButton = header, title, close
+    ns.Flair.ApplyChrome(win)
+    return header
+end
+
+-- ── Tabs ───────────────────────────────────────────────────────────────────
+-- EllesmereUI-style text tabs: no box, dimmed until hovered, and the chosen
+-- one at full brightness over a 2px accent underline. place(first) anchors
+-- the first shown tab; the rest follow 6px apart. Shared by the main tabs
+-- and setup's sub-tabs.
+
+local TAB_GAP = 6
+local function tabWidth(fs, text)
+    local width = fs.GetStringWidth and fs:GetStringWidth()
+    if type(width) ~= "number" or width <= 0 then width = #text * 8 end
+    return math.ceil(width)
+end
+
+function ns.TabStrip(parent, height, place)
+    local strip = { buttons = {}, order = {} }
+    local function paint(b, hover)
+        T.Text(b.Text, (b.active or hover) and "text" or "muted")
+        b.Text:SetAlpha((hover and not b.active) and 0.86 or 1)
+    end
+    function strip.Add(key, text, onClick)
+        local b = CreateFrame("Button", nil, parent)
+        b:SetHeight(height)
+        b.Text = T.Font(UI.FontString(b, "GameFontHighlight", "muted"), 16)
+        b.Text:SetPoint("CENTER", 0, 0)
+        b.line = T.Fill(b:CreateTexture(nil, "OVERLAY"), "accent")
+        b.line:SetPoint("BOTTOM", 0, 0)
+        b.line:Hide()
+        b.key = key
+        b.Text:SetText(text)
+        local width = tabWidth(b.Text, text)
+        b:SetWidth(width + 30)
+        b.line:SetSize(width + 14, 2)
+        b:SetScript("OnEnter", function(self) paint(self, true) end)
+        b:SetScript("OnLeave", function(self) paint(self, false) end)
+        b:SetScript("OnClick", onClick)
+        strip.buttons[key] = b
+        strip.order[#strip.order + 1] = key
+        return b
+    end
+    -- shown: the keys to show, or nil for all of them.
+    function strip.Layout(shown)
+        local previous
+        for _, key in ipairs(strip.order) do
+            local b = strip.buttons[key]
+            local on = not shown or shown[key] and true or false
+            b:SetShown(on)
+            if on then
+                b:ClearAllPoints()
+                if previous then b:SetPoint("BOTTOMLEFT", previous, "BOTTOMRIGHT", TAB_GAP, 0) else place(b) end
+                previous = b
+            end
+        end
+    end
+    function strip.Select(key)
+        strip.selected = key
+        for name, b in pairs(strip.buttons) do
+            b.active = name == key
+            b.line:SetShown(b.active)
+            paint(b, false)
+        end
+    end
+    return strip
+end
+
 local function createHost()
     -- Secure children live in their own root, never under HammerCore settings.
     -- The state driver hides this root in combat without an insecure Hide call.
@@ -467,40 +644,34 @@ local function createHost()
     f:SetSize(W, H); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG")
     if f.SetClampedToScreen then f:SetClampedToScreen(true) end
     f:SetScale(ns.db.hostScale or 1)
-    T.Surface(f, "outer", "edge")
-    f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self) if not InCombatLockdown() then self:StartMoving() end end)
-    f:SetScript("OnDragStop", function(self) if not InCombatLockdown() then self:StopMovingOrSizing() end end)
+    f:SetMovable(true); f:EnableMouse(true)
+    -- Moving and closing a secure frame wait until combat ends.
+    local header = ns.WindowChrome(f, { title = "Loreforge", icon = ns.Flair.BOOK, crop = true,
+        movable = function() return not InCombatLockdown() end,
+        close = function() if not InCombatLockdown() then f:Hide() end end })
     -- Escape closes the window out of combat; the combat state driver is
     -- dropped so it doesn't bring the window back afterwards.
     f:SetScript("OnHide", function(self)
+        ns.Flair.StopAll(self)
         if not InCombatLockdown() then UnregisterStateDriver(self, "visibility") end
     end)
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames + 1] = f:GetName() end
 
-    local icon = f:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(26, 26); icon:SetPoint("TOPLEFT", 16, -13)
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
-    if icon.SetTexCoord then icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
-    local title = label(f, "GameFontNormalLarge", "flavour")
-    title:SetPoint("TOPLEFT", 50, -18); title:SetText("Loreforge")
-    f.tabs = {}
-    for i, spec in ipairs(TABS) do
-        local tab = button(f, spec[2], 110, 28, function() ns.OpenHost(spec[1]) end)
-        tab:SetPoint("TOPLEFT", 176 + (i - 1) * 116, -12)
-        f.tabs[spec[1]] = tab
+    -- Text tabs in the header bar, just right of the title.
+    local strip = ns.TabStrip(header, BAR, function(first) first:SetPoint("LEFT", f.title, "RIGHT", 20, 0) end)
+    for _, spec in ipairs(TABS) do
+        local key = spec[1]
+        strip.Add(key, spec[2], function() ns.OpenHost(key) end)
     end
-    local settings = button(f, "Settings", 92, 28, function()
+    strip.Layout()
+    f.tabStrip, f.tabs = strip, strip.buttons
+    f.settings = button(header, "Settings", 92, 26, function()
         if InCombatLockdown() then return end
         -- One window at a time: settings has a Back to game button.
         f:Hide()
         HC.Settings:Show()
     end)
-    settings:SetPoint("TOPRIGHT", -100, -12)
-    local close = button(f, "Close", 76, 28, function() if not InCombatLockdown() then f:Hide() end end)
-    close:SetPoint("TOPRIGHT", -16, -12)
-    local rule = T.Fill(f:CreateTexture(nil, "ARTWORK"), "edge")
-    rule:SetPoint("TOPLEFT", 16, -50); rule:SetSize(W - 32, 1)
+    f.settings:SetPoint("RIGHT", f.closeButton, "LEFT", -8, 0)
 
     -- A host playing along can run the game from the quiz window alone.
     f.minimise = button(f, "Minimise", 96, 26, function()
@@ -561,6 +732,7 @@ local function createHost()
     f.question = label(play, "GameFontNormalLarge", "flavour", LEFT_W)
     if f.question.SetWordWrap then f.question:SetWordWrap(true) end
     f.timer = timerBar(play, LEFT_W - 60)
+    f.timer.owner = f
     f.answerButtons = {}
     for i = 1, 4 do
         local index = i
@@ -575,6 +747,13 @@ local function createHost()
     f.finale:SetPoint("TOPLEFT", 18, -58)
     f.winnerLine = label(play, "GameFontNormalLarge", "text", LEFT_W)
     if f.winnerLine.SetWordWrap then f.winnerLine:SetWordWrap(true) end
+    f.finaleQuip = label(play, "GameFontHighlight", "flavour", LEFT_W)
+    if f.finaleQuip.SetWordWrap then f.finaleQuip:SetWordWrap(true) end
+    f.trophy = play:CreateTexture(nil, "ARTWORK")
+    f.trophy:SetSize(36, 36)
+    if f.trophy.SetTexCoord then f.trophy:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    f.trophy:SetTexture(ns.Flair.TROPHY)
+    f.trophy:Hide()
     f.finalYou = label(play, "GameFontHighlight", "selected", LEFT_W)
     if f.finalYou.SetWordWrap then f.finalYou:SetWordWrap(true) end
     f.podium = {}
@@ -731,7 +910,7 @@ local function drawBoard(f, g, ready, host)
             T.Fill(row.dot, done and "accent" or "rail")
             row.dot:SetShown(ready or g.phase == "accepting")
             row.rank:SetText(ready and "" or (p.boardRank .. "."))
-            row.name:SetText(p.name .. (mine and " (you)" or ""))
+            row.name:SetText(ns.DisplayName(p.name) .. (mine and " (you)" or ""))
             T.Text(row.name, mine and "selected" or (not ready and leader > 0 and p.total == leader) and "accent" or "text")
             local streak = finished and p.bestStreak or p.streak
             row.score:SetText(ready and (p.ready and "Ready" or "") or ((p.total == 1 and "1 pt" or (p.total .. " pts"))
@@ -779,7 +958,7 @@ local function drawFinale(f, g, top, hostPlayer)
     for i, p in ipairs(standings) do
         if p.total ~= previous then rank, previous = i, p.total end
         ranks[p] = rank
-        if best > 0 and p.total == best then winners[#winners + 1] = p.name end
+        if best > 0 and p.total == best then winners[#winners + 1] = ns.DisplayName(p.name) end
     end
     local function points(n) return n .. (n == 1 and " point" or " points") end
     f.winnerLine:SetText(#winners == 0 and "No correct answers, so no winner this time."
@@ -787,6 +966,25 @@ local function drawFinale(f, g, top, hostPlayer)
         or ("Shared win: " .. table.concat(winners, ", ") .. ", " .. points(best) .. " each."))
     f.winnerLine:ClearAllPoints(); f.winnerLine:SetPoint("TOPLEFT", 18, top)
     local y = top - math.ceil(f.winnerLine:GetStringHeight() or 18) - 10
+    -- Tavern banter: a line for the winner, a tie or nobody at all.
+    local quip = ns.Flair.Quip(#winners == 0 and "none" or #winners > 1 and "tie" or "winner", "host-" .. tostring(g.serial))
+    f.finaleQuip:SetText(quip)
+    f.finaleQuip:SetShown(quip ~= "")
+    if quip ~= "" then
+        f.finaleQuip:ClearAllPoints(); f.finaleQuip:SetPoint("TOPLEFT", 18, y + 4)
+        y = y - math.ceil(f.finaleQuip:GetStringHeight() or 14) - 8
+    end
+    -- The winner's crown sits beside the heading; Lively animations drop it in once.
+    local crowned = #winners > 0 and (ns.Flair.On("storybook") or ns.Flair.On("lively"))
+    f.trophy:SetShown(crowned)
+    if crowned then
+        f.trophy:ClearAllPoints()
+        f.trophy:SetPoint("LEFT", f.finale, "LEFT", math.ceil(f.finale.GetStringWidth and f.finale:GetStringWidth() or 200) + 12, 0)
+        if f.trophyFor ~= g.serial then
+            f.trophyFor = g.serial
+            ns.Flair.BounceIn(f, f.trophy)
+        end
+    end
     local you
     if g.config.hostParticipates and hostPlayer then
         if not hostPlayer.entered then you = "You didn't answer any questions in this game."
@@ -809,7 +1007,7 @@ local function drawFinale(f, g, top, hostPlayer)
         if p then
             row:ClearAllPoints(); row:SetPoint("TOPLEFT", 18, y)
             row.place:SetText(ns.Ordinal(ranks[p]))
-            row.name:SetText(p.name .. (p == hostPlayer and " (you)" or ""))
+            row.name:SetText(ns.DisplayName(p.name) .. (p == hostPlayer and " (you)" or ""))
             local medal = p.total > 0 and ns.MEDALS and ns.MEDALS[ranks[p]]
             if medal then row.place:SetTextColor(medal[1], medal[2], medal[3]) else T.Text(row.place, "muted") end
             T.Text(row.name, p == hostPlayer and "selected" or "text")
@@ -822,14 +1020,18 @@ end
 local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
     local finished = g.phase == "finished"
     f.finale:SetShown(finished); f.winnerLine:SetShown(finished)
+    local story = ns.Flair.On("storybook")
+    ns.Flair.Typeface(f.finale, story, 30, "accent", "flavour")
+    ns.Flair.Typeface(f.question, story, 19, "flavour", "flavour")
     if finished then
         f.finale:SetText("Game complete")
+        f.timer:Pulse(false)
         f.question:Hide(); f.timer:Hide(); f.timer.count:Hide(); f.readyButton:Hide()
         for _, row in ipairs(f.answerButtons) do row:Hide() end
         drawFinale(f, g, top, hostPlayer)
         return
     end
-    f.finalYou:Hide()
+    f.finalYou:Hide(); f.finaleQuip:Hide(); f.trophy:Hide()
     for _, row in ipairs(f.podium) do row:Hide() end
     f.question:Show()
     local item = g.run and g.run[g.index]
@@ -846,6 +1048,8 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
         f.timer:ClearAllPoints(); f.timer:SetPoint("TOPLEFT", 18, y - 6)
         f.timer:SetTime(math.max(0, deadline - GetTime()), g.phase == "ready" and g.config.readySeconds or g.config.seconds)
         y = y - 30
+    else
+        f.timer:Pulse(false)
     end
     local checkingIn = g.config.hostParticipates and ready and not hostPlayer
     f.readyButton:SetShown(checkingIn)
@@ -979,10 +1183,7 @@ function ns.RefreshHost()
     if not f or not g or not f:IsShown() then return end
     if InCombatLockdown() then return end
     local tab = ns.hostTab or "play"
-    for name, b in pairs(f.tabs) do
-        T.Border(b, name == tab and "selected" or "edge")
-        T.Text(b.Text, name == tab and "selected" or "text")
-    end
+    f.tabStrip.Select(tab)
     local setup = g.phase == "setup" or g.phase == "stopped"
     f.history:SetShown(tab == "history")
     f.records:SetShown(tab == "records")

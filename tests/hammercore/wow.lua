@@ -7,8 +7,15 @@ local wow = { printed = {}, frames = {}, regions = {}, reloads = 0, popups = {},
 local Widget = {}
 local methods = {}
 
-function methods:SetShown(shown) self.shown = shown and true or false end
-function methods:Show() self.shown = true end
+-- Like the client, showing a hidden frame runs its OnShow.
+function methods:Show()
+    local was = self.shown
+    self.shown = true
+    if was == false and self.scripts.OnShow then self.scripts.OnShow(self) end
+end
+function methods:SetShown(shown)
+    if shown then self:Show() else self:Hide() end
+end
 function methods:Hide()
     local was = self.shown
     self.shown = false

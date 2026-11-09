@@ -9,8 +9,17 @@ local T, UI = HC.Theme, HC.UI
 --           { text = "Cooldown icons and a cooldown bar.", page = "Cooldowns" },
 --       } },
 --   }
--- `page` adds a button that opens that settings page.  Items in a release
--- that share a page are listed together above one button.
+-- An item is a line of text, or a table:
+--   { text, title?, page?, kind? = "new" | "improved" | "fix",
+--     client? = "retail" | "forever" }
+-- `title` gives a bold first line with `text` under it; `page` makes the
+-- item a link to that settings page; `kind` files it under New features
+-- (the default), Improvements or Bug fixes; `client` adds a coloured
+-- Retail or WoW Forever tag for changes that only apply there.  A release may
+-- also carry `date = "2026-11-08"` (shown on the What's new page) and
+-- `history = true` for highlights written after the fact: they appear under
+-- Earlier releases, and tools/whatsnew_check.py doesn't require an entry
+-- for every patch around them.
 --
 -- The rules every addon shares:
 --   * never on a fresh install: the first run records the version silently;
@@ -36,8 +45,8 @@ HC.WhatsNew = WhatsNew
 
 local SHARED_KEY = "ConsecratedHammerWhatsNew"
 -- Bump when the renderer improves, so the newest copy loaded draws the window.
-local RENDERER = 1
-local WIDTH, HEIGHT = 480, 400
+local RENDERER = 2
+local WIDTH, HEIGHT = 560, 460
 -- The shared window's title icon: the quest giver's "!".
 local SHARED_ICON = "Interface\\GossipFrame\\AvailableQuestIcon"
 
@@ -103,7 +112,10 @@ end
 function WhatsNew:Unseen(seen, current, seenItems)
     local unseen = {}
     for _, release in ipairs(self:Releases()) do
-        if seen then
+        -- History was written after the fact: the page lists it, the popup doesn't.
+        if release.history then
+            -- skip
+        elseif seen then
             local order = WhatsNew.Compare(release.version, seen)
             if order > 0 then
                 unseen[#unseen + 1] = release
@@ -120,6 +132,74 @@ function WhatsNew:Unseen(seen, current, seenItems)
 end
 
 -- How many highlights `version` has, or 0 without a release for it.
+-- What the What's new page's unread badge compares against: the newest
+-- release and its highlight count, so a highlight added to it counts too.
+function WhatsNew:LatestKey()
+    local newest = self:Releases()[1]
+    if not newest then return nil end
+    return tostring(WhatsNew.Base(newest.version)) .. ":" .. #newest.items
+end
+
+function WhatsNew:Unread()
+    local state = HC.State()
+    if not (state and WhatsNew.Enabled()) or state.whatsNewDot == false then return false end
+    local key = self:LatestKey()
+    return key ~= nil and state.whatsNewPageSeen ~= key
+end
+
+-- The quest turn-in sound, for opening the page with the "!" showing.
+-- Retail and Forever don't share a sound library, so this tries the sound
+-- kit, then the classic file path, and remembers which one played (or
+-- why none did) for `whatsnew sound` and the diagnostic report.
+local TURN_IN_KIT = 878   -- SOUNDKIT.IG_QUEST_LIST_COMPLETE
+local TURN_IN_FILE = "Sound\\Interface\\iQuestComplete.ogg"
+
+function WhatsNew:PlayTurnIn()
+    local kit = type(SOUNDKIT) == "table" and SOUNDKIT.IG_QUEST_LIST_COMPLETE or TURN_IN_KIT
+    if type(PlaySound) == "function" then
+        local ok, willPlay = pcall(PlaySound, kit, "SFX")
+        if ok and willPlay then
+            self.lastSound = "sound kit " .. tostring(kit)
+            return true
+        end
+    end
+    if type(PlaySoundFile) == "function" then
+        local ok, willPlay = pcall(PlaySoundFile, TURN_IN_FILE, "SFX")
+        if ok and willPlay then
+            self.lastSound = "sound file " .. TURN_IN_FILE
+            return true
+        end
+    end
+    self.lastSound = "nothing played (kit " .. tostring(kit) .. " and the sound file were refused; is Sound Effects on?)"
+    return false
+end
+
+-- For testing the popup, badge and turn-in again: steps the record back to
+-- the release before the newest, so the next /reload shows the newest
+-- release's highlights and the "!" returns straight away.
+function WhatsNew:ResetSeen()
+    local state = HC.State()
+    if not state then return false end
+    local releases = self:Releases()
+    local newest, previous = releases[1], releases[2]
+    if not newest then return false end
+    if previous then
+        state.whatsNewSeen = tostring(WhatsNew.Base(previous.version))
+        state.whatsNewSeenItems = #previous.items
+    else
+        state.whatsNewSeen = tostring(WhatsNew.Base(newest.version))
+        state.whatsNewSeenItems = 0
+    end
+    state.whatsNewPageSeen = nil
+    if HC.Settings and HC.Settings.RefreshBadges then HC.Settings:RefreshBadges() end
+    return true
+end
+
+function WhatsNew:MarkPageSeen()
+    local state = HC.State()
+    if state then state.whatsNewPageSeen = self:LatestKey() end
+end
+
 function WhatsNew:ItemCount(version)
     for _, release in ipairs(self:Releases()) do
         if WhatsNew.Compare(release.version, version) == 0 then return #release.items end
@@ -141,7 +221,7 @@ function WhatsNew:MarkSeen(state, mark)
     end
 end
 
-local function pageTitle(name)
+function WhatsNew.PageTitle(name)
     for _, spec in ipairs(HC.Settings.queue or {}) do
         if spec.name == name then return spec.title or spec.name end
     end
@@ -159,7 +239,7 @@ function WhatsNew:Section(releases, onShown)
         icon = minimap or HC.spec.icon,
         logo = HC.spec.icon,
         releases = releases,
-        pageTitle = pageTitle,
+        pageTitle = WhatsNew.PageTitle,
         openPage = function(page) HC.Settings:Show(page) end,
         isEnabled = function() return HC.State().whatsNew ~= false end,
         setEnabled = function(value) HC.State().whatsNew = value and true or false end,
@@ -260,6 +340,127 @@ function WhatsNew:Schedule()
     if IsLoggedIn and IsLoggedIn() then soon() end
 end
 
+-- ── Drawing releases ────────────────────────────────────────────────────────
+-- One renderer for the settings page and the after-update window.
+
+WhatsNew.KINDS = {
+    { key = "new", label = "NEW FEATURES" },
+    { key = "improved", label = "IMPROVEMENTS" },
+    { key = "fix", label = "BUG FIXES" },
+}
+local CLIENTS = { retail = "Retail", forever = "WoW Forever" }
+
+function WhatsNew.Item(item)
+    if type(item) ~= "table" then return { text = tostring(item or ""), kind = "new" } end
+    local kind = item.kind
+    if kind ~= "improved" and kind ~= "fix" then kind = "new" end
+    return { text = tostring(item.text or ""), title = item.title, page = item.page, kind = kind,
+        client = CLIENTS[item.client] and item.client or nil }
+end
+
+-- "Minor release   New features: 3   Bug fixes: 2"
+function WhatsNew.Summary(release)
+    local parts = WhatsNew.Parse(release.version) or {}
+    local kind = (parts[3] or 0) > 0 and "Patch" or (parts[2] or 0) > 0 and "Minor release" or "Major release"
+    local counts = {}
+    for _, item in ipairs(release.items or {}) do
+        local key = WhatsNew.Item(item).kind
+        counts[key] = (counts[key] or 0) + 1
+    end
+    local text = { kind }
+    for _, entry in ipairs(WhatsNew.KINDS) do
+        if counts[entry.key] then
+            local label = entry.label:sub(1, 1) .. entry.label:sub(2):lower()
+            text[#text + 1] = label .. ": " .. counts[entry.key]
+        end
+    end
+    return table.concat(text, "     ")
+end
+
+local function tag(item)
+    if not item.client then return "" end
+    return T.Code(item.client) .. CLIENTS[item.client] .. "|r" .. T.Code("muted") .. "  -  |r"
+end
+
+-- Draws a release's items into `parent` from (x, y), `width` wide, grouped
+-- by kind.  opts = { pageTitle(page) -> title?, openPage(page) }.
+-- Returns the y below the last item.
+function WhatsNew.DrawItems(parent, x, y, width, release, opts)
+    local groups = {}
+    for _, raw in ipairs(release.items or {}) do
+        local item = WhatsNew.Item(raw)
+        groups[item.kind] = groups[item.kind] or {}
+        table.insert(groups[item.kind], item)
+    end
+    local first = true
+    for _, kind in ipairs(WhatsNew.KINDS) do
+        local items = groups[kind.key]
+        if items then
+            if not first then y = y - 8 end
+            first = false
+            local label = UI.FontString(parent, "GameFontNormalSmall", "section")
+            label:SetPoint("TOPLEFT", x, y)
+            label:SetText(kind.label)
+            local rule = T.Fill(parent:CreateTexture(nil, "ARTWORK"), "edge")
+            rule:SetHeight(1)
+            rule:SetPoint("LEFT", label, "RIGHT", 10, 0)
+            rule:SetPoint("RIGHT", parent, "LEFT", x + width, 0)
+            y = y - 22
+            for _, item in ipairs(items) do
+                if kind.key == "fix" then
+                    local dot = T.Icon(parent:CreateTexture(nil, "ARTWORK"), "Circle.tga", "accent")
+                    dot:SetSize(5, 5)
+                    dot:SetPoint("TOPLEFT", x + 6, y - 5)
+                    local line = UI.FontString(parent, "GameFontHighlightSmall")
+                    line:SetPoint("TOPLEFT", x + 18, y)
+                    line:SetWidth(width - 22)
+                    line:SetJustifyH("LEFT")
+                    if line.SetWordWrap then line:SetWordWrap(true) end
+                    line:SetText(tag(item) .. (item.title and (item.title .. ": ") or "") .. item.text)
+                    y = y - math.max(14, line:GetStringHeight() or 0) - 7
+                else
+                    local pageTitle = item.page and opts.pageTitle and opts.pageTitle(item.page)
+                    local row = CreateFrame("Button", nil, parent)
+                    row:SetPoint("TOPLEFT", x, y)
+                    local hover = T.Fill(row:CreateTexture(nil, "BACKGROUND"), "hover")
+                    hover:SetAllPoints()
+                    hover:Hide()
+                    local textWidth = width - 20 - (pageTitle and 150 or 0)
+                    local head = UI.FontString(row, "GameFontHighlight")
+                    head:SetPoint("TOPLEFT", 10, -7)
+                    head:SetWidth(textWidth)
+                    head:SetJustifyH("LEFT")
+                    if head.SetWordWrap then head:SetWordWrap(true) end
+                    head:SetText(tag(item) .. (item.title or item.text))
+                    local height = 7 + math.max(14, head:GetStringHeight() or 0)
+                    if item.title then
+                        local body = UI.FontString(row, "GameFontHighlightSmall", "muted")
+                        body:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -3)
+                        body:SetWidth(textWidth)
+                        body:SetJustifyH("LEFT")
+                        if body.SetWordWrap then body:SetWordWrap(true) end
+                        body:SetText(item.text)
+                        height = height + 3 + math.max(12, body:GetStringHeight() or 0)
+                    end
+                    height = height + 8
+                    row:SetSize(width, height)
+                    if pageTitle then
+                        local page = item.page
+                        local link = UI.Link(row, "Open " .. pageTitle, function() opts.openPage(page) end)
+                        link:SetPoint("TOPRIGHT", -10, -8)
+                        row.link = link
+                        row:SetScript("OnEnter", function() hover:Show(); link:GetScript("OnEnter")() end)
+                        row:SetScript("OnLeave", function() hover:Hide(); link:GetScript("OnLeave")() end)
+                        row:SetScript("OnClick", function() opts.openPage(page) end)
+                    end
+                    y = y - height - 2
+                end
+            end
+        end
+    end
+    return y
+end
+
 -- ── The window ─────────────────────────────────────────────────────────────
 
 function WhatsNew:Create()
@@ -313,24 +514,6 @@ function WhatsNew:Create()
     return frame
 end
 
--- Items in order, with those sharing a page gathered under that page's first
--- appearance, so each page gets one button.
-local function groups(items)
-    local list, byPage = {}, {}
-    for _, item in ipairs(items) do
-        local text = type(item) == "table" and item.text or item
-        local page = type(item) == "table" and item.page or nil
-        local group = page and byPage[page]
-        if not group then
-            group = { page = page, lines = {} }
-            list[#list + 1] = group
-            if page then byPage[page] = group end
-        end
-        group.lines[#group.lines + 1] = tostring(text or "")
-    end
-    return list
-end
-
 -- A fresh content frame per showing: it's rare, and the list differs.
 local function fill(frame, sections)
     if frame.content then frame.content:Hide() end
@@ -355,34 +538,21 @@ local function fill(frame, sections)
             y = y - 26
         end
         for index, release in ipairs(section.releases) do
-            if index > 1 then y = y - 10 end
-            local heading = UI.FontString(content, "GameFontNormal", "accent")
+            if index > 1 then y = y - 14 end
+            local heading = T.Font(UI.FontString(content, "GameFontHighlight", "text"), 15)
             heading:SetPoint("TOPLEFT", 4, y)
-            heading:SetText("Version " .. tostring(WhatsNew.Base(release.version)))
-            y = y - 20
-            for _, group in ipairs(groups(release.items)) do
-                for _, text in ipairs(group.lines) do
-                    local line = UI.FontString(content, "GameFontHighlightSmall")
-                    line:SetPoint("TOPLEFT", 12, y)
-                    line:SetWidth(width - 16)
-                    line:SetJustifyH("LEFT")
-                    if line.SetWordWrap then line:SetWordWrap(true) end
-                    line:SetText("- " .. text)
-                    y = y - math.max(14, line:GetStringHeight()) - 6
-                end
-                local title = group.page and section.pageTitle(group.page)
-                if title then
-                    local button = UI.Button(content, 150, 20)
-                    button:SetPoint("TOPLEFT", 20, y)
-                    button:SetText("Open " .. title)
-                    local page = group.page
-                    button:SetScript("OnClick", function()
-                        frame:Hide()
-                        section.openPage(page)
-                    end)
-                    y = y - 28
-                end
-            end
+            heading:SetText(tostring(section.name) .. " " .. tostring(WhatsNew.Base(release.version)))
+            local summary = UI.FontString(content, "GameFontHighlightSmall", "muted")
+            summary:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -4)
+            summary:SetText(WhatsNew.Summary(release))
+            y = y - 44
+            y = WhatsNew.DrawItems(content, 0, y, width, release, {
+                pageTitle = section.pageTitle,
+                openPage = function(page)
+                    frame:Hide()
+                    section.openPage(page)
+                end,
+            })
         end
     end
     content:SetHeight(math.max(1, -y))

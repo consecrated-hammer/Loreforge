@@ -15,21 +15,32 @@ Theme.registry = {
     modern = {
         label = "Modern",
         available = true,
+        -- Warm charcoal with a forge-gold accent.
         colours = {
-            outer = { 0.043, 0.051, 0.063, 0.98 },
-            rail = { 0.071, 0.082, 0.102, 1 },
-            content = { 0.086, 0.098, 0.118, 1 },
-            raised = { 0.110, 0.125, 0.153, 1 },
-            edge = { 0.169, 0.192, 0.227, 1 },
-            menu = { 0.020, 0.027, 0.039, 1 },
-            menuEdge = { 0.337, 0.416, 0.522, 1 },
-            menuActive = { 0.075, 0.125, 0.190, 1 },
-            accent = { 0.298, 0.604, 0.478, 1 },
-            selected = { 0.247, 0.604, 0.925, 1 },
-            muted = { 0.553, 0.584, 0.639, 1 },
-            section = { 0.82, 0.85, 0.90, 1 },
-            text = { 1, 1, 1, 1 },
-            danger = { 0.788, 0.337, 0.306, 1 },
+            outer = { 0.063, 0.059, 0.055, 0.98 },
+            rail = { 0.090, 0.082, 0.075, 1 },
+            content = { 0.118, 0.110, 0.102, 1 },
+            header = { 0.150, 0.137, 0.125, 1 },
+            raised = { 0.157, 0.145, 0.133, 1 },
+            -- Alternate setting rows; quiet enough to read as one block.
+            stripe = { 0.141, 0.131, 0.121, 1 },
+            hover = { 0.196, 0.180, 0.161, 1 },
+            edge = { 0.235, 0.216, 0.192, 1 },
+            field = { 0.078, 0.073, 0.067, 1 },
+            menu = { 0.071, 0.067, 0.059, 1 },
+            menuEdge = { 0.400, 0.349, 0.282, 1 },
+            menuActive = { 0.220, 0.188, 0.141, 1 },
+            accent = { 0.918, 0.733, 0.420, 1 },
+            selected = { 0.918, 0.733, 0.420, 1 },
+            link = { 0.918, 0.733, 0.420, 1 },
+            linkHover = { 1, 0.882, 0.620, 1 },
+            muted = { 0.612, 0.584, 0.545, 1 },
+            section = { 0.690, 0.651, 0.596, 1 },
+            text = { 0.957, 0.937, 0.906, 1 },
+            danger = { 0.851, 0.380, 0.329, 1 },
+            -- Client tags in What's new.
+            retail = { 0.427, 0.667, 0.949, 1 },
+            forever = { 0.918, 0.733, 0.420, 1 },
             -- Warm parchment for whimsical copy such as About tips.
             flavour = { 0.93, 0.85, 0.66, 1 },
             transparent = { 0, 0, 0, 0 },
@@ -57,6 +68,14 @@ Theme.registry = {
             section = { 1, 0.82, 0, 1 },
             text = { 1, 1, 1, 1 },
             danger = { 1, 0.32, 0.26, 1 },
+            header = { 0.06, 0.06, 0.06, 0.92 },
+            stripe = { 0.08, 0.08, 0.08, 0.6 },
+            hover = { 0.20, 0.16, 0.05, 0.9 },
+            field = { 0.04, 0.04, 0.04, 0.96 },
+            link = { 1, 0.82, 0, 1 },
+            linkHover = { 1, 0.93, 0.5, 1 },
+            retail = { 0.427, 0.667, 0.949, 1 },
+            forever = { 1, 0.82, 0, 1 },
             flavour = { 0.93, 0.85, 0.66, 1 },
             transparent = { 0, 0, 0, 0 },
         },
@@ -133,6 +152,27 @@ end
 
 function Theme.Text(fontString, role)
     fontString:SetTextColor(Theme.Unpack(role or "text"))
+    return fontString
+end
+
+-- HammerCore's own textures, vendored with it into Libs/HammerCore/Textures.
+-- They're white so any role can tint them.
+function Theme.Media(name)
+    return "Interface\\AddOns\\" .. tostring(addonName) .. "\\Libs\\HammerCore\\Textures\\" .. name
+end
+
+-- A tinted HammerCore texture.
+function Theme.Icon(texture, name, role)
+    texture:SetTexture(Theme.Media(name))
+    if role and texture.SetVertexColor then texture:SetVertexColor(Theme.Unpack(role)) end
+    return texture
+end
+
+-- Resizes a font string while keeping its template's face.
+function Theme.Font(fontString, size, flags)
+    local face = fontString.GetFont and fontString:GetFont()
+    face = face or STANDARD_TEXT_FONT
+    if face and fontString.SetFont then fontString:SetFont(face, size, flags or "") end
     return fontString
 end
 

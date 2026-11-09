@@ -21,8 +21,8 @@ remains private. Party members with the new build can choose **Join quiz** or
 chat notice. `/lf` reopens an unanswered invitation. The host sees the joined count and clicks **Start game** when
 ready. **Close lobby** cancels an invitation without starting. A player can decline the addon UI and still answer in Party chat.
 
-Setup exposes **Countdown before starting** and **Start countdown** outside
-Advanced options. The countdown defaults to 30 seconds and can be set from
+Setup has **Countdown before starting** and **Start countdown** on its
+**Game** tab. The countdown defaults to 30 seconds and can be set from
 5 to 60 seconds or disabled. An old unmarked 10-second default upgrades once
 to 30; other saved durations and later choices are preserved. The full delay
 begins after the opening chat notice is confirmed. Invitations repeat during

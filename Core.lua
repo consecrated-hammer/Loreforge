@@ -6,8 +6,10 @@ local function partyReport()
     return "\n\n" .. (ok and report or ("Party diagnostics failed: " .. tostring(report)))
 end
 ns.DEFAULTS = { rounds = 1, perRound = 15, seconds = 20, channel = "PARTY", difficulty = "mixed", replayRecords = true,
-    autoMode = false, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 30, hostParticipates = true,
-    compactChoices = false, hostAutoMinimise = true, questionArt = true, roundIntro = true, sound = true, hostScale = 1, playerScale = 1 }
+    autoMode = true, questionGap = 5, idleLimit = 3, readyCheck = true, readySeconds = 30, hostParticipates = true,
+    compactChoices = false, hostAutoMinimise = true, questionArt = true, roundIntro = true, sound = true, hostScale = 1, playerScale = 1,
+    windowOpacity = 1, storybook = true, livelyAnimations = true, tavernBanter = true, streakFlair = true,
+    setupTab = "game" }
 -- Setup ranges. The engine and Party protocol accept wider values from older
 -- clients; the setup controls offer what makes a sensible game.
 ns.LIMITS = { rounds = { 1, 10, 1 }, perRound = { 1, 50, 1 }, seconds = { 5, 60, 5 }, questionGap = { 3, 30, 1 },
@@ -48,6 +50,26 @@ function ns.OpenMain(tab)
         and ns.Party.client.model.state~="stopped" and ns.Player then
         ns.Party.viewHistory=false;ns.Player.Render(ns.Party.client.model);ns.Player.Show()
     else ns.OpenHost(tab) end
+end
+
+-- Window opacity: the body fill of every Loreforge window, solid by default.
+-- Snaps to 5% steps from 50% to 100%; nil for anything unreadable.
+local MIN_WINDOW_OPACITY, MAX_WINDOW_OPACITY = 0.5, 1
+local function windowOpacity(value)
+    value = tonumber(value)
+    if not value or value ~= value then return nil end
+    value = math.floor(value * 20 + 0.5) / 20
+    return math.max(MIN_WINDOW_OPACITY, math.min(MAX_WINDOW_OPACITY, value))
+end
+function ns.GetWindowOpacity()
+    return windowOpacity(ns.db and ns.db.windowOpacity) or ns.DEFAULTS.windowOpacity
+end
+function ns.SetWindowOpacity(value)
+    value = windowOpacity(value)
+    if not ns.db or not value then return false end
+    ns.db.windowOpacity = value
+    if ns.ApplyWindowOpacity then ns.ApplyWindowOpacity() end
+    return true
 end
 
 -- Short interface sounds, all optional. Kit IDs are shared by Retail and
@@ -91,6 +113,11 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     end
     ns.db.themedRoundsMigrated = true
     for key, value in pairs(ns.DEFAULTS) do if type(ns.db[key]) ~= type(value) then ns.db[key] = value end end
+    -- Auto-advance became the default in 1.1.0; saves from before it held
+    -- the old default (off), so turn it on once.
+    if ns.db.autoModeVersion ~= 1 then
+        ns.db.autoMode, ns.db.autoModeVersion = true, 1
+    end
     -- Restore the separate-choice layout on upgrade from the compact default.
     if ns.db.choiceLayoutVersion ~= 1 then
         ns.db.compactChoices, ns.db.choiceLayoutVersion = false, 1
@@ -114,6 +141,7 @@ loader:SetScript("OnEvent", function(self, _, loaded)
         local value = ns.db[key]
         if value ~= value or value < 0.7 or value > 1.5 then ns.db[key] = 1 end
     end
+    ns.db.windowOpacity = windowOpacity(ns.db.windowOpacity) or ns.DEFAULTS.windowOpacity
     if type(ns.db.games) ~= "table" then ns.db.games = {} end
     if type(ns.db.activeGame) ~= "table" then ns.db.activeGame = nil end
     if not ns.Game.CHANNELS[ns.db.channel] then ns.db.channel = "PARTY" end

@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.1.0] - 2026-11-09
+
+### Changed
+
+- **Auto-advance is on by default**, and switches on once for existing
+  saves too. Prefer host-paced? Turn it off under Pacing & chat.
+- **A fresh coat of paint.** Settings move to the new Consecrated Hammer look:
+  a cleaner header, switches, icons on every heading, page resets and a
+  What's new page with the release history. The main window and the player
+  window match it, solid by default. **Window opacity** on Interface lets the
+  game show through if you like.
+- **Roomier main window.** It's wider and a bit taller, with Play, History and
+  Hall of Fame as tabs across the top. Game setup is on its own tabs too:
+  **Game**, **Categories** and **Pacing & chat**, so long category names fit
+  with their counts and Advanced options is gone. The Party lobby gets a tab
+  while it's open, and setup reopens on the tab you used last.
+- **Answer keys in settings.** A Key Bindings page binds Answer 1 to 4
+  directly. Press a key, done, no rummaging through the game's own menu.
+- **Support links.** CurseForge, Discord and Buy me a coffee at the bottom of
+  the settings window. Hide them on Visibility.
+- **A bit more fun.** Storybook titles and parchment, numbered answer badges,
+  answers that pop, sparkle or wobble, tavern banter after each question (only
+  you see it, the barkeep is discreet) and a flame beside your score from 3 in
+  a row. Tone any of it down under **Flair** on Interface.
+
+### Fixed
+
+- **Stop game from the quiz window.** Solo practice and hosts playing along had
+  to dig out the minimised main window to stop. Now it's right there.
+- **Shorter names.** Players on your realm show without the realm. Forever's
+  realm names were turning name tags into small essays.
+
 ## [1.0.0] - 2026-11-01
 
 - Every category has its own painting beside the question, with a bell for

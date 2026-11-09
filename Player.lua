@@ -14,8 +14,9 @@ ns.Player = Player
 
 local WIDTH, PAD, MAX_ROWS, MAX_HISTORY = 460, 16, 5, 20
 local MAX_ROUNDS, ROUND_COLUMNS, MAX_ROUND_ROWS = 20, 5, 10
--- The body scrolls between a fixed title bar and timer, and a fixed footer of
--- actions.  The scroll bar sits in the right-hand margin.
+-- The body scrolls between a fixed header bar and timer, and a fixed footer
+-- of actions.  The scroll bar sits in the right-hand margin.  HEADER grows
+-- with the theme's edge when the window is built.
 local HEADER, FOOTER, MIN_BODY, MIN_HEIGHT = 64, 48, 120, 340
 local INNER = WIDTH - PAD * 2
 local NO_ART = { invitation = true, joining = true, history = true, stopped = true }
@@ -129,49 +130,38 @@ local function create()
     f:SetClampedToScreen(true)
     f:SetMovable(true)
     f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    f:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        -- An invitation sits at its own spot; only the game window's position is kept.
-        if not Player.anchoredInvite then savePosition(self) end
-    end)
-    T.Surface(f, "outer", "edge")
+    -- An invitation sits at its own spot; only the game window's position is kept.
+    ns.WindowChrome(f, { title = "Loreforge", icon = ns.Flair.QUEST, close = function() Player.Hide() end,
+        moved = function(self) if not Player.anchoredInvite then savePosition(self) end end })
+    f.hide = f.closeButton
+    UI.AttachHint(f.hide, "Hide", "You stay in the game. Click the Loreforge quiz button to come back.")
+    local inset = f.inset
+    -- The scrolling body starts below the header bar and the timer.
+    HEADER = inset + ns.WINDOW_BAR + 23
     local db = ns.db or {}
     f:SetScale(clampScale(db.playerScale))
     anchor(f, false)
 
-    -- Below the title and close button, which sit on top of the painting.
+    -- The painting fills the panel below the header bar.
     f.art = f:CreateTexture(nil, "BORDER")
-    f.introBand = f:CreateTexture(nil, "BORDER", nil, 1)
-    f.introBand:SetColorTexture(0, 0, 0, 0.7)
-    f.introBand:SetPoint("BOTTOMLEFT", 1, 1)
-    f.introBand:SetPoint("BOTTOMRIGHT", -1, 1)
+    f.introBand = T.Fill(f:CreateTexture(nil, "BORDER", nil, 1), "field")
+    f.introBand:SetAlpha(0.8)
+    f.introBand:SetPoint("BOTTOMLEFT", inset, inset)
+    f.introBand:SetPoint("BOTTOMRIGHT", -inset, inset)
     f.introBand:SetHeight(84)
     f.introRound = UI.FontString(f, "GameFontNormalHuge", "flavour")
     f.introRound:SetPoint("BOTTOM", 0, 46)
     f.introTheme = UI.FontString(f, "GameFontHighlightLarge", "text")
     f.introTheme:SetPoint("BOTTOM", 0, 20)
-    f.icon = f:CreateTexture(nil, "ARTWORK")
-    f.icon:SetSize(20, 20)
-    f.icon:SetPoint("TOPLEFT", PAD, -14)
-    f.icon:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
-    f.title = UI.FontString(f, "GameFontNormalLarge")
-    f.title:SetPoint("LEFT", f.icon, "RIGHT", 6, 0)
-    f.title:SetText("Loreforge")
-    f.hide = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-    f.hide:SetPoint("TOPRIGHT", -5, -5)
-    f.hide:SetScript("OnClick", function() Player.Hide() end)
-    UI.AttachHint(f.hide, "Hide", "You stay in the game. Click the Loreforge quiz button to come back.")
-    f.position = UI.FontString(f, "GameFontHighlightSmall", "muted")
-    f.position:SetPoint("TOPRIGHT", -40, -18)
+    f.position = UI.FontString(f.header, "GameFontHighlightSmall", "muted")
+    f.position:SetPoint("RIGHT", f.hide, "LEFT", -10, 0)
     f.position:SetWidth(300)
     f.position:SetJustifyH("RIGHT")
     if f.position.SetWordWrap then f.position:SetWordWrap(false) end
 
     f.timer = CreateFrame("Frame", nil, f)
     f.timer:SetSize(INNER, 4)
-    f.timer:SetPoint("TOPLEFT", PAD, -46)
+    f.timer:SetPoint("TOPLEFT", PAD, -(inset + ns.WINDOW_BAR + 9))
     T.Fill(f.timer:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
     f.timer.fill = T.Fill(f.timer:CreateTexture(nil, "ARTWORK"), "selected")
     f.timer.fill:SetPoint("TOPLEFT")
@@ -188,11 +178,11 @@ local function create()
     f.scroll:SetScript("OnMouseWheel", function(_, delta) Player.Scroll(delta) end)
     f.bar = CreateFrame("Slider", nil, f)
     f.bar:SetOrientation("VERTICAL")
-    f.bar:SetSize(6, MIN_BODY)
-    f.bar:SetPoint("TOPLEFT", f.scroll, "TOPRIGHT", 5, 0)
-    T.Fill(f.bar:CreateTexture(nil, "BACKGROUND"), "rail"):SetAllPoints()
-    local thumb = T.Fill(f.bar:CreateTexture(nil, "ARTWORK"), "selected")
-    thumb:SetSize(6, 28)
+    f.bar:SetSize(4, MIN_BODY)
+    f.bar:SetPoint("TOPLEFT", f.scroll, "TOPRIGHT", 6, 0)
+    T.Fill(f.bar:CreateTexture(nil, "BACKGROUND"), "edge"):SetAllPoints()
+    local thumb = T.Fill(f.bar:CreateTexture(nil, "ARTWORK"), "accent")
+    thumb:SetSize(4, 36)
     if f.bar.SetThumbTexture then f.bar:SetThumbTexture(thumb) end
     f.bar:SetScript("OnValueChanged", function(_, value)
         if not Player.syncingBar then Player.ScrollTo(value) end
@@ -208,7 +198,17 @@ local function create()
     for i = 1, 4 do f.answers[i] = answerButton(body, i) end
     f.feedback = label(body, "GameFontNormal", "flavour", INNER)
     f.feedback:SetJustifyH("CENTER")
+    -- Tavern banter: one local quip under the result, never sent anywhere.
+    f.quip = label(body, "GameFontHighlightSmall", "flavour", INNER)
+    f.quip:SetJustifyH("CENTER")
+    f.cheer = label(body, "GameFontHighlight", "flavour", INNER)
+    f.trophy = body:CreateTexture(nil, "ARTWORK")
+    f.trophy:SetSize(30, 30)
+    if f.trophy.SetTexCoord then f.trophy:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    f.trophy:SetTexture(ns.Flair.TROPHY)
+    f.trophy:Hide()
     f.you = label(body, "GameFontHighlightSmall", "muted", INNER)
+    f.streak = ns.Flair.StreakBadge(f, body)
     f.standTitle = label(body, "GameFontNormal", "accent", INNER)
     f.rows = {}
     for i = 1, MAX_ROWS + 1 do f.rows[i] = standingRow(body) end
@@ -238,13 +238,21 @@ local function create()
     for i = 1, MAX_ROUND_ROWS + 1 do f.roundRows[i] = standingRow(body) end
     f.primary = button(f, 170, function() Player.Primary() end, "primary")
     f.secondary = button(f, 120, function() Player.Secondary() end)
-    f.leave = button(f, 90, function() Player.Leave() end, "danger")
+    -- Leave for a joined player; Stop game when it's your own game (solo
+    -- practice or hosting while playing along), at any point.
+    f.leave = button(f, 100, function()
+        if Player.model and Player.model.handlers and ns.RequestStop then ns.RequestStop() else Player.Leave() end
+    end, "danger")
     f.leave:SetText("Leave")
-    UI.AttachHint(f.leave, "Leave", "Leave the game. Points you've scored stay on the board.")
+    UI.AttachHint(f.leave, function() return f.leave:GetText() end, function()
+        return Player.model and Player.model.handlers and "End this game. Scores so far won't be saved."
+            or "Leave the game. Points you've scored stay on the board."
+    end)
 
     -- Hiding by any route (Hide, Escape) keeps the player joined and leaves
     -- the restore button; only Player.Show brings the window back.
-    f:SetScript("OnHide", function()
+    f:SetScript("OnHide", function(self)
+        ns.Flair.StopAll(self)
         if Player.drawing then return end
         local model = Player.model
         Player.hiddenFor = model and model.id
@@ -318,9 +326,9 @@ local function remaining(model)
 end
 
 local STATUS = {
-    invitation = function(m) return (m.host or "The host") .. " invited you to a quiz." end,
-    joining = function(m) return "Joining. Waiting for " .. (m.host or "the host") .. " to confirm." end,
-    lobby = function(m) return "You're in. Waiting for " .. (m.host or "the host") .. " to start." end,
+    invitation = function(m) return (m.host and ns.DisplayName(m.host) or "The host") .. " invited you to a quiz." end,
+    joining = function(m) return "Joining. Waiting for " .. (m.host and ns.DisplayName(m.host) or "the host") .. " to confirm." end,
+    lobby = function(m) return "You're in. Waiting for " .. (m.host and ns.DisplayName(m.host) or "the host") .. " to start." end,
     ready = function(m)
         if (m.remaining or 0)>0 and (remaining(m) or 0)<=0 then return "Countdown complete. Waiting for the first question." end
         if m.ready then return "You're ready. Waiting for everyone else." end
@@ -338,9 +346,9 @@ local STATUS = {
         return m.hostPaced and "The host will start the next question." or "Waiting for the next question."
     end,
     paused = function() return "The game is paused." end,
-    finished = function(m) return "Final results from " .. (m.host or "the host") .. "." end,
-    stopped = function(m) return (m.host or "The host") .. " stopped the game." end,
-    disconnected = function(m) return "Lost contact with " .. (m.host or "the host") .. "." end,
+    finished = function(m) return "Final results from " .. (m.host and ns.DisplayName(m.host) or "the host") .. "." end,
+    stopped = function(m) return (m.host and ns.DisplayName(m.host) or "The host") .. " stopped the game." end,
+    disconnected = function(m) return "Lost contact with " .. (m.host and ns.DisplayName(m.host) or "the host") .. "." end,
     history = function() return "Your games" end,
 }
 
@@ -405,7 +413,7 @@ local function drawRows(f, model)
         local row = shown[i]
         widget:SetShown(row ~= nil)
         if row then
-            local name = text(row.name) ~= "" and row.name or tostring(row.key or "?")
+            local name = ns.DisplayName(text(row.name) ~= "" and row.name or tostring(row.key or "?"))
             local rank = row.rank and (row.rank .. ".  ") or ""
             if lobby then rank = "" end
             local suffix = ""
@@ -435,7 +443,6 @@ local function drawAnswers(f, model)
     local open = state == "accepting" and (left == nil or left > 0)
     local correct = REVEALED[state] and tonumber(model.correct) or nil
     for i, b in ipairs(f.answers) do
-        b:SetText(choiceText(model, i))
         local border, role = "edge", "text"
         if correct then
             if i == correct then border = "accent"
@@ -446,6 +453,10 @@ local function drawAnswers(f, model)
         elseif not open then
             role = "muted"
         end
+        -- Storybook's 1 to 4 badges; the text keeps clear of them both sides.
+        local badged = ns.Flair.AnswerBadge(b, i, role == "muted" and "muted" or border)
+        b.Text:SetWidth(badged and INNER - 76 or INNER - 24)
+        b:SetText(choiceText(model, i))
         T.Border(b, border)
         T.Text(b.Text, role)
         b:SetEnabled(open)
@@ -480,7 +491,7 @@ local function winners(model)
     if best > 0 then
         for _, row in ipairs(rows) do
             if (tonumber(row.total) or 0) == best then
-                names[#names + 1] = text(row.name) ~= "" and row.name or tostring(row.key or "?")
+                names[#names + 1] = ns.DisplayName(text(row.name) ~= "" and row.name or tostring(row.key or "?"))
             end
         end
     end
@@ -530,7 +541,9 @@ local function youText(model)
     local me = myRow(model)
     if not me then return model.joined and "You: no points yet" or "" end
     local parts = { "You: " .. plural(tonumber(me.total) or 0, "point") }
-    if (tonumber(me.streak) or 0) >= 1 and model.state ~= "finished" then parts[#parts + 1] = "streak " .. me.streak end
+    -- Streak flair shows the count beside the line instead from 3 in a row.
+    local flame = ns.Flair.On("streak") and ns.Flair.StreakTier(me.streak) > 0
+    if (tonumber(me.streak) or 0) >= 1 and model.state ~= "finished" and not flame then parts[#parts + 1] = "streak " .. me.streak end
     if me.rank then parts[#parts + 1] = ordinal(tonumber(me.rank) or 0) end
     if model.state == "accepting" and model.answeredCount then parts[#parts + 1] = model.answeredCount .. " answered" end
     return table.concat(parts, " · ")
@@ -539,7 +552,7 @@ end
 local function historyText(entry)
     local date = entry.date
     if type(date) == "number" and _G.date then date = _G.date("%d %b %H:%M", date) end
-    local parts = { tostring(date or "?"), text(entry.host) ~= "" and entry.host or "Unknown host" }
+    local parts = { tostring(date or "?"), text(entry.host) ~= "" and ns.DisplayName(entry.host) or "Unknown host" }
     if entry.rank then parts[#parts + 1] = ordinal(tonumber(entry.rank) or 0) end
     if entry.score then
         parts[#parts + 1] = entry.score .. (entry.totalQuestions and ("/" .. entry.totalQuestions) or "") .. " correct"
@@ -576,7 +589,7 @@ local function drawRoundRows(f, model, entry)
                 or tostring(row.key or "?")
             local mine = row.key and row.key == model.me
             widget.name:SetText((row == pinned and "... " or "") .. (row.rank and (row.rank .. ".  ") or "")
-                .. name .. (mine and " (you)" or ""))
+                .. ns.DisplayName(name) .. (mine and " (you)" or ""))
             T.Text(widget.name, mine and "selected" or "text")
             local parts = { "+" .. (tonumber(row.round) or 0) .. " this round" }
             if row.total then parts[#parts + 1] = "total " .. row.total end
@@ -643,12 +656,27 @@ function Player.Draw()
     end
 
     f.position:SetText((state == "history" or state == "round_intro") and "" or positionLine(model))
+    local story = ns.Flair.On("storybook")
+    ns.Flair.Typeface(f.headline, story, 24, "accent", "flavour")
+    ns.Flair.Typeface(f.question, story, 16, "flavour", "text")
     local headline = headlineText(model)
     f.headline:SetText(headline)
     add(f.headline, headline ~= "", 8)
     local winner = winnerText(model)
     f.winner:SetText(winner)
     add(f.winner, winner ~= "", 6)
+    local champions = state == "finished" and not (model.resultsPending and #(type(model.rows) == "table" and model.rows or {}) == 0)
+        and #winners(model) or nil
+    local cheer = champions and ns.Flair.Quip(champions == 0 and "none" or champions > 1 and "tie" or "winner", model.id) or ""
+    f.cheer:SetText(cheer)
+    add(f.cheer, cheer ~= "", 8)
+    -- The winner's crown beside the heading.
+    local crowned = (champions or 0) > 0 and (story or ns.Flair.On("lively"))
+    f.trophy:SetShown(crowned)
+    if crowned then
+        f.trophy:ClearAllPoints()
+        f.trophy:SetPoint("LEFT", f.headline, "LEFT", math.ceil(f.headline.GetStringWidth and f.headline:GetStringWidth() or 160) + 10, 0)
+    end
     -- On the quiz card the feedback line speaks for the state; between
     -- questions the status follows the score line instead.
     local status = (not QUESTION[state] or state == "revealing") and STATUS[state] and STATUS[state](model) or ""
@@ -679,12 +707,28 @@ function Player.Draw()
     for _, b in ipairs(f.answers) do add(b, hasChoices, 6, b:GetHeight()) end
     f.feedback:SetText(feedback)
     add(f.feedback, feedback ~= "", 10)
+    local quip = ""
+    if hasChoices and REVEALED[state] and tonumber(model.correct) and (chosen(model) or model.joined) then
+        local me = myRow(model)
+        local bucket = ns.Flair.RevealBucket(chosen(model), tonumber(model.correct), me and me.streak)
+        quip = bucket and ns.Flair.Quip(bucket, tostring(model.id) .. ":" .. tostring(model.index) .. ":" .. tostring(model.attempt),
+            me and me.streak) or ""
+    end
+    f.quip:SetText(quip)
+    add(f.quip, quip ~= "", 10)
 
     local you = (ACTIVE[state] and state ~= "joining" or finished) and youText(model) or ""
     f.you:SetText(you)
     if f.you.SetFontObject then f.you:SetFontObject(finished and "GameFontHighlight" or "GameFontHighlightSmall") end
     T.Text(f.you, finished and "selected" or "muted")
     add(f.you, you ~= "", finished and 16 or 12)
+    -- Streak flair: a flame beside the score line from 3 in a row.
+    local me = you ~= "" and not finished and myRow(model)
+    f.streak:SetStreak(me and me.streak or 0)
+    if f.streak:IsShown() then
+        f.streak:ClearAllPoints()
+        f.streak:SetPoint("LEFT", f.you, "LEFT", math.ceil(f.you.GetStringWidth and f.you:GetStringWidth() or 200) + 8, 0)
+    end
     add(f.status, status ~= "" and (state == "between" or state == "revealing"), 12)
 
     local history = state == "history"
@@ -738,7 +782,9 @@ function Player.Draw()
     end
     f.secondary:SetShown(secondary ~= nil)
     if secondary then f.secondary:SetText(secondary) end
-    f.leave:SetShown(model.joined and ACTIVE[state] and not QUESTION[state] and not model.handlers or false)
+    local hosting = model.handlers ~= nil
+    f.leave:SetText(hosting and "Stop game" or "Leave")
+    f.leave:SetShown(ACTIVE[state] and (hosting or (model.joined and not QUESTION[state])) or false)
     local content = math.max(1, -layout(f.body, items))
     f.primary:ClearAllPoints(); f.primary:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD, 16)
     f.secondary:ClearAllPoints()
@@ -771,31 +817,32 @@ function Player.ArtPath(model)
     return "Interface\\AddOns\\Loreforge\\Textures\\theme-" .. key .. ".tga"
 end
 
--- The square paintings are never cropped: the window widens by the panel's full
--- height. A window too tall for the screen's width keeps a smaller square, in
+-- The square paintings are never cropped: the window widens by the height of
+-- the panel below the header bar. A window too tall for the screen's width keeps a smaller square, in
 -- the middle of the panel. A round intro centres it across the whole window.
 function Player.DrawArt(f, model, path, intro)
-    local height = f:GetHeight() - 2
+    local inset, top = f.inset or 1, (f.inset or 1) + ns.WINDOW_BAR
+    local height = f:GetHeight() - top - inset
     local side = height
     if path then
         local screen = UIParent and UIParent.GetWidth and UIParent:GetWidth() or 0
         local scale = f:GetScale() or 1
         if screen and screen > 0 and scale > 0 then
-            side = math.max(1, math.min(side, math.floor(screen * 0.95 / scale) - WIDTH - 2))
+            side = math.max(1, math.min(side, math.floor(screen * 0.95 / scale) - WIDTH - inset * 2))
         end
     end
-    f:SetWidth(path and WIDTH + side + 2 or WIDTH)
-    local rightGap = path and side + 1 or 0
-    f.position:ClearAllPoints()
-    f.position:SetPoint("TOPRIGHT", path and -(rightGap + PAD) or -40, -18)
+    f:SetWidth(path and WIDTH + side + inset * 2 or WIDTH)
+    local rightGap = path and side + inset or 0
     f.leave:ClearAllPoints(); f.leave:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -(PAD + rightGap), 16)
     f.art:SetShown(path ~= nil)
     f.art:ClearAllPoints()
     if path then
         f.art:SetTexture(path)
         f.art:SetSize(side, side)
-        if intro then f.art:SetPoint("CENTER")
-        else f.art:SetPoint("RIGHT", -1, 0) end
+        -- Centred in the panel below the bar: across the window for an intro,
+        -- in the right-hand panel beside a question.
+        if intro then f.art:SetPoint("CENTER", f, "CENTER", 0, -(top - inset) / 2)
+        else f.art:SetPoint("RIGHT", f, "RIGHT", -inset, -(top - inset) / 2) end
         f.art:SetTexCoord(0, 1, 0, 1)
     end
     f.introBand:SetShown(intro)
@@ -861,8 +908,13 @@ end
 
 function Player.UpdateTimer()
     local f, model = Player.frame, Player.model
-    if not (f and model and (model.state == "accepting" or model.state == "ready") and f.timer:IsShown()) then return end
+    if not (f and model and (model.state == "accepting" or model.state == "ready") and f.timer:IsShown()) then
+        if f then ns.Flair.Pulse(f, f.timer, false) end
+        return
+    end
     local left = remaining(model) or 0
+    -- Lively animations: the bar pulses through the last five seconds.
+    ns.Flair.Pulse(f, f.timer, left > 0 and left <= 5)
     local seconds = type(model.config) == "table" and tonumber(model.state == "ready"
         and (model.config.readySeconds or (model.remaining or 0) / 1000) or model.config.seconds) or nil
     local fraction = seconds and seconds > 0 and math.min(1, left / seconds) or 0
@@ -983,10 +1035,32 @@ function Player.Render(model)
         if id and model.joined then Player.opened[id] = true end
         open()
         Player.Draw()
+        Player.Animate(model)
     else
         close()
     end
     Player.RefreshRestore()
+end
+
+-- Lively animations for a joined player, once per moment: stars on a correct
+-- answer, a shake on a wrong one and the winner's crown dropping in.
+function Player.Animate(model)
+    local f = Player.frame
+    if not (f and f:IsShown() and model.joined) then return end
+    local state = model.state
+    local correct = tonumber(model.correct)
+    if (state == "revealing" or state == "between") and correct and f.answers[correct] and f.answers[correct]:IsShown() then
+        local key = tostring(model.id) .. ":" .. tostring(model.index) .. ":" .. tostring(model.attempt)
+        if Player.animatedReveal ~= key then
+            Player.animatedReveal = key
+            local choice = chosen(model)
+            if choice == correct then ns.Flair.Sparkle(f, f.answers[correct])
+            elseif choice and f.answers[choice] then ns.Flair.Shake(f, f.answers[choice]) end
+        end
+    elseif state == "finished" and f.trophy:IsShown() and Player.animatedFinish ~= model.id then
+        Player.animatedFinish = model.id
+        ns.Flair.BounceIn(f, f.trophy)
+    end
 end
 
 -- Sound cues for a joined player: a new question, the reveal and the finish.
@@ -1039,6 +1113,7 @@ function Player.Choose(index)
     if left and left <= 0 then return end
     Player.clicked = { id = model.id, index = model.index, attempt = model.attempt, choice = index, at = now() }
     Player.Draw()
+    if Player.frame and Player.frame:IsShown() then ns.Flair.Pop(Player.frame, Player.frame.answers[index]) end
     local accepted=act("Answer", index)
     if accepted==false then
         Player.clicked=nil

@@ -36,7 +36,25 @@ Pages.visibility.build = function(panel, y)
             "Open a short list of new features the first time you log in after an update.", y,
             function() return HC.State().whatsNew ~= false end,
             function(value) HC.State().whatsNew = value end)
+        _, y = UI.Check(panel, "Mark unread What's new",
+            "Show a yellow ! beside What's new until you've opened it since the last update.", y,
+            function() return HC.State().whatsNewDot ~= false end,
+            function(value)
+                HC.State().whatsNewDot = value
+                HC.Settings:RefreshBadges()
+            end)
+        _, y = UI.Check(panel, "Turn-in sound",
+            "Play the quest turn-in sound when opening What's new clears the !.", y,
+            function() return HC.State().whatsNewSound ~= false end,
+            function(value) HC.State().whatsNewSound = value end)
     end
+    _, y = UI.Check(panel, "Show support links",
+        "Show the Discord and Buy me a coffee links at the bottom of this window.", y,
+        function() return HC.State().supportLinks ~= false end,
+        function(value)
+            HC.State().supportLinks = value
+            HC.Settings:RefreshFooter()
+        end)
     return y
 end
 
@@ -193,11 +211,10 @@ about.build = function(panel, y)
         field("Source", meta("X-Website") or ""),
     }, "\n"))
     if HC.WhatsNew and HC.WhatsNew.Enabled() then
-        local whatsNew = UI.Button(card, 110, 22)
-        whatsNew:SetPoint("TOPRIGHT", -14, -14)
-        whatsNew:SetText("What's new")
+        local whatsNew = UI.Link(card, "What's new", function() HC.Settings:Show(Pages.whatsNew.name) end,
+            "GameFontHighlight")
+        whatsNew:SetPoint("TOPRIGHT", -16, -16)
         UI.AttachHint(whatsNew, "What's new", "Show the highlights of recent releases.")
-        whatsNew:SetScript("OnClick", function() HC.WhatsNew:Show() end)
         Pages.whatsNewButton = whatsNew
     end
 
@@ -282,6 +299,146 @@ about.build = function(panel, y)
         y = y - 20
     end
     return y - 8
+end
+
+-- ── What's new ─────────────────────────────────────────────────────────────
+-- Every release's highlights, newest first, for addons that supply
+-- spec.whatsNew. Listed first under REFERENCE, with an unread "!" until the
+-- player opens it after an update (see Settings:RefreshBadges).
+
+local MONTHS = { "January", "February", "March", "April", "May", "June", "July",
+    "August", "September", "October", "November", "December" }
+
+local function longDate(date)
+    local year, month, day = tostring(date or ""):match("^(%d%d%d%d)%-(%d%d)%-(%d%d)$")
+    if not year then return nil end
+    return tonumber(day) .. " " .. (MONTHS[tonumber(month)] or month) .. " " .. year
+end
+Pages.LongDate = longDate
+
+Pages.whatsNew = { name = "What's new", group = "reference", standard = true,
+    description = "Highlights from each release. The changelog has every detail." }
+-- One release as a collapsible card.  The header gives the addon, version,
+-- a Latest tag, the release date and how many features and fixes it has;
+-- the body lists them (see WhatsNew.DrawItems).
+local CARD_HEADER = 56
+
+local function releaseCard(panel, release, newest, relayout)
+    local W = HC.WhatsNew
+    local width = UI.CONTENT_WIDTH
+    local card = CreateFrame("Frame", nil, panel, "BackdropTemplate")
+    card:SetWidth(width)
+    T.Surface(card, "raised", "edge")
+    local head = CreateFrame("Button", nil, card)
+    head:SetPoint("TOPLEFT")
+    head:SetPoint("TOPRIGHT")
+    head:SetHeight(CARD_HEADER)
+    local hover = T.Fill(head:CreateTexture(nil, "BACKGROUND"), "hover")
+    hover:SetAllPoints()
+    hover:Hide()
+    local stripe = T.Fill(card:CreateTexture(nil, "ARTWORK"), "accent")
+    stripe:SetPoint("TOPLEFT")
+    stripe:SetPoint("BOTTOMLEFT")
+    stripe:SetWidth(3)
+    stripe:SetShown(newest)
+    local icon = head:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(24, 24)
+    icon:SetPoint("LEFT", 18, 0)
+    icon:SetTexture(HC.spec.icon)
+    local name = T.Font(UI.FontString(head, "GameFontHighlight", "text"), 15)
+    name:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, 4)
+    name:SetText(HC.name .. " " .. tostring(W.Base(release.version)))
+    local latest = UI.FontString(head, "GameFontNormalSmall", "accent")
+    latest:SetPoint("LEFT", name, "RIGHT", 10, 0)
+    latest:SetText(newest and "Latest" or "")
+    local summary = UI.FontString(head, "GameFontHighlightSmall", "muted")
+    summary:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -5)
+    local when = longDate(release.date)
+    summary:SetText(W.Summary(release) .. (when and ("     " .. when) or ""))
+    local chevron = T.Icon(head:CreateTexture(nil, "ARTWORK"), "Chevron.tga", "muted")
+    chevron:SetSize(14, 14)
+    chevron:SetPoint("RIGHT", -18, 0)
+
+    local body = CreateFrame("Frame", nil, card)
+    body:SetPoint("TOPLEFT", 0, -CARD_HEADER)
+    body:SetWidth(width)
+    local rule = T.Fill(body:CreateTexture(nil, "ARTWORK"), "edge")
+    rule:SetPoint("TOPLEFT", 1, 0)
+    rule:SetPoint("TOPRIGHT", -1, 0)
+    rule:SetHeight(1)
+    local bottom = W.DrawItems(body, 16, -14, width - 32, release, {
+        pageTitle = W.PageTitle,
+        openPage = function(page) HC.Settings:Show(page) end,
+    })
+    local bodyHeight = -bottom + 6
+    body:SetHeight(bodyHeight)
+
+    W.expanded = W.expanded or {}
+    local key = tostring(W.Base(release.version))
+    if W.expanded[key] == nil then W.expanded[key] = newest end
+    function card:Refresh()
+        local open = W.expanded[key]
+        body:SetShown(open)
+        if chevron.SetRotation then chevron:SetRotation(open and math.pi or 0) end
+        self:SetHeight(CARD_HEADER + (open and bodyHeight or 0))
+    end
+    head:SetScript("OnEnter", function() hover:Show(); chevron:SetVertexColor(T.Unpack("text")) end)
+    head:SetScript("OnLeave", function() hover:Hide(); chevron:SetVertexColor(T.Unpack("muted")) end)
+    head:SetScript("OnClick", function()
+        W.expanded[key] = not W.expanded[key]
+        relayout()
+    end)
+    card.head, card.body, card.release = head, body, release
+    card:Refresh()
+    return card
+end
+
+Pages.whatsNew.build = function(panel, top)
+    local hint = UI.FontString(panel, "GameFontHighlightSmall", "muted")
+    hint:SetPoint("TOPLEFT", UI.PAD + 2, top - 10)
+    hint:SetText("Click a highlight to go straight to its setting.")
+    local unread = UI.Switch(panel)
+    unread:SetSize(220, 28)
+    unread:SetPoint("TOPRIGHT", panel, "TOPLEFT", UI.PAD + UI.CONTENT_WIDTH + UI.CELL_INSET, top - 2)
+    unread.Text:SetText("Mark unread releases")
+    UI.AttachHint(unread, "Mark unread releases", "Show a yellow ! beside What's new until you've opened it since the last update.")
+    unread:SetScript("OnClick", function(self)
+        self:SetChecked(not self:GetChecked())
+        HC.State().whatsNewDot = self:GetChecked()
+        HC.Settings:RefreshBadges()
+    end)
+    UI.OnRefresh(panel, function() unread:SetChecked(HC.State().whatsNewDot ~= false) end)
+    unread:SetChecked(HC.State().whatsNewDot ~= false)
+
+    local cards, earlierLabel = {}, nil
+    local function relayout()
+        local y = top - 40
+        for _, card in ipairs(cards) do
+            if card.release.history and card == cards.firstHistory then
+                y = y - 8
+                earlierLabel:ClearAllPoints()
+                earlierLabel:SetPoint("TOPLEFT", UI.PAD + 2, y)
+                y = y - 22
+            end
+            card:Refresh()
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", UI.PAD, y)
+            y = y - card:GetHeight() - 10
+        end
+        if panel.hcSetBottom then panel.hcSetBottom(y) end
+        return y
+    end
+    for index, release in ipairs(HC.WhatsNew:Releases()) do
+        local card = releaseCard(panel, release, index == 1, relayout)
+        if release.history and not cards.firstHistory then
+            cards.firstHistory = card
+            earlierLabel = UI.FontString(panel, "GameFontNormalSmall", "section")
+            earlierLabel:SetText("EARLIER RELEASES")
+        end
+        cards[#cards + 1] = card
+    end
+    Pages.whatsNewCards = cards
+    return relayout()
 end
 
 -- The Theme page is withheld until Classic is ready; see Theme.lua.

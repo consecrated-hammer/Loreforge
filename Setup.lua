@@ -3,7 +3,8 @@ local HC, UI = ns.HammerCore, ns.HammerCore.UI
 local T = HC.Theme
 
 -- Game setup lives in the Play tab, separate from general addon settings.
--- Presets cover most games; Advanced options stay folded away.
+-- Presets cover most games; the rest sits on sub-tabs across the top (Game,
+-- Categories, Pacing & chat), each using the full window width.
 
 local PRESETS = {
     { name = 'Quick', hint = '5 questions, 20 seconds each.', rounds = 1, perRound = 5, seconds = 20 },
@@ -11,6 +12,34 @@ local PRESETS = {
     { name = 'Marathon', hint = '50 questions, 25 seconds each.', rounds = 1, perRound = 50, seconds = 25 },
 }
 local LOBBY_ROWS = 5
+-- Setup's sub-tabs, in order. While a Party lobby is open its tab takes the
+-- Categories tab's place; only the other three are remembered.
+local SUBTABS = { { 'game', 'Game' }, { 'categories', 'Categories' }, { 'lobby', 'Party lobby' }, { 'pacing', 'Pacing & chat' } }
+local SAVED_TABS = { game = true, categories = true, pacing = true }
+local MARGIN, GAP, TAB_H = 18, 24, 40
+-- Room kept for a category's question count, left of its switch.
+local COUNT_W = 36
+
+-- HammerCore 0.3 rows take the settings page's width; the setup columns
+-- are narrower, so each row is sized back to the width it asks for.
+local function fit(row, width)
+    if not width then return row end
+    row:SetWidth(width)
+    row.hcWidth = width
+    if row.hcStripe then row.hcStripe:SetWidth(width) end
+    return row
+end
+local function Row(panel, y, height, title, hint, width)
+    return fit(UI.Row(panel, y, height, title, hint, width), width)
+end
+local function Check(panel, label, hint, y, get, set, width)
+    local row, nextY = UI.Check(panel, label, hint, y, get, set, width)
+    return fit(row, width), nextY
+end
+local function Dropdown(panel, label, hint, y, values, labels, get, set, width, offset, buttonWidth)
+    local row, nextY, button = UI.Dropdown(panel, label, hint, y, values, labels, get, set, width, offset, buttonWidth)
+    return fit(row, width), nextY, button
+end
 
 local function plural(n, word) return n .. ' ' .. word .. (n == 1 and '' or 's') end
 
@@ -29,13 +58,15 @@ local MAX_THEMED_ROUND = 15
 -- A labelled minus/value/plus control. The mouse wheel steps it too.
 local function stepper(panel, labelText, hint, y, key, format, width)
     local limits = ns.LIMITS[key]
-    local row = UI.Row(panel, y, 28, labelText, hint, width)
-    local minus = UI.Button(row, 28, 24)
-    minus:SetPoint('LEFT', row, 'LEFT', 190, 0); minus:SetText('-')
-    local value = UI.FontString(row, 'GameFontHighlight', 'text')
-    value:SetPoint('LEFT', minus, 'RIGHT', 0, 0); value:SetWidth(90); value:SetJustifyH('CENTER')
+    local row = Row(panel, y, 28, labelText, hint, width)
+    -- Right-aligned, like the dropdowns and switches beside it.
     local plus = UI.Button(row, 28, 24)
-    plus:SetPoint('LEFT', value, 'RIGHT', 0, 0); plus:SetText('+')
+    plus:SetPoint('RIGHT', row, 'RIGHT', -UI.CELL_INSET, 0); plus:SetText('+')
+    local value = UI.FontString(row, 'GameFontHighlight', 'text')
+    value:SetPoint('RIGHT', plus, 'LEFT', 0, 0); value:SetWidth(90); value:SetJustifyH('CENTER')
+    local minus = UI.Button(row, 28, 24)
+    minus:SetPoint('RIGHT', value, 'LEFT', 0, 0); minus:SetText('-')
+    if row.Title then row.Title:SetPoint('RIGHT', minus, 'LEFT', -12, 0) end
     -- A themed round stays short enough for a category to fill it.
     local function upper()
         if key == 'perRound' and ns.db.rounds > 1 then return MAX_THEMED_ROUND end
@@ -71,33 +102,42 @@ local function stepper(panel, labelText, hint, y, key, format, width)
     UI.OnRefresh(panel, render)
     render()
     row.minus, row.plus, row.value = minus, plus, value
-    return row, y - 32
+    return row, row.hcNextY or (y - 44)
 end
 
 local function seconds(v) return v .. 's' end
 
+-- A section heading with a rule, lined up with the rows below it.
 local function section(panel, title, y, width)
     local text = UI.FontString(panel, 'GameFontNormal', 'flavour')
-    text:SetPoint('TOPLEFT', 16, y); text:SetText(title)
+    text:SetPoint('TOPLEFT', UI.PAD, y); text:SetText(title)
     local line = T.Fill(panel:CreateTexture(nil, 'ARTWORK'), 'edge')
-    line:SetPoint('TOPLEFT', 16, y - 20); line:SetSize(width or 374, 1)
+    line:SetPoint('TOPLEFT', UI.PAD, y - 20); line:SetSize(width, 1)
+    UI.RestartStripes(panel)
     return y - 30
 end
 
 local function lobbyOpen() return ns.Party and ns.Party.host and not ns.Party.host.started or false end
 
+-- The remembered sub-tab, or Game.
+local function savedTab()
+    local tab = ns.db and ns.db.setupTab
+    return SAVED_TABS[tab] and tab or 'game'
+end
+
 function ns.BuildSetup(host)
     local L = ns.HostLayout
+    local fullWidth = L.width - MARGIN * 2
+    local colWidth = math.floor((fullWidth - GAP) / 2)
     local setup = CreateFrame('Frame', nil, host)
     setup:SetAllPoints()
+    local panels = {}
 
-    -- Presets
-    local presetLabel = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
-    presetLabel:SetPoint('TOPLEFT', 18, -116); presetLabel:SetText('Quick start')
+    -- Presets sit on the title line, right-aligned.
     setup.presets = {}
     for i, preset in ipairs(PRESETS) do
-        local b = UI.Button(setup, 104, 26)
-        b:SetPoint('TOPLEFT', 96 + (i - 1) * 110, -110); b:SetText(preset.name)
+        local b = UI.Button(setup, 96, 26)
+        b:SetPoint('TOPRIGHT', -(MARGIN + (#PRESETS - i) * 102), -58); b:SetText(preset.name)
         b:SetScript('OnClick', function()
             ns.db.rounds, ns.db.perRound, ns.db.seconds = preset.rounds, preset.perRound, preset.seconds
             ns.setupError = nil
@@ -106,13 +146,15 @@ function ns.BuildSetup(host)
         UI.AttachHint(b, preset.name, preset.hint)
         setup.presets[i] = b
     end
+    local presetLabel = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
+    presetLabel:SetPoint('RIGHT', setup.presets[1], 'LEFT', -10, 0); presetLabel:SetText('Quick start')
 
     -- One banner for anything blocking the start, or an interrupted game.
     local banner = CreateFrame('Frame', nil, setup, 'BackdropTemplate')
-    banner:SetSize(L.width - 36, 44); banner:SetPoint('TOPLEFT', 18, -146)
+    banner:SetSize(fullWidth, 44); banner:SetPoint('TOPLEFT', MARGIN, -112)
     T.Surface(banner, 'raised', 'danger')
     banner.text = UI.FontString(banner, 'GameFontHighlightSmall', 'text')
-    banner.text:SetPoint('LEFT', 12, 0); banner.text:SetWidth(L.width - 36 - 330); banner.text:SetJustifyH('LEFT')
+    banner.text:SetPoint('LEFT', 12, 0); banner.text:SetWidth(fullWidth - 330); banner.text:SetJustifyH('LEFT')
     banner.first = UI.Button(banner, 150, 26)
     banner.first:SetPoint('RIGHT', -168, 0)
     banner.second = UI.Button(banner, 150, 26)
@@ -132,14 +174,46 @@ function ns.BuildSetup(host)
     end)
     setup.rosterButton = roster
 
-    -- Left: game options in a scrolling column.
-    local scroll, left, setHeight = ns.ScrollArea(setup, 0, -196, 430, 330)
-    setup.scroll, setup.scrollbar, setup.left = scroll, scroll.bar, left
+    -- Sub-tabs across the top, in the main tabs' style, over a quiet rule.
+    local bar = CreateFrame('Frame', nil, setup)
+    bar:SetSize(fullWidth, TAB_H)
+    local rule = T.Fill(bar:CreateTexture(nil, 'BORDER'), 'edge')
+    rule:SetPoint('BOTTOMLEFT'); rule:SetPoint('BOTTOMRIGHT'); rule:SetHeight(1)
+    setup.tabBar = bar
+    -- The first tab's text lines up with the content's left edge.
+    local strip = ns.TabStrip(bar, TAB_H, function(first) first:SetPoint('BOTTOMLEFT', bar, 'BOTTOMLEFT', -15, 0) end)
+    for _, spec in ipairs(SUBTABS) do
+        local key = spec[1]
+        strip.Add(key, spec[2], function() setup.SelectTab(key) end)
+    end
+    setup.tabStrip, setup.subtabs = strip, strip.buttons
+
+    setup.pages, setup.columns = {}, {}
+    local function page(key)
+        local frame = CreateFrame('Frame', nil, setup)
+        frame:SetSize(L.width, 1)
+        setup.pages[key] = frame
+        return frame
+    end
+    -- Rows sit UI.PAD into their panel, so each column panel starts that far
+    -- left of where its rows should line up.
+    local function column(parent, index, width)
+        local panel = CreateFrame('Frame', nil, parent)
+        panel:SetSize((width or colWidth) + UI.PAD, 1)
+        panel:SetPoint('TOPLEFT', MARGIN - UI.PAD + (index - 1) * (colWidth + GAP), 0)
+        panels[#panels + 1] = panel
+        return panel
+    end
+
+    -- ── Game: where it's played, then how long ──
+    local gamePage = page('game')
+    local gameCol, lengthCol = column(gamePage, 1), column(gamePage, 2)
+    setup.columns.game, setup.columns.length = gameCol, lengthCol
     local _, y
-    y = section(left, 'Game', 0)
-    _, y = UI.Dropdown(left, 'Output', 'Where questions are posted and players answer.', y,
+    y = section(gameCol, 'Game', 0, colWidth)
+    _, y = Dropdown(gameCol, 'Output', 'Where questions are posted and players answer.', y,
         { 'PARTY', 'RAID', 'INSTANCE_CHAT', 'GUILD' }, { 'Party', 'Raid', 'Instance', 'Guild' },
-        function() return ns.db.channel end, function(value) setup.SetOutput(value) end, 400, 190, 150)
+        function() return ns.db.channel end, function(value) setup.SetOutput(value) end, colWidth, 190, 160)
     -- Switching away from Party would close an open lobby; ask first.
     function setup.SetOutput(value)
         if value ~= 'PARTY' and lobbyOpen() then
@@ -159,54 +233,28 @@ function ns.BuildSetup(host)
         ns.db.channel = value
         setup.Refresh()
     end
-    _, y = UI.Check(left, 'Host plays along', 'You answer and score like everyone else.', y,
-        function() return ns.db.hostParticipates end, function(value) ns.db.hostParticipates = value end, 400)
-    y = section(left, 'Length', y - 6)
-    _, y = stepper(left, 'Themed rounds', 'Each round draws from one of your categories, named as it starts. Off mixes them all.', y, 'rounds',
-        function(v) return v == 1 and 'Off' or tostring(v) end, 400)
-    setup.questions, y = stepper(left, 'Questions', nil, y, 'perRound', nil, 400)
-    _, y = stepper(left, 'Answer time', nil, y, 'seconds', seconds, 400)
-    _, y = UI.Check(left, 'Countdown before starting', 'Players can join and type ready before the first question.', y,
-        function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, 400)
-    setup.countdown, y = stepper(left, 'Start countdown', 'Seconds before the first question. You can start sooner; disable the countdown above to skip it.', y, 'readySeconds', seconds, 400)
-    _, y = UI.Dropdown(left, 'Difficulty', 'Hard includes obscure lore, talents and procs.', y,
+    _, y = Check(gameCol, 'Host plays along', 'You answer and score like everyone else.', y,
+        function() return ns.db.hostParticipates end, function(value) ns.db.hostParticipates = value end, colWidth)
+    _, y = Dropdown(gameCol, 'Difficulty', 'Hard includes obscure lore, talents and procs.', y,
         { 'mixed', 'easy', 'hard' }, { 'Mixed', 'Easier', 'Hard' },
-        function() return ns.db.difficulty end, function(value) ns.db.difficulty = value end, 400, 190, 150)
+        function() return ns.db.difficulty end, function(value) ns.db.difficulty = value end, colWidth, 190, 160)
 
-    local toggle = UI.Button(left, 200, 24)
-    toggle:SetPoint('TOPLEFT', 16, y - 8)
-    local advancedTop = y - 44
-    local advanced = CreateFrame('Frame', nil, left)
-    advanced:SetPoint('TOPLEFT', 0, advancedTop); advanced:SetSize(430, 1)
-    local a = 0
-    a = section(advanced, 'Pacing', a)
-    _, a = UI.Check(advanced, 'Auto-advance questions', 'The next question starts after a short gap. Off: you start each one.', a,
-        function() return ns.db.autoMode end, function(value) ns.db.autoMode = value end, 400)
-    _, a = stepper(advanced, 'Question gap', 'Seconds between questions with auto-advance.', a, 'questionGap', seconds, 400)
-    _, a = stepper(advanced, 'Pause when quiet', 'Auto-advance pauses after this many questions with no answers.', a, 'idleLimit',
-        function(v) return v == 0 and 'Off' or plural(v, 'question') end, 400)
-    a = section(advanced, 'Chat', a - 6)
-    _, a = UI.Check(advanced, 'Choices on one line', 'Posts the four choices on one line instead of four.', a,
-        function() return ns.db.compactChoices end, function(value) ns.db.compactChoices = value end, 400)
-    _, a = UI.Check(advanced, 'Announce top three records', 'After the final scores, post records for the top three players.', a,
-        function() return ns.db.replayRecords end, function(value) ns.db.replayRecords = value end, 400)
-    advanced:SetHeight(-a)
-    setup.advanced = advanced
-    local function layoutLeft()
-        local open = ns.showAdvanced == true
-        advanced:SetShown(open)
-        toggle:SetText(open and 'Hide advanced options' or 'Advanced options')
-        setHeight(open and (-advancedTop - a + 10) or (-advancedTop + 4), true)
-    end
-    toggle:SetScript('OnClick', function() ns.showAdvanced = not ns.showAdvanced; layoutLeft() end)
-    setup.advancedToggle = toggle
+    y = section(lengthCol, 'Length', 0, colWidth)
+    _, y = stepper(lengthCol, 'Themed rounds', 'Each round draws from one of your categories, named as it starts. Off mixes them all.', y, 'rounds',
+        function(v) return v == 1 and 'Off' or tostring(v) end, colWidth)
+    setup.questions, y = stepper(lengthCol, 'Questions', nil, y, 'perRound', nil, colWidth)
+    _, y = stepper(lengthCol, 'Answer time', nil, y, 'seconds', seconds, colWidth)
+    _, y = Check(lengthCol, 'Countdown before starting', 'Players can join and type ready before the first question.', y,
+        function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, colWidth)
+    setup.countdown, y = stepper(lengthCol, 'Start countdown', 'Seconds before the first question. You can start sooner; disable the countdown above to skip it.', y, 'readySeconds', seconds, colWidth)
 
-    -- Right: categories, or the lobby while one is open.
-    local right = CreateFrame('Frame', nil, setup)
-    right:SetSize(L.rightWidth + 30, 330); right:SetPoint('TOPLEFT', L.rightX - 30, -196)
-    local r = section(right, 'Categories', 0, L.rightWidth)
-    local all = UI.Button(right, 50, 20); all:SetPoint('TOPLEFT', L.rightWidth - 92, 2); all:SetText('All')
-    local none = UI.Button(right, 50, 20); none:SetPoint('TOPLEFT', L.rightWidth - 38, 2); none:SetText('None')
+    -- ── Categories: two columns of switches with their question counts ──
+    local categoryPage = page('categories')
+    local catLeft, catRight = column(categoryPage, 1), column(categoryPage, 2)
+    setup.columns.categories = { catLeft, catRight }
+    local top = section(catLeft, 'Categories', 0, fullWidth)
+    local all = UI.Button(categoryPage, 50, 20); all:SetPoint('TOPRIGHT', categoryPage, 'TOPRIGHT', -(MARGIN + 54), 2); all:SetText('All')
+    local none = UI.Button(categoryPage, 50, 20); none:SetPoint('TOPRIGHT', categoryPage, 'TOPRIGHT', -MARGIN, 2); none:SetText('None')
     local function setAll(value)
         for _, category in ipairs(ns.Game.CATEGORIES) do ns.db.categories[category[1]] = value end
         setup.Refresh()
@@ -214,48 +262,73 @@ function ns.BuildSetup(host)
     all:SetScript('OnClick', function() setAll(true) end)
     none:SetScript('OnClick', function() setAll(false) end)
     setup.categoryRows = {}
-    for _, category in ipairs(ns.Game.CATEGORIES) do
+    local half = math.ceil(#ns.Game.CATEGORIES / 2)
+    local columnY = { [catLeft] = top, [catRight] = top }
+    for i, category in ipairs(ns.Game.CATEGORIES) do
         local key = category[1]
+        local panel = i <= half and catLeft or catRight
         local row
-        row, r = UI.Check(right, category[2], nil, r,
+        row, columnY[panel] = Check(panel, category[2], nil, columnY[panel],
             function() return ns.db.categories[key] == true end,
-            function(value) ns.db.categories[key] = value end, L.rightWidth)
+            function(value) ns.db.categories[key] = value end, colWidth)
         row.count = UI.FontString(row, 'GameFontHighlightSmall', 'muted')
-        row.count:SetPoint('RIGHT', row, 'RIGHT', 0, 0)
+        row.count:SetWidth(COUNT_W); row.count:SetJustifyH('RIGHT')
+        local check = row.hcCheckbox
+        -- Left of the switch, or at the edge beside Classic's checkbox; the
+        -- name stops short of the count so long names never run under it.
+        if check.track then row.count:SetPoint('RIGHT', check.track, 'LEFT', -12, 0)
+        else row.count:SetPoint('RIGHT', row, 'RIGHT', -UI.CELL_INSET, 0) end
+        check.Text:SetPoint('RIGHT', row.count, 'LEFT', -8, 0)
         setup.categoryRows[key] = row
     end
-    setup.right = right
 
-    local lobby = CreateFrame('Frame', nil, setup)
-    lobby:SetSize(L.rightWidth + 30, 330); lobby:SetPoint('TOPLEFT', L.rightX - 30, -196)
-    local ly = section(lobby, 'Party lobby', 0, L.rightWidth)
-    lobby.timer = UI.FontString(lobby, 'GameFontHighlightSmall', 'muted')
-    lobby.timer:SetPoint('TOPRIGHT', lobby, 'TOPLEFT', 16 + L.rightWidth, 0)
+    -- ── Party lobby: takes the Categories tab's place while it's open ──
+    local lobby = page('lobby')
+    local lobbyCol = column(lobby, 1, fullWidth)
+    local ly = section(lobbyCol, 'Party lobby', 0, fullWidth)
+    lobby.timer = UI.FontString(lobbyCol, 'GameFontHighlightSmall', 'muted')
+    lobby.timer:SetPoint('TOPRIGHT', lobbyCol, 'TOPLEFT', UI.PAD + fullWidth, 0)
     lobby.rows = {}
     for i = 1, LOBBY_ROWS do
-        local row = CreateFrame('Frame', nil, lobby)
-        row:SetSize(L.rightWidth, 22); row:SetPoint('TOPLEFT', 16, ly - (i - 1) * 24)
+        local row = CreateFrame('Frame', nil, lobbyCol)
+        row:SetSize(fullWidth, 22); row:SetPoint('TOPLEFT', UI.PAD, ly - (i - 1) * 24)
         row.dot = row:CreateTexture(nil, 'ARTWORK'); row.dot:SetSize(6, 6); row.dot:SetPoint('LEFT', 0, 0)
         row.name = UI.FontString(row, 'GameFontHighlight', 'text'); row.name:SetPoint('LEFT', 12, 0)
-        row.name:SetWidth(L.rightWidth - 110); row.name:SetJustifyH('LEFT')
+        row.name:SetWidth(fullWidth - 200); row.name:SetJustifyH('LEFT')
         row.state = UI.FontString(row, 'GameFontHighlightSmall', 'muted'); row.state:SetPoint('RIGHT', 0, 0)
         lobby.rows[i] = row
     end
-    lobby.note = UI.FontString(lobby, 'GameFontHighlightSmall', 'muted')
-    lobby.note:SetPoint('TOPLEFT', 16, ly - LOBBY_ROWS * 24 - 8); lobby.note:SetWidth(L.rightWidth); lobby.note:SetJustifyH('LEFT')
+    lobby.note = UI.FontString(lobbyCol, 'GameFontHighlightSmall', 'muted')
+    lobby.note:SetPoint('TOPLEFT', UI.PAD, ly - LOBBY_ROWS * 24 - 8); lobby.note:SetWidth(fullWidth); lobby.note:SetJustifyH('LEFT')
     lobby.note:SetText('Players without Loreforge can still answer in Party chat.')
-    lobby.keep = UI.Button(lobby, 150, 26)
-    lobby.keep:SetPoint('TOPLEFT', 16, ly - LOBBY_ROWS * 24 - 52); lobby.keep:SetText('Keep lobby open')
+    lobby.keep = UI.Button(lobbyCol, 150, 26)
+    lobby.keep:SetPoint('TOPLEFT', UI.PAD, ly - LOBBY_ROWS * 24 - 36); lobby.keep:SetText('Keep lobby open')
     lobby.keep:SetScript('OnClick', function() if ns.Party then ns.Party.KeepLobbyOpen() end; setup.Refresh() end)
     UI.AttachHint(lobby.keep, 'Keep lobby open', 'Resets the lobby timer to 10 minutes.')
     setup.lobbyPanel = lobby
 
+    -- ── Pacing & chat ──
+    local pacingPage = page('pacing')
+    local pacingCol, chatCol = column(pacingPage, 1), column(pacingPage, 2)
+    setup.columns.pacing, setup.columns.chat = pacingCol, chatCol
+    local a = section(pacingCol, 'Pacing', 0, colWidth)
+    _, a = Check(pacingCol, 'Auto-advance questions', 'The next question starts after a short gap. Off: you start each one.', a,
+        function() return ns.db.autoMode end, function(value) ns.db.autoMode = value end, colWidth)
+    _, a = stepper(pacingCol, 'Question gap', 'Seconds between questions with auto-advance.', a, 'questionGap', seconds, colWidth)
+    _, a = stepper(pacingCol, 'Pause when quiet', 'Auto-advance pauses after this many questions with no answers.', a, 'idleLimit',
+        function(v) return v == 0 and 'Off' or plural(v, 'question') end, colWidth)
+    a = section(chatCol, 'Chat', 0, colWidth)
+    _, a = Check(chatCol, 'Choices on one line', 'Posts the four choices on one line instead of four.', a,
+        function() return ns.db.compactChoices end, function(value) ns.db.compactChoices = value end, colWidth)
+    _, a = Check(chatCol, 'Announce top three records', 'After the final scores, post records for the top three players.', a,
+        function() return ns.db.replayRecords end, function(value) ns.db.replayRecords = value end, colWidth)
+
     setup.pool = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
-    setup.pool:SetPoint('BOTTOMLEFT', 18, 62); setup.pool:SetWidth(L.width - 36); setup.pool:SetJustifyH('LEFT')
+    setup.pool:SetPoint('BOTTOMLEFT', MARGIN, 62); setup.pool:SetWidth(fullWidth); setup.pool:SetJustifyH('LEFT')
 
     -- Footer: one primary action, with lobby actions beside it when a lobby is open.
     setup.start = UI.Button(setup, 200, 34, 'primary')
-    setup.start:SetPoint('BOTTOMLEFT', 18, 18); setup.start:SetText('Start game')
+    setup.start:SetPoint('BOTTOMLEFT', MARGIN, 18); setup.start:SetText('Start game')
     UI.AttachHint(setup.start, function() return setup.start:GetText() end,
         function() return setup.issue or setup.startHint or 'Ready to go.' end)
     setup.start:SetScript('OnClick', function()
@@ -295,12 +368,42 @@ function ns.BuildSetup(host)
             row:SetShown(p ~= nil)
             if p then
                 local joined = h.joined[p.key] ~= nil
-                row.name:SetText(p.name)
+                row.name:SetText(ns.DisplayName(p.name))
                 row.state:SetText(joined and 'Joined' or 'Chat only so far')
                 T.Text(row.state, joined and 'accent' or 'muted')
                 T.Fill(row.dot, joined and 'accent' or 'rail')
             end
         end
+    end
+
+    local function closeMenus()
+        for _, panel in ipairs(panels) do
+            for _, child in ipairs({ panel:GetChildren() }) do
+                if child.hcCloseMenu then child.hcCloseMenu() end
+            end
+        end
+    end
+
+    -- Which sub-tab shows. An opening lobby comes to the front once; while
+    -- it's open it stands in for Categories, and when it closes the
+    -- remembered tab returns.
+    local function showTab(isOpen)
+        if isOpen and not setup.lobbyWasOpen then setup.current = 'lobby' end
+        setup.lobbyWasOpen = isOpen
+        local current = setup.current or savedTab()
+        if current == 'lobby' and not isOpen then current = savedTab() end
+        if current == 'categories' and isOpen then current = 'lobby' end
+        setup.current = current
+        strip.Layout({ game = true, categories = not isOpen, lobby = isOpen, pacing = true })
+        strip.Select(current)
+        for key, frame in pairs(setup.pages) do frame:SetShown(key == current) end
+    end
+    function setup.SelectTab(key)
+        if InCombatLockdown() then return end
+        if SAVED_TABS[key] then ns.db.setupTab = key end
+        closeMenus()
+        setup.current = key
+        setup.Refresh()
     end
 
     local function refresh(panel)
@@ -309,7 +412,7 @@ function ns.BuildSetup(host)
     end
     local function refreshAll()
         if InCombatLockdown() then return end
-        refresh(left); refresh(advanced); refresh(right)
+        for _, panel in ipairs(panels) do refresh(panel) end
         setup.questions.Title:SetText(ns.db.rounds > 1 and 'Questions per round' or 'Questions')
         local available = #ns.Game.Pool(HC.QUIZ, ns.db, ns.era)
         local restricted = ns.Restricted()
@@ -360,16 +463,13 @@ function ns.BuildSetup(host)
             end
             banner.second:SetText('Dismiss'); banner.second:SetScript('OnClick', ns.DismissInterrupted); banner.second:Show()
         end
-        local top = banner:IsShown() and -196 or -150
-        scroll:ClearAllPoints(); scroll:SetPoint('TOPLEFT', 0, top)
-        local height = L.height - 86 + top
-        scroll:SetHeight(height); scroll.bar:SetHeight(height)
-        right:ClearAllPoints(); right:SetPoint('TOPLEFT', L.rightX - 30, top)
-        lobby:ClearAllPoints(); lobby:SetPoint('TOPLEFT', L.rightX - 30, top)
-        layoutLeft()
-
-        right:SetShown(not isOpen)
-        lobby:SetShown(isOpen)
+        -- The sub-tabs and their pages sit below the banner when it shows.
+        local tabTop = banner:IsShown() and -164 or -108
+        bar:ClearAllPoints(); bar:SetPoint('TOPLEFT', MARGIN, tabTop)
+        for _, frame in pairs(setup.pages) do
+            frame:ClearAllPoints(); frame:SetPoint('TOPLEFT', 0, tabTop - TAB_H - 14)
+        end
+        showTab(isOpen)
         if isOpen then drawLobby() end
 
         if setup.solo then
@@ -388,18 +488,10 @@ function ns.BuildSetup(host)
         setup.lobby:SetShown(isOpen)
         setup.closeLobby:SetShown(isOpen)
     end
-    left.hcRefreshAll = function() ns.setupError = nil; refreshAll() end
-    advanced.hcRefreshAll = left.hcRefreshAll
-    right.hcRefreshAll = left.hcRefreshAll
+    local function changed() ns.setupError = nil; refreshAll() end
+    for _, panel in ipairs(panels) do panel.hcRefreshAll = changed end
     setup.Refresh = refreshAll
-    setup:SetScript('OnHide', function()
-        for _, panel in ipairs({ left, advanced, right }) do
-            for _, child in ipairs({ panel:GetChildren() }) do
-                if child.hcCloseMenu then child.hcCloseMenu() end
-            end
-        end
-    end)
-    layoutLeft()
+    setup:SetScript('OnHide', closeMenus)
     refreshAll()
     return setup
 end

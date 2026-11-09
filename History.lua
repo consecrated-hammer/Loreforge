@@ -89,7 +89,7 @@ local function describe(entry)
     local top = out.rows[1]
     out.winner = top and top.total > 0 and top.name or nil
     out.title = when(entry.date) .. "   " .. out.where
-    out.summary = (out.place and ("You: " .. ordinal(out.place)) or (out.winner and ("Winner: " .. out.winner) or "No correct answers"))
+    out.summary = (out.place and ("You: " .. ordinal(out.place)) or (out.winner and ("Winner: " .. ns.DisplayName(out.winner)) or "No correct answers"))
         .. "  ·  " .. out.length
     return out
 end
@@ -107,31 +107,36 @@ function ns.BuildHistory(host)
     view.empty:SetPoint("TOPLEFT", 18, -124)
     view.empty:SetText("No finished games yet. Play one and it shows up here.")
 
-    local scroll, list, setHeight = ns.ScrollArea(view, 18, -116, 440, L.height - 150)
+    -- The list takes a little over half the width; the detail card the rest.
+    local listWidth = math.floor((L.width - 36) * 0.55)
+    local detailX = 18 + listWidth + 20
+    local scroll, list, setHeight = ns.ScrollArea(view, 18, -116, listWidth, L.height - 150)
     view.list = list
     view.entries = {}
     for i = 1, MAX_LIST do
-        local b = UI.Button(list, 440, 40)
+        local b = UI.Button(list, listWidth, 40)
         b:SetPoint("TOPLEFT", 0, -(i - 1) * 44)
-        b.Text:ClearAllPoints(); b.Text:SetPoint("TOPLEFT", 10, -7); b.Text:SetJustifyH("LEFT"); b.Text:SetWidth(420)
-        b.sub = label(b, "GameFontHighlightSmall", "muted", 420)
+        b.Text:ClearAllPoints(); b.Text:SetPoint("TOPLEFT", 10, -7); b.Text:SetJustifyH("LEFT"); b.Text:SetWidth(listWidth - 20)
+        b.sub = label(b, "GameFontHighlightSmall", "muted", listWidth - 20)
         b.sub:SetPoint("TOPLEFT", 10, -23)
         b:SetScript("OnClick", function(self) view.selected = self.index; view.Refresh() end)
         view.entries[i] = b
     end
 
     local detail = CreateFrame("Frame", nil, view, "BackdropTemplate")
-    detail:SetPoint("TOPLEFT", 478, -116); detail:SetSize(L.width - 478 - 18, L.height - 150)
+    local detailWidth = L.width - detailX - 18
+    local inner = detailWidth - 24
+    detail:SetPoint("TOPLEFT", detailX, -116); detail:SetSize(detailWidth, L.height - 150)
     T.Surface(detail, "raised", "edge")
-    detail.title = label(detail, "GameFontNormal", "flavour", 260)
+    detail.title = label(detail, "GameFontNormal", "flavour", inner)
     detail.title:SetPoint("TOPLEFT", 12, -12)
-    detail.sub = label(detail, "GameFontHighlightSmall", "muted", 260)
+    detail.sub = label(detail, "GameFontHighlightSmall", "muted", inner)
     detail.sub:SetPoint("TOPLEFT", 12, -32)
     detail.rows = {}
     for i = 1, DETAIL_ROWS do
         local row = CreateFrame("Frame", nil, detail)
-        row:SetSize(260, 22); row:SetPoint("TOPLEFT", 12, -62 - (i - 1) * 24)
-        row.name = label(row, "GameFontHighlight", "text", 180); row.name:SetPoint("LEFT", 0, 0)
+        row:SetSize(inner, 22); row:SetPoint("TOPLEFT", 12, -62 - (i - 1) * 24)
+        row.name = label(row, "GameFontHighlight", "text", inner - 90); row.name:SetPoint("LEFT", 0, 0)
         row.score = label(row, "GameFontHighlightSmall", "muted", 80); row.score:SetPoint("RIGHT", 0, 0); row.score:SetJustifyH("RIGHT")
         detail.rows[i] = row
     end
@@ -162,7 +167,7 @@ function ns.BuildHistory(host)
             local data = d.rows[i]
             row:SetShown(data ~= nil)
             if data then
-                row.name:SetText(data.rank .. ".  " .. tostring(data.name) .. (data.mine and " (you)" or ""))
+                row.name:SetText(data.rank .. ".  " .. ns.DisplayName(data.name) .. (data.mine and " (you)" or ""))
                 local medal = data.total > 0 and MEDALS[data.rank]
                 if data.mine then T.Text(row.name, "selected")
                 elseif medal then row.name:SetTextColor(medal[1], medal[2], medal[3]) else T.Text(row.name, "text") end
@@ -182,8 +187,8 @@ function ns.BuildRecords(host)
     heading:SetPoint("TOPLEFT", 18, -64); heading:SetText("Hall of Fame")
     view.sub = label(view, "GameFontHighlightSmall", "muted", L.width - 36)
     view.sub:SetPoint("TOPLEFT", 18, -88)
-    local columns = { { "Player", 18, 250 }, { "Wins", 290, 60 }, { "Games", 360, 60 }, { "Correct", 430, 70 },
-        { "Accuracy", 510, 80 }, { "Best streak", 600, 100 } }
+    local columns = { { "Player", 18, 320 }, { "Wins", 360, 70 }, { "Games", 450, 70 }, { "Correct", 540, 80 },
+        { "Accuracy", 640, 90 }, { "Best streak", 750, 120 } }
     for _, c in ipairs(columns) do
         local h = label(view, "GameFontHighlightSmall", "muted", c[3])
         h:SetPoint("TOPLEFT", c[2], -116); h:SetText(c[1])
@@ -226,7 +231,7 @@ function ns.BuildRecords(host)
             local r, p = row(i), rows[i].record
             r:Show()
             local answered, correct = tonumber(p.answered) or 0, tonumber(p.correct) or 0
-            local values = { i .. ".  " .. tostring(p.name or rows[i].key), tostring(p.wins or 0), tostring(p.games or 0),
+            local values = { i .. ".  " .. ns.DisplayName(p.name or rows[i].key), tostring(p.wins or 0), tostring(p.games or 0),
                 tostring(correct), answered > 0 and (math.floor(correct / answered * 100 + 0.5) .. "%") or "-",
                 tostring(p.bestStreak or 0) }
             for c, cell in ipairs(r.cells) do cell:SetText(values[c]) end

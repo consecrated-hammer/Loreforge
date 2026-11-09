@@ -36,7 +36,7 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     eq(ns.hostFrame.setup:IsShown(), true, "minimap left-click opens main setup")
     SlashCmdList.LOREFORGE("settings")
     eq(ns.HammerCore.Settings:IsShown(), true, "HammerCore settings")
-    for _, name in ipairs({ "Player records", "Visibility", "Commands", "Troubleshooting", "About" }) do
+    for _, name in ipairs({ "Interface", "Key Bindings", "Player records", "Party games", "What's new", "Visibility", "Commands", "Troubleshooting", "About" }) do
         ns.HammerCore.Settings:Show(name)
     end
     eq(next(ns.HammerCore.Settings.errors), nil, "every page builds")

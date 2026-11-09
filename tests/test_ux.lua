@@ -279,6 +279,23 @@ eq(ns.db.perRound, 15, 'with the same number of questions')
 ns = load({ rounds = 3, perRound = 5, themedRoundsMigrated = true })
 eq(ns.db.rounds, 3, 'themed rounds survive a reload')
 
+-- ── Setup sub-tab memory ──
+ns = load({ setupTab = 'categories' })
+ns.OpenHost()
+eq(ns.hostFrame.setup.pages.categories:IsShown(), true, 'setup reopens on the remembered tab')
+eq(ns.hostFrame.setup.pages.game:IsShown(), false, 'and only that tab')
+wow.Click(ns.hostFrame.setup.subtabs.pacing)
+eq(ns.db.setupTab, 'pacing', 'a clicked sub-tab is remembered')
+ns = load(ns.db)
+ns.OpenHost()
+eq(ns.hostFrame.setup.pages.pacing:IsShown(), true, 'and survives a reload')
+eq(ns.hostFrame.setup.subtabs.pacing.active, true, 'with its tab underlined')
+ns = load({ setupTab = 'lobby' })
+ns.OpenHost()
+eq(ns.hostFrame.setup.pages.game:IsShown(), true, 'an unknown saved tab falls back to Game')
+ns = load({ setupTab = 42 })
+eq(ns.db.setupTab, 'game', 'an unreadable saved tab resets to the default')
+
 -- ── Setup ──
 ns = load(nil)
 eq(ns.db.hostParticipates, true, 'the host plays along by default')
@@ -288,7 +305,69 @@ ns.OpenHost()
 local f = ns.hostFrame
 local setup = f.setup
 assert(setup:IsShown(), 'Play opens on setup')
-eq(setup.countdown:GetParent(), setup.left, 'start countdown is outside folded advanced options')
+
+-- Main tabs: plain text across the header, the chosen one underlined.
+eq(f.tabs.play.active, true, 'Play is the chosen main tab')
+eq(f.tabs.play.line:IsShown(), true, 'with an accent underline')
+eq(f.tabs.history.line:IsShown(), false, 'other tabs have none')
+eq(f.tabs.play.template, nil, 'tabs are text, not boxed buttons')
+eq(f.tabs.history.points[1][2], f.tabs.play, 'tabs run left to right')
+eq(f.tabs.history:GetWidth(), #'History' * 8 + 30, 'a tab is its text plus 30')
+eq(f.tabs.history.line:GetWidth(), #'History' * 8 + 14, 'its underline its text plus 14')
+wow.Click(f.tabs.history)
+eq(f.history:IsShown(), true, 'History opens from its tab')
+eq(setup:IsShown(), false, 'and replaces setup')
+eq(f.tabs.history.active, true, 'History is now underlined')
+eq(f.tabs.play.active, false, 'Play is not')
+wow.Click(f.tabs.records)
+eq(f.records:IsShown(), true, 'Hall of Fame opens from its tab')
+eq(f.history:IsShown(), false, 'one view at a time')
+wow.Click(f.tabs.play)
+eq(setup:IsShown(), true, 'Play returns to setup')
+
+-- Setup sub-tabs: Game by default, one page at a time.
+eq(ns.db.setupTab, 'game', 'setup opens on Game by default')
+eq(setup.pages.game:IsShown(), true, 'the Game page shows')
+eq(setup.pages.categories:IsShown(), false, 'Categories waits for its tab')
+eq(setup.pages.pacing:IsShown(), false, 'and Pacing & chat for its')
+eq(setup.subtabs.game.active, true, 'the Game sub-tab is underlined')
+eq(setup.subtabs.lobby:IsShown(), false, 'no lobby tab without a lobby')
+wow.Click(setup.subtabs.categories)
+eq(setup.pages.categories:IsShown(), true, 'Categories opens')
+eq(setup.pages.game:IsShown(), false, 'and Game hides')
+eq(ns.db.setupTab, 'categories', 'the choice is saved')
+wow.Click(setup.subtabs.pacing)
+eq(setup.pages.pacing:IsShown(), true, 'Pacing & chat opens')
+wow.Click(setup.subtabs.game)
+eq(setup.pages.game:IsShown(), true, 'and back to Game')
+eq(f.tags:GetParent(), f, 'the summary belongs to the window, not a page')
+assert(f.tags:GetText():find('questions', 1, true), 'the summary stays above every sub-tab')
+eq(setup.start:GetParent(), setup, 'Start game sits outside the sub-tab pages')
+eq(setup.pool:GetParent(), setup, 'and so does the questions available line')
+eq(setup.presets[1]:GetParent(), setup, 'and the presets')
+eq(setup.banner:GetParent(), setup, 'and the banner')
+
+-- Each column uses half the window, so the rows are wide.
+local half = math.floor((ns.HostLayout.width - 36 - 24) / 2)
+eq(setup.countdown:GetWidth(), half, 'Length rows use half the window')
+eq(setup.countdown:GetParent(), setup.columns.length, 'start countdown sits under Length')
+eq(setup.columns.length:GetParent(), setup.pages.game, 'on the Game tab, never folded away')
+eq(setup.columns.pacing:GetParent(), setup.pages.pacing, 'pacing has its own tab')
+
+-- Categories: two columns, every name with room to spare beside its count.
+local split = math.ceil(#ns.Game.CATEGORIES / 2)
+for i, category in ipairs(ns.Game.CATEGORIES) do
+    local row = setup.categoryRows[category[1]]
+    eq(row:GetParent(), setup.columns.categories[i <= split and 1 or 2], category[2] .. ' sits in its column')
+    eq(row:GetWidth(), half, category[2] .. ' row is half the window wide')
+    -- Room for the name: the row less its insets, the switch, the count and the gaps.
+    local room = row:GetWidth() - 14 - 14 - 40 - 12 - 36 - 8
+    assert(room >= #category[2] * 8, category[2] .. ' fits untruncated (' .. room .. ' px)')
+    local text = row.hcCheckbox.Text
+    eq(text.points[#text.points][2], row.count, category[2] .. ' stops short of its count')
+    eq(row.count.points[1][2], row.hcCheckbox.track, category[2] .. ' count sits left of the switch')
+end
+assert(#'Things You Probably Vendored' * 8 <= half - 124, 'the longest name fits')
 wow.Click(setup.countdown.plus)
 eq(ns.db.readySeconds, 35, 'start countdown can be configured')
 wow.Click(setup.countdown.minus)
@@ -351,14 +430,34 @@ ns.game:Stop(); ns.RefreshHost()
 local closed = false
 ns.Party.host = { started = false, joined = {}, expires = now + 30 }
 ns.Party.CloseLobby = function() closed = true; ns.Party.host = nil end
+wow.Click(setup.subtabs.game)
 setup.Refresh()
-eq(setup.lobbyPanel:IsShown(), true, 'an open lobby replaces the categories')
+eq(setup.lobbyPanel:IsShown(), true, 'an opening lobby comes to the front')
+eq(setup.pages.game:IsShown(), false, 'over the tab that was open')
+eq(setup.subtabs.lobby:IsShown(), true, 'with its own tab')
+eq(setup.subtabs.lobby.active, true, 'underlined')
+eq(setup.subtabs.categories:IsShown(), false, "in the Categories tab's place")
+eq(setup.subtabs.lobby.points[1][2], setup.subtabs.game, 'right after Game')
+eq(f.status:GetText(), 'Lobby open', 'the title says a lobby is open')
 assert(setup.lobbyPanel.timer:GetText():find('Closes in 0:30', 1, true), 'the lobby shows its timer')
+wow.Click(setup.subtabs.pacing)
+eq(setup.lobbyPanel:IsShown(), false, 'other tabs still open while the lobby is up')
+eq(setup.subtabs.lobby:IsShown(), true, 'and the lobby tab stays')
+setup.Refresh()
+eq(setup.pages.pacing:IsShown(), true, 'a refresh does not drag you back to the lobby')
+wow.Click(setup.subtabs.lobby)
+eq(setup.lobbyPanel:IsShown(), true, 'the lobby tab takes you back')
+eq(ns.db.setupTab, 'pacing', 'the lobby is never the remembered tab')
+ns.db.setupTab = 'categories'; setup.current = 'categories'; setup.Refresh()
+eq(setup.lobbyPanel:IsShown(), true, 'a saved Categories tab shows the lobby while it is open')
 setup.SetOutput('GUILD')
 eq(wow.popups[#wow.popups], 'LOREFORGE_CLOSE_LOBBY', 'switching output with a lobby open asks first')
 eq(ns.db.channel, 'PARTY', 'nothing changes until confirmed')
 StaticPopupDialogs.LOREFORGE_CLOSE_LOBBY.OnAccept()
 eq(closed, true, 'confirming closes the lobby'); eq(ns.db.channel, 'GUILD', 'and switches output')
+eq(setup.subtabs.lobby:IsShown(), false, 'the lobby tab goes when it closes')
+eq(setup.subtabs.categories:IsShown(), true, 'and Categories comes back')
+eq(setup.pages.categories:IsShown(), true, 'on the remembered tab')
 setup.SetOutput('PARTY')
 ns.Party.host = nil; setup.Refresh()
 
@@ -388,7 +487,23 @@ assert(P.frame and P.frame:IsShown(), 'the host gets the quiz window')
 eq(P.frame.question:GetText(), ns.game.run[1].text, 'it shows the question')
 eq(P.frame.answers[2].Text:GetText(), ns.game.run[1].choices[2], 'and the choices')
 assert(not f.answerButtons[1]:IsShown(), 'the console leaves the choices to it')
-assert(not P.frame.leave:IsShown(), 'a host has nothing to leave')
+assert(P.frame.leave:IsShown(), 'a host playing along can stop the game from the quiz window')
+eq(P.frame.leave:GetText(), 'Stop game', 'as Stop game, not Leave')
+do
+    local asked = 0
+    local requestStop = ns.RequestStop
+    ns.RequestStop = function() asked = asked + 1 end
+    wow.Click(P.frame.leave)
+    ns.RequestStop = requestStop
+    eq(asked, 1, 'Stop game asks the host to confirm the stop')
+end
+-- Labels drop your own realm: Forever's are long and pipe-laden.
+do
+    local key, full = ns.Identity('Skyward Stormblessed')
+    eq(ns.DisplayName(full), 'Skyward Stormblessed', 'own realm is not shown')
+    eq(ns.DisplayName('Other-Elsewhere'), 'Other-Elsewhere', 'other realms are')
+    eq(ns.DisplayName(nil), '?', 'missing names read as ?')
+end
 eq(f.status:GetText(), 'Answers open', 'the phase is the heading')
 assert(f.tags:GetText():find('Question 1 of 2', 1, true), 'progress uses the round numbering')
 LoreforgeAnswer(ns.game.run[1].correct)
@@ -461,7 +576,7 @@ eq(ns.hostMinimised, nil, 'and is no longer minimised')
 ns.RefreshHost()
 assert(f.finale:IsShown() and f.finale:GetText() == 'Game complete', 'the host sees a large Game complete')
 eq(f.status:GetText(), '', 'the small header does not repeat it')
-eq(f.winnerLine:GetText(), 'Guest-Realm wins with 1 point.', 'the winner line')
+eq(f.winnerLine:GetText(), 'Guest wins with 1 point.', 'the winner line')
 for i, row in ipairs(f.answerButtons) do assert(not row:IsShown(), 'answer ' .. i .. ' is gone') end
 assert(not f.question:IsShown(), 'the last question is gone')
 if ns.game.config.hostParticipates then
@@ -469,7 +584,7 @@ if ns.game.config.hostParticipates then
 else
     assert(not f.finalYou:IsShown(), 'a host who did not play has no result line')
 end
-assert(f.podium[1]:IsShown() and f.podium[1].name:GetText() == 'Guest-Realm' and not f.podium[2]:IsShown(), 'the podium lists players who answered')
+assert(f.podium[1]:IsShown() and f.podium[1].name:GetText() == 'Guest' and not f.podium[2]:IsShown(), 'the podium lists players who answered')
 assert(f.scoreTitle:GetText():find('Final standings', 1, true), 'the board is the final standings')
 eq(#ns.db.games.retail, 1, 'finished games are kept')
 eq(ns.db.games.retail[1].rows[1].name, 'Guest-Realm', 'with their standings')
@@ -480,13 +595,13 @@ end
 ns.OpenHost('history')
 assert(f.history:IsShown() and not f.setup:IsShown(), 'History replaces Play')
 eq(#ns.HistoryEntries(), 2, 'hosted and Party games share one list')
-assert(f.history.entries[1].sub:GetText():find('Winner: Guest-Realm', 1, true), 'the newest game first')
+assert(f.history.entries[1].sub:GetText():find('Winner: Guest', 1, true), 'the newest game first')
 wow.Click(f.history.entries[2])
 assert(f.history.detail.rows[1].name:GetText():find('(you)', 1, true), 'the detail marks you')
 ns.db.records.retail['zed-realm'] = { name = 'Zed-Realm', games = 5, wins = 4, correct = 9, answered = 10, bestStreak = 3 }
 ns.OpenHost('records')
 assert(f.records:IsShown(), 'Hall of Fame tab')
-eq(f.records.rows[1].cells[1]:GetText(), '1.  Zed-Realm', 'most wins first')
+eq(f.records.rows[1].cells[1]:GetText(), '1.  Zed', 'most wins first')
 eq(f.records.rows[1].cells[5]:GetText(), '90%', 'accuracy is shown')
 
 -- ── Player window ──
@@ -513,7 +628,7 @@ P.Render(model('between', { correct = 1, hostPaced = true }))
 eq(P.frame.status:GetText(), 'The host will start the next question.', 'host pacing is explained')
 P.Render(model('finished', { correct = 1, id = 'pg-final' }))
 eq(P.frame.headline:GetText(), 'Game complete', 'the finish has a large headline')
-eq(P.frame.winner:GetText(), 'Host-Realm wins with 3 points.', 'the winner is named under it')
+eq(P.frame.winner:GetText(), 'Host wins with 3 points.', 'the winner is named under it')
 eq(P.frame.you:GetText(), 'You won with 3 points', 'and the local result')
 assert(not P.frame.question:IsShown() and not P.frame.answers[1]:IsShown() and not P.frame.feedback:IsShown(),
     'the last question, choices and reveal are gone')

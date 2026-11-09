@@ -9,10 +9,10 @@ Loreforge runs on Retail and WoW Forever. The host picks Party, Raid, Instance o
 ## What it does
 
 - **One main window.** `/lf` opens Loreforge with three tabs: **Play** for setup and the live game, **History** for finished games and **Hall of Fame** for saved player records.
-- **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. The start countdown is visible in setup; pacing and chat options sit under **Advanced options**.
-- **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Host-paced games wait at **Ask next question**; auto-advance continues after a short gap. The pacing switch changes mode mid-game.
+- **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. Setup is split into **Game**, **Categories** and **Pacing & chat** tabs, and reopens on the one you used last. The Party lobby gets its own tab while it's open.
+- **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Auto-advance (the default) continues after a short gap; host-paced games wait at **Ask next question**. The pacing switch changes mode mid-game.
 - **The host plays along** by default, answering by click, chat or an answer key. **Practice solo** runs a private game that posts nothing to chat.
-- **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** under Advanced options enables the compact layout.
+- **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** on the Pacing & chat tab enables the compact layout.
 - **Numbered answers.** Each player's last valid `1`, `2`, `3` or `4` before time's up counts, so a mis-click can be fixed. Correct answers earn one point; joint winners share the win.
 - **Optional themed rounds**, where each round sticks to one category.
 - **Live scores**, recaps every five questions in a plain game, streaks, named recaps and personal-best callouts.

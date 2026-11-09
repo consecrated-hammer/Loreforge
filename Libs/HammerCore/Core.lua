@@ -8,7 +8,7 @@ local addonName, ns = ...
 local HC = {}
 ns.HammerCore = HC
 
-HC.VERSION = "0.2.1"
+HC.VERSION = "0.3.1"
 HC.addonName = addonName
 
 -- The one chat colour every addon uses for its name prefix.
@@ -20,6 +20,14 @@ local DEFAULTS = {
     minimapAngle = 225,
     theme = "modern",
     whatsNew = true,
+    -- The unread "!" beside What's new in the settings rail.
+    whatsNewDot = true,
+    -- The quest turn-in sound when opening What's new clears the "!".
+    whatsNewSound = true,
+    -- The Discord and coffee links in the settings footer.
+    supportLinks = true,
+    -- The settings window's own scale, from its header slider.
+    settingsScale = 1,
 }
 
 function HC.GetMetadata(key)
@@ -110,6 +118,8 @@ function HC.State()
     end
     if type(state.minimapAngle) ~= "number" then state.minimapAngle = DEFAULTS.minimapAngle end
     if state.settingsPoint ~= nil and not HC.ValidPoint(state.settingsPoint) then state.settingsPoint = nil end
+    local scale = tonumber(state.settingsScale)
+    state.settingsScale = scale and math.max(0.7, math.min(1.3, scale)) or 1
     if HC.Theme and not HC.Theme.registry[state.theme] then state.theme = DEFAULTS.theme end
     return state
 end

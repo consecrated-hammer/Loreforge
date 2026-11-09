@@ -72,9 +72,20 @@ function Commands:RegisterCore()
     self:Add({ name = "about", section = CORE, help = "Open the About page",
         run = function() HC.Settings:Show("About") end })
     if type(spec.whatsNew) == "table" and #spec.whatsNew > 0 then
-        self:Add({ name = "whatsnew", section = CORE, help = "Show what's new",
-            run = function()
-                if not HC.WhatsNew:Show() then HC.Print("nothing new to show") end
+        self:Add({ name = "whatsnew", args = "[reset|sound]", section = CORE, help = "Show what's new",
+            run = function(args, entry)
+                if args == "reset" then
+                    if HC.WhatsNew:ResetSeen() then
+                        HC.Print("What's new reset. The ! is back; /reload to see the popup again.")
+                    end
+                elseif args == "sound" then
+                    HC.WhatsNew:PlayTurnIn()
+                    HC.Print("turn-in sound: " .. tostring(HC.WhatsNew.lastSound))
+                elseif args ~= "" then
+                    usage(entry)
+                elseif not HC.WhatsNew:Show() then
+                    HC.Print("nothing new to show")
+                end
             end })
     end
     self:Add({ name = "debug", section = CORE, help = "Open a copyable diagnostic report",
@@ -246,6 +257,9 @@ function HC.DiagnosticReport()
     if HC.WhatsNew and HC.WhatsNew.Enabled() then
         lines[#lines + 1] = "What's new: " .. (state.whatsNew == false and "off" or "on")
             .. ", last seen " .. tostring(state.whatsNewSeen or "none")
+            .. ", page seen " .. tostring(state.whatsNewPageSeen or "never")
+            .. ", turn-in sound " .. (state.whatsNewSound == false and "off" or "on")
+            .. (HC.WhatsNew.lastSound and (" (last: " .. HC.WhatsNew.lastSound .. ")") or "")
     end
     if HC.Settings.errors then
         for name, err in pairs(HC.Settings.errors) do

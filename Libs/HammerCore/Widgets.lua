@@ -11,8 +11,13 @@ local T = HC.Theme
 local UI = {}
 HC.UI = UI
 
-UI.PAD = 16
+UI.PAD = 24
+-- The window sets this to its real content width before it builds pages.
 UI.CONTENT_WIDTH = 540
+-- Every setting sits in a cell this tall: label on the left, control on the
+-- right.  A page in two columns pairs cells into one striped row.
+UI.CELL_H = 40
+UI.CELL_INSET = 14
 
 local function refreshAll(panel)
     if panel.hcRefreshAll then panel.hcRefreshAll() end
@@ -29,11 +34,98 @@ local function resolve(value)
     return value
 end
 
+-- ── Cell layout ────────────────────────────────────────────────────────────
+-- Pages stack settings top to bottom by passing y along.  In two columns a
+-- left cell leaves y where it was, so the next cell lands beside it; anything
+-- else placed at that y (a header, text, a card) first moves below the pair.
+-- Rows alternate a quiet stripe, and a filled two-column row has a centre rule.
+
+local function layout(panel)
+    local state = rawget(panel, "hcLayout")
+    if not state then
+        state = { columns = panel.hcColumns or 1, open = false, stripe = 0 }
+        panel.hcLayout = state
+    end
+    return state
+end
+
+-- Sets one or two columns for the cells that follow.
+function UI.Columns(panel, count, y)
+    y = UI.Flush(panel, y)
+    layout(panel).columns = count == 2 and 2 or 1
+    return y
+end
+
+-- Closes a half-filled two-column row; returns the y below it.  Any y
+-- inside the open row (callers often pass y - 4 for a little air) lands
+-- below it, so nothing is drawn over the half row.
+function UI.Flush(panel, y)
+    local state = rawget(panel, "hcLayout")
+    if state and state.open then
+        state.open = false
+        return math.min(y, state.rowY - state.rowH - 4)
+    end
+    return y
+end
+
+-- Claims a cell at y.  Returns x, width, the y for whatever comes next, and
+-- the cell's slot: { stripe, columns, left }.  The row draws its own stripe
+-- (see UI.Row), so a page that moves rows later moves their stripes too.
+function UI.PlaceCell(panel, y, height)
+    local state = layout(panel)
+    height = height or UI.CELL_H
+    if state.columns == 2 then
+        local half = math.floor((UI.CONTENT_WIDTH - 1) / 2)
+        if state.open and state.rowY == y then
+            state.open = false
+            -- The pair is complete, so the centre rule now separates something.
+            local rule = state.leftSlot and state.leftSlot.rule
+            if rule then rule:Show() end
+            return UI.PAD + half + 1, half, y - math.max(height, state.rowH) - 4,
+                { stripe = state.stripe, columns = 2, left = false }
+        end
+        state.stripe = state.stripe + 1
+        state.open, state.rowY, state.rowH = true, y, height
+        state.leftSlot = { stripe = state.stripe, columns = 2, left = true }
+        return UI.PAD, half, y, state.leftSlot
+    end
+    state.open = false
+    state.stripe = state.stripe + 1
+    return UI.PAD, UI.CONTENT_WIDTH, y - height - 4, { stripe = state.stripe, columns = 1, left = true }
+end
+
+-- A row's stripe: the full content width from the row's left edge, so a
+-- left cell also paints behind its right-hand neighbour.
+local function stripe(row, slot, height)
+    if not (slot and slot.left) then return end
+    local fill = row:CreateTexture(nil, "BACKGROUND")
+    T.Fill(fill, slot.stripe % 2 == 1 and "stripe" or "content")
+    fill:SetPoint("TOPLEFT", row, "TOPLEFT")
+    fill:SetSize(UI.CONTENT_WIDTH, height)
+    row.hcStripe = fill
+    if slot.columns == 2 then
+        -- Hidden until a right-hand cell joins the row: a lone cell has
+        -- nothing to divide.
+        local rule = T.Fill(row:CreateTexture(nil, "BORDER"), "edge")
+        rule:SetSize(1, height - 12)
+        rule:SetPoint("TOPLEFT", row, "TOPLEFT", math.floor((UI.CONTENT_WIDTH - 1) / 2), -6)
+        rule:Hide()
+        row.hcRule, slot.rule = rule, rule
+    end
+end
+UI.Stripe = stripe
+
+-- Starts the stripes again, as each section does.
+function UI.RestartStripes(panel)
+    layout(panel).stripe = 0
+end
+
 -- Hints live in a tooltip rather than a second grey line under every control.
 function UI.AttachHint(control, title, hint)
     if not hint then return end
     control.hcHintTitle, control.hcHint = title, hint
     control:HookScript("OnEnter", function(self)
+        if not self.hcHint then return end
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
         local titleText = resolve(self.hcHintTitle)
         GameTooltip:SetText(type(titleText) == "string" and titleText or HC.name, T.Unpack("accent"))
@@ -93,6 +185,65 @@ function UI.CheckButton(parent)
     return btn
 end
 
+-- An on/off switch: a pill track with a round knob.  The button covers its
+-- whole cell, so clicking the label works too; .Text is that label.
+function UI.Switch(parent)
+    local btn = CreateFrame("Button", nil, parent)
+    btn.Text = UI.FontString(btn)
+    btn.Text:SetPoint("LEFT", UI.CELL_INSET, 0)
+    btn.Text:SetJustifyH("LEFT")
+    if btn.Text.SetWordWrap then btn.Text:SetWordWrap(false) end
+    local track = CreateFrame("Frame", nil, btn)
+    track:SetSize(40, 20)
+    track:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    btn.Text:SetPoint("RIGHT", track, "LEFT", -12, 0)
+    local left = T.Icon(track:CreateTexture(nil, "ARTWORK"), "Circle.tga")
+    left:SetSize(10, 20)
+    left:SetPoint("LEFT")
+    if left.SetTexCoord then left:SetTexCoord(0, 0.5, 0, 1) end
+    local right = T.Icon(track:CreateTexture(nil, "ARTWORK"), "Circle.tga")
+    right:SetSize(10, 20)
+    right:SetPoint("RIGHT")
+    if right.SetTexCoord then right:SetTexCoord(0.5, 1, 0, 1) end
+    local middle = track:CreateTexture(nil, "ARTWORK")
+    middle:SetTexture("Interface\\Buttons\\WHITE8X8")
+    middle:SetPoint("TOPLEFT", left, "TOPRIGHT")
+    middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
+    local knob = T.Icon(track:CreateTexture(nil, "OVERLAY"), "Circle.tga")
+    knob:SetSize(14, 14)
+    btn.track, btn.knob = track, knob
+    local function paint(self)
+        local role = self.checked and "accent" or "edge"
+        for _, part in ipairs({ left, right, middle }) do
+            if part.SetVertexColor then part:SetVertexColor(T.Unpack(role)) end
+        end
+        knob:ClearAllPoints()
+        if self.checked then
+            knob:SetPoint("RIGHT", track, "RIGHT", -3, 0)
+            knob:SetVertexColor(T.Unpack("field"))
+        else
+            knob:SetPoint("LEFT", track, "LEFT", 3, 0)
+            knob:SetVertexColor(T.Unpack("muted"))
+        end
+        local enabled = self.enabled ~= false
+        track:SetAlpha(enabled and 1 or 0.4)
+        T.Text(self.Text, enabled and "text" or "muted")
+    end
+    btn.SetChecked = function(self, checked)
+        self.checked = checked and true or false
+        paint(self)
+    end
+    btn.GetChecked = function(self) return self.checked end
+    local setEnabled = btn.SetEnabled
+    btn.SetEnabled = function(self, enabled)
+        if setEnabled then setEnabled(self, enabled) end
+        self.enabled = enabled and true or false
+        paint(self)
+    end
+    btn:SetChecked(false)
+    return btn
+end
+
 -- Buttons keep a quiet surface so actions are visibly clickable without
 -- turning every setting into a card.  variant: nil, "primary" or "danger".
 function UI.Button(parent, width, height, variant)
@@ -112,11 +263,20 @@ function UI.Button(parent, width, height, variant)
     else
         button = CreateFrame("Button", nil, parent, "BackdropTemplate")
         button:SetSize(width or 160, height or 22)
-        T.Surface(button, "raised", variant == "danger" and "danger"
-            or variant == "primary" and "accent" or "edge")
+        local border = variant == "danger" and "danger" or variant == "primary" and "accent" or "edge"
+        T.Surface(button, "raised", border)
         button.Text = UI.FontString(button, "GameFontHighlight", variant == "danger" and "danger" or "text")
         button.Text:SetAllPoints()
         button.Text:SetJustifyH("CENTER")
+        button:HookScript("OnEnter", function(self)
+            if self.enabled == false then return end
+            self:SetBackdropColor(T.Unpack("hover"))
+            if border == "edge" then T.Border(self, "menuEdge") end
+        end)
+        button:HookScript("OnLeave", function(self)
+            self:SetBackdropColor(T.Unpack("raised"))
+            T.Border(self, border)
+        end)
     end
     button.SetText = function(self, text)
         self.Text:SetText(text or "")
@@ -127,20 +287,20 @@ function UI.Button(parent, width, height, variant)
 end
 
 local function chevron(button)
-    for _, spec in ipairs({ { -13, 2, -0.75 }, { -8, 2, 0.75 } }) do
-        local arrow = T.Fill(button:CreateTexture(nil, "OVERLAY"), "muted")
-        arrow:SetSize(7, 1)
-        arrow:SetPoint("RIGHT", spec[1], spec[2])
-        if arrow.SetRotation then arrow:SetRotation(spec[3]) end
-    end
+    local arrow = T.Icon(button:CreateTexture(nil, "OVERLAY"), "Chevron.tga", "muted")
+    arrow:SetSize(12, 12)
+    arrow:SetPoint("RIGHT", -10, 0)
+    button.chevron = arrow
 end
 
 -- A select is a value field, so a subtle border makes its value readable.
 function UI.SelectButton(parent, width, height)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    button:SetSize(width or 160, height or 30)
-    T.Surface(button, "rail", "edge")
-    button.Text = UI.FontString(button)
+    button:SetSize(width or 160, height or 28)
+    T.Surface(button, "field", "edge")
+    button:HookScript("OnEnter", function(self) T.Border(self, "menuEdge") end)
+    button:HookScript("OnLeave", function(self) T.Border(self, "edge") end)
+    button.Text = UI.FontString(button, "GameFontHighlightSmall")
     button.Text:SetPoint("LEFT", 10, 0)
     button.Text:SetPoint("RIGHT", -26, 0)
     button.Text:SetJustifyH("LEFT")
@@ -230,13 +390,21 @@ end
 
 -- ── Row controls ───────────────────────────────────────────────────────────
 
+-- A setting cell: title on the left, the control added by the caller on the
+-- right.  row.hcNextY is where the next setting goes.
 function UI.Row(parent, y, height, title, hint, width)
+    local cellHeight = math.max(height or UI.CELL_H, UI.CELL_H)
+    local x, cellWidth, nextY, slot = UI.PlaceCell(parent, y, cellHeight)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(width or UI.CONTENT_WIDTH, height or 38)
-    row:SetPoint("TOPLEFT", UI.PAD, y)
+    row:SetSize(cellWidth, cellHeight)
+    row:SetPoint("TOPLEFT", x, y)
+    stripe(row, slot, cellHeight)
+    row.hcNextY, row.hcWidth = nextY, cellWidth
     if title ~= nil then
         row.Title = UI.FontString(row)
-        row.Title:SetPoint("LEFT", 0, 0)
+        row.Title:SetPoint("LEFT", UI.CELL_INSET, 0)
+        row.Title:SetJustifyH("LEFT")
+        if row.Title.SetWordWrap then row.Title:SetWordWrap(false) end
         row.hcRefreshTitle = function() row.Title:SetText(resolve(title) or "") end
         row.hcRefreshTitle()
     end
@@ -245,11 +413,23 @@ function UI.Row(parent, y, height, title, hint, width)
     return row
 end
 
+-- Keeps a row's title clear of its control.
+local function fitTitle(row, control)
+    if row.Title then row.Title:SetPoint("RIGHT", control, "LEFT", -12, 0) end
+end
+
 function UI.Check(panel, label, hint, y, get, set, width)
-    local row = UI.Row(panel, y, 28, nil, hint, width)
+    local row = UI.Row(panel, y, UI.CELL_H, nil, hint, width)
     row.hcHintTitle = label
-    local btn = UI.CheckButton(row)
-    btn:SetPoint("LEFT", 12, 0)
+    local btn
+    if T.IsClassic() then
+        -- Classic keeps Blizzard's own checkbox beside its label.
+        btn = UI.CheckButton(row)
+        btn:SetPoint("LEFT", UI.CELL_INSET, 0)
+    else
+        btn = UI.Switch(row)
+        btn:SetAllPoints(row)
+    end
     btn.Text:SetText(label)
     row.hcCheckbox = btn
     local function toggle()
@@ -261,22 +441,50 @@ function UI.Check(panel, label, hint, y, get, set, width)
     row:SetScript("OnMouseUp", function(_, button)
         if button == "LeftButton" then toggle() end
     end)
+    UI.AttachHint(btn, label, hint)
     local function render() btn:SetChecked(get() and true or false) end
     onRefresh(panel, render)
     render()
-    return row, y - 32
+    return row, row.hcNextY
+end
+
+-- A small button inside a setting's cell, such as "Test" beside a sound
+-- switch.  It sits left of the switch (or at the cell's right edge).
+function UI.CellAction(row, text, width, hint)
+    local switch = row.hcCheckbox
+    local button = UI.Button(row, width or 52, 22)
+    if switch and switch.track then
+        button:SetPoint("RIGHT", switch.track, "LEFT", -14, 0)
+        switch.Text:SetPoint("RIGHT", button, "LEFT", -10, 0)
+        if button.SetFrameLevel and switch.GetFrameLevel then
+            button:SetFrameLevel((switch:GetFrameLevel() or 0) + 2)
+        end
+    else
+        button:SetPoint("RIGHT", row, "RIGHT", -UI.CELL_INSET, 0)
+    end
+    button:SetText(text)
+    if hint then UI.AttachHint(button, text, hint) end
+    return button
 end
 
 function UI.Slider(panel, label, hint, y, minV, maxV, step, get, set, fmt, width)
-    local row = UI.Row(panel, y, 28, label, hint, width)
-    local sliderWidth = math.max(80, math.min(180, (width or UI.CONTENT_WIDTH) - 150))
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint, width)
+    local sliderWidth = math.max(90, math.min(160, math.floor(row.hcWidth * 0.34)))
+    local box = CreateFrame("Frame", nil, row, "BackdropTemplate")
+    box:SetSize(48, 24)
+    box:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    T.Surface(box, "field", "edge")
+    local value = UI.FontString(box, "GameFontHighlightSmall")
+    value:SetAllPoints()
+    value:SetJustifyH("CENTER")
     local s = CreateFrame("Slider", nil, row)
     s:SetOrientation("HORIZONTAL")
-    s:SetSize(sliderWidth, 16)
-    s:SetPoint("LEFT", row, "LEFT", 150, 0)
+    s:SetSize(sliderWidth, 18)
+    s:SetPoint("RIGHT", box, "LEFT", -12, 0)
     s:SetMinMaxValues(minV, maxV)
     s:SetValueStep(step)
     s:SetObeyStepOnDrag(true)
+    fitTitle(row, s)
     local fill
     if T.IsClassic() then
         -- Blizzard's slider bar: a bordered groove and the gold thumb.
@@ -297,26 +505,24 @@ function UI.Slider(panel, label, hint, y, minV, maxV, step, get, set, fmt, width
         fill = s:CreateTexture(nil, "ARTWORK")
         fill:Hide()
     else
-        local track = T.Fill(s:CreateTexture(nil, "BACKGROUND"), "rail")
-        track:SetPoint("LEFT", 4, 0)
-        track:SetPoint("RIGHT", -4, 0)
+        local track = T.Fill(s:CreateTexture(nil, "BACKGROUND"), "edge")
+        track:SetPoint("LEFT", 6, 0)
+        track:SetPoint("RIGHT", -6, 0)
         track:SetHeight(4)
-        fill = T.Fill(s:CreateTexture(nil, "ARTWORK"), "selected")
-        fill:SetPoint("LEFT", 4, 0)
+        fill = T.Fill(s:CreateTexture(nil, "ARTWORK"), "accent")
+        fill:SetPoint("LEFT", 6, 0)
         fill:SetHeight(4)
-        local thumb = T.Fill(s:CreateTexture(nil, "OVERLAY"), "selected")
-        thumb:SetSize(10, 10)
+        local thumb = T.Icon(s:CreateTexture(nil, "OVERLAY"), "Circle.tga", "accent")
+        thumb:SetSize(14, 14)
         if s.SetThumbTexture then s:SetThumbTexture(thumb) end
     end
-    local value = UI.FontString(row, "GameFontHighlight", "muted")
-    value:SetPoint("LEFT", s, "RIGHT", 14, 0)
 
     local rendering = false
     local function render(v)
         if row.hcRefreshTitle then row.hcRefreshTitle() end
         value:SetText(fmt and fmt(v) or tostring(v))
         local ratio = (v - minV) / math.max(1, maxV - minV)
-        fill:SetWidth(math.max(0, (sliderWidth - 8) * ratio))
+        fill:SetWidth(math.max(0.01, (sliderWidth - 12) * ratio))
     end
     s:SetScript("OnValueChanged", function(_, v)
         -- Snap before storing: some clients report unsnapped values mid-drag.
@@ -325,6 +531,11 @@ function UI.Slider(panel, label, hint, y, minV, maxV, step, get, set, fmt, width
         if rendering then return end
         set(v)
         refreshAll(panel)
+    end)
+    s:EnableMouseWheel(true)
+    s:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetValue() or get()
+        self:SetValue(math.max(minV, math.min(maxV, current + delta * step)))
     end)
     UI.AttachHint(s, label, hint)
     local function refresh()
@@ -335,15 +546,18 @@ function UI.Slider(panel, label, hint, y, minV, maxV, step, get, set, fmt, width
     end
     onRefresh(panel, refresh)
     refresh()
-    return row, y - 34
+    return row, row.hcNextY
 end
 
 -- A labelled select.  values/labels may be tables or functions.
--- buttonWidth widens the select for long choices (default 156).
+-- buttonWidth widens the select for long choices.  offset is ignored: the
+-- select sits at the right of its cell.
 function UI.Dropdown(panel, label, hint, y, values, labels, get, set, width, offset, buttonWidth)
-    local row = UI.Row(panel, y, 30, label, hint, width)
-    local button = UI.SelectButton(row, buttonWidth or 156, 30)
-    button:SetPoint("LEFT", row, "LEFT", offset or 150, 0)
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint, width)
+    local wide = math.min(buttonWidth or 180, math.floor(row.hcWidth * 0.55))
+    local button = UI.SelectButton(row, wide, 28)
+    button:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    fitTitle(row, button)
     local function choices() return resolve(values), resolve(labels) end
     local function render()
         local vals, labs = choices()
@@ -362,20 +576,17 @@ function UI.Dropdown(panel, label, hint, y, values, labels, get, set, width, off
     UI.AttachHint(button, label, hint)
     onRefresh(panel, render)
     render()
-    return row, y - 34, button
+    return row, row.hcNextY, button
 end
 
 -- A select whose choices can change after the page is built (chat windows,
 -- known spells): a small title above a wide select.
 -- optionsFn() returns values, labels.
 function UI.DynamicDropdown(panel, label, hint, y, optionsFn, get, set, width)
-    local row = UI.Row(panel, y, 54, nil, hint)
-    row.hcHintTitle = label
-    local title = UI.FontString(row, "GameFontHighlightSmall", "muted")
-    title:SetPoint("TOPLEFT", 0, 0)
-    title:SetText(label)
-    local button = UI.SelectButton(row, width or 264, 30)
-    button:SetPoint("TOPLEFT", 0, -15)
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint)
+    local button = UI.SelectButton(row, math.min(width or 240, math.floor(row.hcWidth * 0.6)), 28)
+    button:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    fitTitle(row, button)
     local function render()
         local values, labels = optionsFn()
         local current = get()
@@ -391,16 +602,16 @@ function UI.DynamicDropdown(panel, label, hint, y, optionsFn, get, set, width)
         refreshAll(panel)
     end)
     UI.AttachHint(button, label, hint)
-    UI.AttachTitleHint(row, title, label, hint)
     onRefresh(panel, render)
     render()
-    return row, y - 54, button
+    return row, row.hcNextY, button
 end
 
 -- Two labelled selects under one heading.
 -- left/right = { label, values, labels, get, set, hint? }; values and labels
 -- may be functions.  Returns leftButton, rightButton, next y.
 function UI.DropdownPair(panel, heading, y, left, right)
+    y = UI.Flush(panel, y)
     local groupTitle = UI.FontString(panel, "GameFontHighlight", "accent")
     groupTitle:SetPoint("TOPLEFT", UI.PAD, y)
     groupTitle:SetText(heading)
@@ -440,13 +651,9 @@ end
 -- A menu of radio modes and combinable conditions, summarised on the button.
 -- spec = { items = { { label, radio?, heading?, get, set, disabled? } }, summary = fn }
 -- label and disabled may be functions; they are re-read each time it opens.
-function UI.MultiSelect(panel, label, hint, y, spec, width)
-    local title = UI.FontString(panel, "GameFontHighlightSmall", "muted")
-    title:SetPoint("TOPLEFT", UI.PAD, y)
-    title:SetText(label)
-    local btn = UI.SelectButton(panel, width or 240, 30)
-    btn:SetPoint("TOPLEFT", UI.PAD, y - 15)
-    local function render() btn:SetText(spec.summary()) end
+-- A tick list that drops from `btn`.  spec = { items = { { label, get, set,
+-- radio?, disabled?, heading? } }, summary() }; render() relabels btn.
+local function checklist(btn, panel, spec, render)
     local menu, dismiss, controls
     local function refreshChecks()
         for _, control in ipairs(controls) do
@@ -470,6 +677,28 @@ function UI.MultiSelect(panel, label, hint, y, spec, width)
         T.Surface(menu, "menu", "menuEdge")
         local menuWidth, cursorY = btn:GetWidth(), -5
         controls = {}
+        -- spec.bulk: Select all / Deselect all across the top, as in
+        -- Blizzard's own filter menus. true sets every tickable item; a
+        -- function(selected) does it the addon's way (keeping one, say).
+        if spec.bulk then
+            local function bulk(selected)
+                if type(spec.bulk) == "function" then
+                    spec.bulk(selected)
+                else
+                    for _, item in ipairs(spec.items) do
+                        if not item.heading and not item.radio and not resolve(item.disabled) then item.set(selected) end
+                    end
+                end
+                refreshAll(panel)
+                render()
+                refreshChecks()
+            end
+            local all = UI.Link(menu, "Select all", function() bulk(true) end)
+            all:SetPoint("TOPLEFT", 12, cursorY - 6)
+            local none = UI.Link(menu, "Deselect all", function() bulk(false) end)
+            none:SetPoint("LEFT", all, "RIGHT", 14, 0)
+            cursorY = cursorY - 28
+        end
         for _, item in ipairs(spec.items) do
             if item.heading then
                 local heading = UI.FontString(menu, "GameFontDisableSmall", "muted")
@@ -516,20 +745,47 @@ function UI.MultiSelect(panel, label, hint, y, spec, width)
         dismiss:Show()
         menu:Show()
     end)
+end
+
+function UI.MultiSelect(panel, label, hint, y, spec, width)
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint)
+    local btn = UI.SelectButton(row, math.min(width or 240, math.floor(row.hcWidth * 0.6)), 28)
+    btn:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    fitTitle(row, btn)
+    local function render() btn:SetText(spec.summary()) end
+    checklist(btn, panel, spec, render)
     UI.AttachHint(btn, label, hint)
-    UI.AttachTitleHint(panel, title, label, hint)
     onRefresh(panel, render)
     render()
-    return btn, y - 54
+    return btn, row.hcNextY
+end
+
+-- MultiSelect's tick list on a small button with a title above, for cards
+-- laid out by hand such as profile rules.  Returns the button and the y below.
+function UI.CompactMultiSelect(parent, label, hint, x, y, width, spec)
+    local title = UI.FontString(parent, "GameFontHighlightSmall", "muted")
+    title:SetPoint("TOPLEFT", x, y)
+    title:SetText(label)
+    local button = UI.SelectButton(parent, width or 150, 26)
+    button:SetPoint("TOPLEFT", x, y - 15)
+    button.hcTitle = title
+    local function render() button:SetText(spec.summary()) end
+    checklist(button, parent, spec, render)
+    UI.AttachHint(button, label, hint)
+    UI.AttachTitleHint(parent, title, label, hint)
+    onRefresh(parent, render)
+    render()
+    return button, y - 45
 end
 
 -- A searchable list for large catalogues such as the client's emotes.
 -- spec = { items = function() -> { { value, label } }, get, set, width }
 function UI.SearchPicker(panel, label, hint, y, spec, width, offset)
-    local row = UI.Row(panel, y, 30, label, hint, width)
-    local pickerWidth = spec.width or 220
-    local button = UI.SelectButton(row, pickerWidth, 30)
-    button:SetPoint("LEFT", row, "LEFT", offset or 150, 0)
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint, width)
+    local pickerWidth = math.min(spec.width or 220, math.floor(row.hcWidth * 0.6))
+    local button = UI.SelectButton(row, pickerWidth, 28)
+    button:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    fitTitle(row, button)
     local function labelFor(value)
         for _, item in ipairs(spec.items()) do
             if item.value == value then return item.label end
@@ -623,19 +879,94 @@ function UI.SearchPicker(panel, label, hint, y, spec, width, offset)
     UI.AttachHint(button, label, hint)
     onRefresh(panel, render)
     render()
-    return row, y - 34, button
+    return row, row.hcNextY, button
+end
+
+-- A select with a small title above it, placed at x, y inside any frame
+-- (cards, multi-column rows).  values/labels may be functions.
+-- Returns the button and the y below it.
+function UI.CompactSelect(parent, label, hint, x, y, width, values, labels, get, set)
+    local title = UI.FontString(parent, "GameFontHighlightSmall", "muted")
+    title:SetPoint("TOPLEFT", x, y)
+    title:SetText(label)
+    local button = UI.SelectButton(parent, width or 150, 26)
+    button:SetPoint("TOPLEFT", x, y - 15)
+    button.hcTitle = title
+    local function choices() return resolve(values), resolve(labels) end
+    local function render()
+        local vals, labs = choices()
+        local current, text = get(), labs[1] or "-"
+        for index, value in ipairs(vals) do
+            if value == current then text = labs[index] end
+        end
+        button:SetText(text)
+    end
+    button.hcCloseMenu = popupMenu(button, choices, get, function(value)
+        set(value)
+        render()
+        refreshAll(parent)
+    end)
+    UI.AttachHint(button, label, hint)
+    UI.AttachTitleHint(parent, title, label, hint)
+    onRefresh(parent, render)
+    render()
+    return button, y - 45
+end
+
+-- A number with - and + buttons and a small title above.  Shift-click steps
+-- by `big` (default 5).  Returns the frame and the y below it.
+function UI.Stepper(parent, label, hint, x, y, minV, maxV, get, set, big)
+    local title = UI.FontString(parent, "GameFontHighlightSmall", "muted")
+    title:SetPoint("TOPLEFT", x, y)
+    title:SetText(label)
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(96, 26)
+    holder:SetPoint("TOPLEFT", x, y - 15)
+    holder.hcTitle = title
+    local minus = UI.Button(holder, 26, 26)
+    minus:SetPoint("LEFT", 0, 0)
+    local plus = UI.Button(holder, 26, 26)
+    plus:SetPoint("RIGHT", 0, 0)
+    minus:SetText("-")
+    plus:SetText("+")
+    local value = UI.FontString(holder, "GameFontHighlight")
+    value:SetPoint("LEFT", minus, "RIGHT", 0, 0)
+    value:SetPoint("RIGHT", plus, "LEFT", 0, 0)
+    value:SetJustifyH("CENTER")
+    local function render()
+        local current = get()
+        value:SetText(tostring(current))
+        UI.SetEnabled(minus, current > minV)
+        UI.SetEnabled(plus, current < maxV)
+    end
+    local function step(direction)
+        local amount = (IsShiftKeyDown and IsShiftKeyDown()) and (big or 5) or 1
+        set(math.max(minV, math.min(maxV, get() + direction * amount)))
+        render()
+        refreshAll(parent)
+    end
+    minus:SetScript("OnClick", function() step(-1) end)
+    plus:SetScript("OnClick", function() step(1) end)
+    UI.AttachHint(minus, label, hint)
+    UI.AttachHint(plus, label, hint)
+    UI.AttachTitleHint(parent, title, label, hint)
+    holder.minus, holder.plus, holder.value = minus, plus, value
+    onRefresh(parent, render)
+    render()
+    return holder, y - 45
 end
 
 -- A single-line text field that saves on Enter or when it loses focus.
 function UI.TextInput(panel, label, hint, y, get, set, width, inputWidth)
-    local row = UI.Row(panel, y, 30, label, hint, width)
+    local row = UI.Row(panel, y, UI.CELL_H, label, hint, width)
     local box = CreateFrame("EditBox", nil, row, "BackdropTemplate")
-    box:SetSize(inputWidth or 300, 26)
-    box:SetPoint("LEFT", row, "LEFT", 150, 0)
+    box:SetSize(math.min(inputWidth or 260, math.floor(row.hcWidth * 0.6)), 26)
+    box:SetPoint("RIGHT", -UI.CELL_INSET, 0)
+    fitTitle(row, box)
     box:SetAutoFocus(false)
     box:SetFontObject(ChatFontNormal)
     box:SetTextInsets(8, 8, 0, 0)
-    T.Surface(box, "rail", "edge")
+    T.Surface(box, "field", "edge")
     local function save(self) set(self:GetText() or "") end
     box:SetScript("OnEnterPressed", function(self) save(self); self:ClearFocus() end)
     box:SetScript("OnEditFocusLost", save)
@@ -645,44 +976,70 @@ function UI.TextInput(panel, label, hint, y, get, set, width, inputWidth)
         if not (box.HasFocus and box:HasFocus()) then box:SetText(get() or "") end
     end)
     box:SetText(get() or "")
-    return row, y - 34, box
+    return row, row.hcNextY, box
 end
 
 -- ── Layout helpers ─────────────────────────────────────────────────────────
 
--- A section heading with a rule running to the right edge.
-function UI.Header(panel, text, y)
-    local fs = UI.FontString(panel, "GameFontNormalLarge", "section")
-    fs:SetPoint("TOPLEFT", UI.PAD, y)
-    fs:SetText(text)
-    local rule = T.Fill(panel:CreateTexture(nil, "ARTWORK"), "edge")
-    rule:SetHeight(1)
-    rule:SetPoint("LEFT", fs, "RIGHT", 10, 0)
-    rule:SetPoint("RIGHT", panel.hcHeaderOwner or panel, "RIGHT", -20, 0)
-    return fs, y - 28
+-- A section label in small capitals, as the start of a block of settings.
+-- `icon` (optional) is a texture path or file ID drawn before the text, such
+-- as the spell a section is about.  A function is called on every refresh,
+-- for icons that depend on what the player knows.
+function UI.Header(panel, text, y, icon)
+    y = UI.Flush(panel, y)
+    if y < -16 then y = y - 10 end
+    local fs = UI.FontString(panel, "GameFontNormalSmall", "section")
+    fs:SetText(tostring(text or ""):upper())
+    if icon then
+        local tex = panel:CreateTexture(nil, "ARTWORK")
+        tex:SetSize(18, 18)
+        tex:SetPoint("TOPLEFT", UI.PAD + 2, y + 3)
+        if tex.SetTexCoord then tex:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        fs.hcIcon = tex
+        local function render()
+            local value = resolve(icon)
+            tex:SetShown(value ~= nil)
+            fs:ClearAllPoints()
+            if value ~= nil then
+                tex:SetTexture(value)
+                fs:SetPoint("LEFT", tex, "RIGHT", 6, 0)
+            else
+                fs:SetPoint("TOPLEFT", UI.PAD + 2, y)
+            end
+        end
+        if type(icon) == "function" then onRefresh(panel, render) end
+        render()
+    else
+        fs:SetPoint("TOPLEFT", UI.PAD + 2, y)
+    end
+    UI.RestartStripes(panel)
+    return fs, y - 22
 end
 
 -- Small muted capitals above a list.
 function UI.SectionLabel(panel, text, y)
+    y = UI.Flush(panel, y)
     local fs = UI.FontString(panel, "GameFontDisableSmall", "muted")
-    fs:SetPoint("TOPLEFT", UI.PAD, y)
+    fs:SetPoint("TOPLEFT", UI.PAD + 2, y)
     fs:SetText(text)
     return fs, y - 20
 end
 
 -- A single line of body text.  Settings text never wraps.
 function UI.Text(panel, text, y, role)
+    y = UI.Flush(panel, y)
     local fs = UI.FontString(panel, "GameFontHighlightSmall", role or "muted")
-    fs:SetPoint("TOPLEFT", UI.PAD, y)
+    fs:SetPoint("TOPLEFT", UI.PAD + 2, y - 4)
     fs:SetWidth(UI.CONTENT_WIDTH)
     fs:SetJustifyH("LEFT")
     if fs.SetWordWrap then fs:SetWordWrap(false) end
     fs:SetText(text)
-    return fs, y - 20
+    return fs, y - 24
 end
 
 -- A bordered card at the page's left edge; returns the card and next y.
 function UI.Card(panel, y, height, width)
+    y = UI.Flush(panel, y)
     local card = CreateFrame("Frame", nil, panel, "BackdropTemplate")
     card:SetPoint("TOPLEFT", UI.PAD, y)
     card:SetSize(width or UI.CONTENT_WIDTH, height)
@@ -690,27 +1047,57 @@ function UI.Card(panel, y, height, width)
     return card, y - height - 14
 end
 
--- A button that goes to another settings page, e.g. "View ignored (3)".
+-- Text that acts as a link: accent coloured, brighter with an underline on
+-- hover.  Returns the button; its width follows the text.
+function UI.Link(parent, text, onClick, template)
+    local link = CreateFrame("Button", nil, parent)
+    link.Text = UI.FontString(link, template or "GameFontHighlightSmall", "link")
+    link.Text:SetPoint("LEFT")
+    local underline = T.Fill(link:CreateTexture(nil, "ARTWORK"), "linkHover")
+    underline:SetHeight(1)
+    underline:SetPoint("TOPLEFT", link.Text, "BOTTOMLEFT", 0, -1)
+    underline:SetPoint("TOPRIGHT", link.Text, "BOTTOMRIGHT", 0, -1)
+    underline:Hide()
+    link.SetText = function(self, value)
+        self.Text:SetText(value or "")
+        self.text = value
+        local width = self.Text.GetStringWidth and self.Text:GetStringWidth() or 0
+        self:SetSize(math.max(20, (width or 0) + 2), 16)
+    end
+    link:SetScript("OnEnter", function() T.Text(link.Text, "linkHover"); underline:Show() end)
+    link:SetScript("OnLeave", function() T.Text(link.Text, "link"); underline:Hide() end)
+    link:SetScript("OnClick", onClick)
+    link:SetText(text)
+    return link
+end
+
+-- A link that goes to another settings page, e.g. "View ignored (3)".
 function UI.PageLink(panel, y, text, page)
-    local button = UI.Button(panel, 180, 22)
-    button:SetPoint("TOPLEFT", UI.PAD, y)
-    button:SetText(resolve(text))
-    button:SetScript("OnClick", function() HC.Settings:Show(page) end)
-    onRefresh(panel, function() button:SetText(resolve(text)) end)
-    return button, y - 30
+    y = UI.Flush(panel, y)
+    local link = UI.Link(panel, resolve(text), function() HC.Settings:Show(page) end, "GameFontHighlight")
+    link:SetPoint("TOPLEFT", UI.PAD + 2, y - 4)
+    onRefresh(panel, function() link:SetText(resolve(text)) end)
+    return link, y - 28
 end
 
 -- A danger-styled button that restores one page's settings.
+-- A standalone button on its own line at the page's left edge, the same
+-- size and inset as the page reset, so page actions line up.
+function UI.ActionButton(panel, y, text, onClick, hint, style, width)
+    y = UI.Flush(panel, y)
+    local button = UI.Button(panel, width or 160, 26, style)
+    button:SetPoint("TOPLEFT", UI.PAD, y - 10)
+    button:SetText(text)
+    if hint then UI.AttachHint(button, text, hint) end
+    button:SetScript("OnClick", onClick)
+    return button, y - 48
+end
+
 function UI.PageReset(panel, y, reset, label)
-    local button = UI.Button(panel, 180, 22, "danger")
-    button:SetPoint("TOPLEFT", UI.PAD, y - 4)
-    button:SetText(label or "Reset page")
-    UI.AttachHint(button, label or "Reset page", "Restore the settings on this page.")
-    button:SetScript("OnClick", function()
+    return UI.ActionButton(panel, y, label or "Reset page", function()
         reset()
         refreshAll(panel)
-    end)
-    return button, y - 40
+    end, "Restore the settings on this page.", "danger")
 end
 
 function UI.SetEnabled(control, enabled)

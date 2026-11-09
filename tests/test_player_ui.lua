@@ -31,7 +31,7 @@ end
 
 assert(loadfile('tests/transport-libs.lua'))()()
 local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
-for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Setup.lua','History.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua' }) do
+for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Flair.lua', 'Setup.lua','History.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua' }) do
     assert(loadfile(file))('Loreforge', ns)
 end
 local loader
@@ -55,11 +55,11 @@ local function last() return calls[#calls] or {} end
 local config = { rounds = 2, perRound = 3, seconds = 20, difficulty = 'mixed', categories = 'Lore, Murlocs', readyCheck = true }
 local rows = {
     { key = 'host-realm', name = 'Host-Realm', total = 0, round = 0, streak = 0, rank = 1 },
-    { key = 'guest-realm', name = 'Guest-Realm', total = 0, round = 0, streak = 0, rank = 1 },
+    { key = 'guest-away', name = 'Guest-Away', total = 0, round = 0, streak = 0, rank = 1 },
     { key = 'chatonly-realm', name = 'Chatonly-Realm', total = 0, round = 0, streak = 0, rank = 1 },
 }
 local function model(state, extra)
-    local m = { id = 'game-1', state = state, host = 'Host-Realm', config = config, joined = true, me = 'guest-realm', rows = rows }
+    local m = { id = 'game-1', state = state, host = 'Host-Realm', config = config, joined = true, me = 'guest-away', rows = rows }
     for k, v in pairs(extra or {}) do m[k] = v end
     return m
 end
@@ -102,7 +102,7 @@ P.Render(as(model('joining')))
 eq(f.primary:GetText(), 'Joining...', 'joining waits for host confirmation')
 eq(f.primary.enabled, false, 'joining is not clickable')
 P.Render(as(model('lobby')))
-assert(f.status:GetText():find('Waiting for Host-Realm', 1, true), 'lobby names the host')
+assert(f.status:GetText():find('Waiting for Host', 1, true), 'lobby names the host')
 eq(f.standTitle:GetText(), 'Players', 'lobby lists players')
 assert(f.leave:IsShown(), 'Leave is available once joined')
 assert(f.rows[3]:IsShown() and f.rows[3].name:GetText():find('Chatonly', 1, true), 'chat-only players stay in the list')
@@ -241,9 +241,10 @@ assert(f.status:GetText() ~= 'Final scores coming up.', 'other reveals do not')
 
 -- Theme art widens the window; a round intro shows it whole with no question.
 P.Render(as(question({ art = 'goblins' })))
-eq(f:GetWidth(), 460 + f:GetHeight(), 'the window widens by the square art')
+-- The painting fills the panel below the 40px header bar, inside a 1px edge.
+eq(f:GetWidth(), 460 + (f:GetHeight() - 42) + 2, 'the window widens by the square art')
 eq(f.art:GetWidth(), f.art:GetHeight(), 'the art is square')
-eq(f.art:GetHeight(), f:GetHeight() - 2, 'at full height')
+eq(f.art:GetHeight(), f:GetHeight() - 42, 'at the full height below the header bar')
 eq(f.art.texture, 'Interface\\AddOns\\Loreforge\\Textures\\theme-goblins.tga', 'the question uses its art')
 P.Render(as(question({ art = 'nonsense' })))
 assert(f.art.texture:find('theme-mixed', 1, true), 'an unknown key shows the bell')
@@ -270,7 +271,8 @@ eq(f.body:GetHeight() - f.scroll:GetHeight(), P.scrollRange, 'scroll range cover
 eq(f.primary:GetText(), 'Retry answer', 'the footer action is still there')
 eq(f.primary.points[1][1], 'BOTTOMLEFT', 'footer actions are pinned to the window bottom')
 eq(f.primary.points[1][2], f, 'footer actions sit outside the scrolling body')
-eq(f.hide.parent, f, 'Hide stays in the fixed title bar')
+eq(f.hide.parent, f.header, 'Hide stays in the fixed header bar')
+eq(f.header.parent, f, 'the header bar sits outside the scrolling body')
 P.Scroll(-1000)
 eq(P.scrollOffset, P.scrollRange, 'scrolling stops at the bottom')
 eq(f.bar:GetValue(), P.scrollRange, 'the scroll bar follows the wheel')
@@ -312,23 +314,23 @@ P.Show()
 -- Up to five standings plus the local player pinned below.
 local big = {}
 for i = 1, 8 do big[i] = { key = 'p' .. i, name = 'Player' .. i, total = 9 - i, streak = 0, rank = i } end
-big[7].key, big[7].name = 'guest-realm', 'Guest-Realm'
+big[7].key, big[7].name = 'guest-away', 'Guest-Away'
 P.Render(as(model('between', { rows = big })))
 eq(f.rows[5].name:GetText():sub(1, 3), '5. ', 'five leaders show')
-assert(f.rows[6]:IsShown() and f.rows[6].name:GetText():find('Guest-Realm (you)', 1, true), 'the local player is pinned')
+assert(f.rows[6]:IsShown() and f.rows[6].name:GetText():find('Guest-Away (you)', 1, true), 'the local player is pinned')
 assert(f.you:GetText():find('7th', 1, true), 'personal rank shows')
 
 -- Final results open once even after hiding, with shared winners.
 wow.Click(f.hide)
 local final = {
-    { key = 'guest-realm', name = 'Guest-Realm', total = 4, bestStreak = 3, rank = 1, winner = true },
+    { key = 'guest-away', name = 'Guest-Away', total = 4, bestStreak = 3, rank = 1, winner = true },
     { key = 'chatonly-realm', name = 'Chatonly-Realm', total = 4, bestStreak = 2, rank = 1, winner = true },
     { key = 'host-realm', name = 'Host-Realm', total = 1, rank = 3 },
 }
 P.Render(as(model('finished', { rows = final })))
 assert(f:IsShown(), 'final results open once')
 eq(f.headline:GetText(), 'Game complete', 'the finish has a large headline')
-eq(f.winner:GetText(), 'Shared win: Guest-Realm, Chatonly-Realm, 4 points each.', 'a tie is a shared win')
+eq(f.winner:GetText(), 'Shared win: Guest-Away, Chatonly, 4 points each.', 'a tie is a shared win')
 eq(f.you:GetText(), 'You shared the win with 4 points · best streak 3', 'the local result and best streak')
 assert(not f.question:IsShown() and not f.answers[1]:IsShown() and not f.feedback:IsShown(), 'no stale question, choices or reveal')
 eq(f.standTitle:GetText(), 'Final standings', 'final standings heading')
@@ -340,8 +342,8 @@ assert(not f.roundBar:IsShown(), 'no round scores without round data')
 -- Saved round standings sit under the final standings.
 local rounds = {
     { round = 1, rows = { { key = 'chatonly-realm', round = 3, total = 3, rank = 1 },
-        { key = 'guest-realm', round = 1, total = 1, rank = 2 } } },
-    { round = 2, rows = { { key = 'guest-realm', round = 3, total = 4, rank = 1 } } },
+        { key = 'guest-away', round = 1, total = 1, rank = 2 } } },
+    { round = 2, rows = { { key = 'guest-away', round = 3, total = 4, rank = 1 } } },
 }
 P.Render(as(model('finished', { rows = final, rounds = rounds })))
 assert(f.roundBar:IsShown(), 'round scores are offered')
@@ -350,13 +352,13 @@ assert(f.roundButtons[2]:IsShown() and not f.roundButtons[3]:IsShown(), 'only ro
 assert(not f.roundRows[1]:IsShown(), 'round rows wait for a click')
 wow.Click(f.roundButtons[1])
 eq(f.roundTitle:GetText(), 'Round scores · Round 1', 'the selected round is named')
-assert(f.roundRows[1].name:GetText():find('1.  Chatonly-Realm', 1, true), 'round names come from the final rows')
+assert(f.roundRows[1].name:GetText():find('1.  Chatonly', 1, true), 'round names come from the final rows')
 eq(f.roundRows[1].score:GetText(), '+3 this round · total 3', 'round and running totals show')
-assert(f.roundRows[2].name:GetText():find('Guest-Realm (you)', 1, true), 'the local player is marked')
+assert(f.roundRows[2].name:GetText():find('Guest-Away (you)', 1, true), 'the local player is marked')
 assert(f.rows[1]:IsShown() and f.rows[1].name:GetText():find('Shared win', 1, true), 'final standings stay visible')
 assert(f.roundRows[1].points[1][5] < f.rows[3].points[1][5], 'round rows sit below the final standings')
 wow.Click(f.roundButtons[2])
-assert(f.roundRows[1].name:GetText():find('Guest-Realm', 1, true) and not f.roundRows[2]:IsShown(), 'switching rounds redraws')
+assert(f.roundRows[1].name:GetText():find('Guest-Away', 1, true) and not f.roundRows[2]:IsShown(), 'switching rounds redraws')
 wow.Click(f.roundButtons[2])
 assert(not f.roundRows[1]:IsShown(), 'clicking the open round closes it')
 P.Render(as(model('between', { rows = final, rounds = rounds })))
@@ -366,13 +368,13 @@ eq(f.headline:GetText(), '', 'the completion headline is only for finished games
 -- Single winner, lower places, nobody scoring and pending results.
 local solo = {
     { key = 'chatonly-realm', name = 'Chatonly-Realm', total = 5, rank = 1, winner = true },
-    { key = 'guest-realm', name = 'Guest-Realm', total = 2, bestStreak = 1, rank = 2 },
+    { key = 'guest-away', name = 'Guest-Away', total = 2, bestStreak = 1, rank = 2 },
     { key = 'host-realm', name = 'Host-Realm', total = 1, rank = 3 },
 }
 P.Render(as(model('finished', { rows = solo })))
-eq(f.winner:GetText(), 'Chatonly-Realm wins with 5 points.', 'one winner is named')
+eq(f.winner:GetText(), 'Chatonly wins with 5 points.', 'one winner is named')
 eq(f.you:GetText(), 'You finished 2nd of 3 with 2 points', 'a lower place shows rank and score')
-P.Render(as(model('finished', { rows = { { key = 'guest-realm', name = 'Guest-Realm', total = 0, rank = 1 },
+P.Render(as(model('finished', { rows = { { key = 'guest-away', name = 'Guest-Away', total = 0, rank = 1 },
     { key = 'host-realm', name = 'Host-Realm', total = 0, rank = 1 } } })))
 eq(f.winner:GetText(), 'No correct answers, so no winner this time.', 'zero scores have no winner')
 eq(f.you:GetText(), 'You finished 1st of 2 with 0 points', 'a zero score is not a win')
@@ -393,7 +395,7 @@ P.Render({ state = 'history', history = {
     { id = 'game-0', host = 'Other-Realm', date = '28 Oct 19:00', rank = 2, score = 3, totalQuestions = 5 },
 } })
 assert(f:IsShown() and f.history[2]:IsShown(), 'history lists saved games')
-assert(f.history[1].Text:GetText():find('Host-Realm · 1st · 4/6 correct', 1, true), 'history row summary')
+assert(f.history[1].Text:GetText():find('Host · 1st · 4/6 correct', 1, true), 'history row summary')
 assert(not f.history[3]:IsShown(), 'unused history rows stay hidden')
 wow.Click(f.history[2])
 eq(last()[1], 'OpenHistory', 'history entry click'); eq(last()[2], 'game-0', 'opening an entry asks for that game')
@@ -424,4 +426,43 @@ wow.Click(f.primary)
 P.Render(nil)
 assert(not f:IsShown() and not P.restore:IsShown(), 'no model hides the window and restore button')
 eq(focus, 0, 'the window never takes keyboard focus')
+
+-- Both game windows share the header bar and a solid body; Window opacity
+-- fades only the body, live, and text never fades.
+ns.OpenHost('play')
+local host = ns.hostFrame
+eq(host:GetName(), 'LoreforgeHostTable', 'the host window keeps its name')
+assert(host.template:find('SecureHandlerStateTemplate', 1, true), 'and its secure template')
+eq(host.header.parent, host, 'the host has a header bar')
+eq(host.closeButton.parent, host.header, 'with its close button')
+eq(host.tabs.play.parent, host.header, 'and the tabs')
+eq(ns.db.windowOpacity, 1, 'windows are solid by default')
+eq(ns.GetWindowOpacity(), 1, 'the getter agrees')
+for _, win in ipairs({ host, f }) do
+    eq(win.hcBody.colour[4], 1, win:GetName() .. ' body is solid')
+    eq(win.backdropColour[4], 0, win:GetName() .. ' backdrop keeps only its edge')
+end
+assert(ns.SetWindowOpacity(0.72), 'opacity can be set')
+eq(ns.db.windowOpacity, 0.7, 'opacity snaps to 5% steps')
+for _, win in ipairs({ host, f }) do eq(win.hcBody.colour[4], 0.7, win:GetName() .. ' body follows the setting live') end
+eq(f.question.alpha, nil, 'text never fades')
+eq(f.alpha, nil, 'nor the window itself')
+ns.SetWindowOpacity(0.1)
+eq(ns.db.windowOpacity, 0.5, 'opacity stops at 50%')
+eq(ns.SetWindowOpacity('nope'), false, 'unreadable values are refused')
+eq(ns.db.windowOpacity, 0.5, 'and change nothing')
+ns.db.windowOpacity = 3
+eq(ns.GetWindowOpacity(), 1, 'a saved value out of range reads clamped')
+ns.SetWindowOpacity(1)
+eq(host.hcBody.colour[4], 1, 'back to solid')
+host.closeButton.scripts.OnClick(host.closeButton)
+assert(not host:IsShown(), 'the close button hides the host window')
+ns.OpenHost('play')
+combat = true
+host.closeButton.scripts.OnClick(host.closeButton)
+assert(host:IsShown(), 'the host window does not close itself in combat')
+host.header.scripts.OnDragStart(host.header)
+eq(host.hcMoving, nil, 'nor move')
+combat = false
+host:Hide()
 io.write('loreforge player UI tests passed\n')
