@@ -5,6 +5,19 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
+    { version = "1.3.0", date = "2026-11-10", items = {
+        { title = "Quick play", text = "A little solo quiz card for idle moments. One click, no setup, nothing in chat. Try /lf quick, right-click the minimap button, or the button on the Play tab.",
+            page = "Quick play" },
+        { title = "Fancy a question?", text = "Take a flight path and Loreforge offers a quiz. Flight challenge: as many as you can before you touch down.",
+            page = "Quick play" },
+        { title = "Daily question", text = "One question a day, one try and no timer. Keep your daily streak going with /lf daily, the Play tab or the minimap menu.",
+            page = "Quick play" },
+        { title = "Personal bests", text = "Best streak, best Lightning, best flight and your daily streak, on the card and in the Hall of Fame." },
+        { title = "Make yourself at home", text = "A welcome window helps you choose flights and daily offers. Run /lf setup to open it again. Quick play leads the Play tab when you're solo.",
+            page = "Visibility" },
+        { title = "Better with LibTaxiData", text = "Install the free LibTaxiData library and Flight challenge counts down from your first flight. Without it, Loreforge learns each route as you fly.",
+            kind = "improved" },
+    } },
     { version = "1.1.0", date = "2026-11-09", items = {
         { title = "Stop game in the quiz window", text = "Practising solo or hosting while you play? Stop game now sits right in the quiz window.",
             kind = "fixed" },

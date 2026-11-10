@@ -12,6 +12,11 @@ manual-changelog:
 
 license-output: LICENSE.txt
 
+# Flight challenge reads flight times from LibTaxiData when it's installed.
+# Optional: LibTaxiData has no WoW Forever release yet.
+optional-dependencies:
+  - libtaxidata
+
 # Preserve upstream sources, including LibDeflate's metadata placeholders.
 plain-copy:
   - Libs/LibStub

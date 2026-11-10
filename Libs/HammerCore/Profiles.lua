@@ -9,16 +9,17 @@ local HC = ns.HammerCore
 -- values over them and asks the addon to refresh.  Nothing else in the addon
 -- has to know profiles exist.
 --
--- Which keys belong to profiles is a player setting: the addon declares
--- groups of keys ("Position", "Grid and size") and each group can be ticked
--- into or out of profiles.  A group that is out is shared by every profile.
+-- The addon declares groups of keys ("Position", "Grid and size") and every
+-- group is saved per profile.  Players don't choose: a profile is the whole
+-- layout (Kevin, 2026-11-10).  Keys outside the groups are the same in
+-- every profile.
 --
 -- Everything lives in db.hcProfiles:
 --   list        { [name] = { [key] = value } }
 --   active      account-wide active profile
 --   characters  { ["Name-Realm"] = profile } when perCharacter is on
 --   loaded      the profile whose values are in the flat keys right now
---   groups      { [groupKey] = true|false }
+--   groups      { [groupKey] = true } groups already seeded into profiles
 --   newFrom     "ACTIVE" | "DEFAULTS"
 --   auto, autoState   see AutoSwitch.lua
 --
@@ -83,12 +84,7 @@ function Profiles:Group(key)
 end
 
 function Profiles:Included(key)
-    local data = self:Data()
-    local group = self:Group(key)
-    if not (data and group) then return false end
-    local value = data.groups and data.groups[key]
-    if value == nil then return group.default and true or false end
-    return value and true or false
+    return self:Data() ~= nil and self:Group(key) ~= nil
 end
 
 -- Every key currently stored per profile.
@@ -203,6 +199,19 @@ function Profiles:Ready()
         data.active = spec.active or seeds[1].name
         data.loaded = nil
     end
+    -- Groups that used to be shared (before 0.3.2 players chose) join every
+    -- profile with the value in use now, so nothing changes on screen.
+    local current = db()
+    for _, group in ipairs(spec.groups) do
+        if data.groups[group.key] ~= true then
+            for _, values in pairs(data.list) do
+                for _, field in ipairs(group.keys) do
+                    if values[field] == nil then values[field] = deepCopy(current[field]) end
+                end
+            end
+            data.groups[group.key] = true
+        end
+    end
     if not self:Exists(data.active) then data.active = self:Names()[1] end
     for key, name in pairs(data.characters) do
         if type(key) ~= "string" or not self:Exists(name) then data.characters[key] = nil end
@@ -259,18 +268,10 @@ local function refreshSettings()
     if settings and settings.RefreshProfileTag then settings:RefreshProfileTag() end
 end
 
--- How the open settings page relates to profiles, for the tag beside its
--- title.  `groups` are the page's profile group keys (spec.profileGroups).
--- Returns the active profile, and the labels of this page's groups that are
--- saved per profile (empty: everything on the page is shared).
-function Profiles:PageStatus(groups)
+-- The profile in use, for the tag beside each settings page's title.
+function Profiles:PageStatus()
     if not self.spec then return nil end
-    local saved = {}
-    for _, key in ipairs(groups or {}) do
-        local group = self:Group(key)
-        if group and self:Included(key) then saved[#saved + 1] = group.label end
-    end
-    return self:Loaded() or self:Active(), saved
+    return self:Loaded() or self:Active()
 end
 Profiles.RefreshSettings = refreshSettings
 
@@ -426,21 +427,6 @@ end
 
 -- Ticking a group in gives every profile the current shared value, so they
 -- start equal; ticking it out drops it from all of them.
-function Profiles:SetIncluded(key, included)
-    local data = self:Data()
-    local group = self:Group(key)
-    if not (data and group) then return end
-    if self:Included(key) == (included and true or false) then return end
-    self:Capture()
-    data.groups[key] = included and true or false
-    local saved = db()
-    for _, values in pairs(data.list) do
-        for _, field in ipairs(group.keys) do
-            values[field] = included and deepCopy(saved[field]) or nil
-        end
-    end
-end
-
 function Profiles:SetPerCharacter(enabled)
     local data = self:Data()
     enabled = enabled and true or false

@@ -251,7 +251,8 @@ function HC.DiagnosticReport()
         HC.name .. " diagnostics",
         "Version: " .. Commands.VersionText(),
         "Startup message: " .. (state.startupMessage and "on" or "off"),
-        "Minimap button: " .. (state.minimap and "shown" or "hidden"),
+        "Minimap button: " .. (state.minimap and "shown" or "hidden")
+            .. ", right-click " .. tostring(state.minimapRightClick or "menu"),
         "Theme: " .. tostring(state.theme),
     }
     if HC.WhatsNew and HC.WhatsNew.Enabled() then
@@ -261,10 +262,18 @@ function HC.DiagnosticReport()
             .. ", turn-in sound " .. (state.whatsNewSound == false and "off" or "on")
             .. (HC.WhatsNew.lastSound and (" (last: " .. HC.WhatsNew.lastSound .. ")") or "")
     end
+    if HC.Welcome and HC.Welcome.Enabled() then
+        lines[#lines + 1] = "Welcome: " .. (HC.Welcome:AutoShow() and "show" or "don't show")
+            .. ", last seen " .. tostring(state.welcomeSeen or "none")
+    end
     if HC.Settings.errors then
         for name, err in pairs(HC.Settings.errors) do
             lines[#lines + 1] = "Settings page failed: " .. name .. ": " .. err
         end
+    end
+    if HC.Flights and HC.Flights.enabled then
+        local ok, report = pcall(HC.Flights.Report, HC.Flights)
+        lines[#lines + 1] = ok and report or ("Flights report failed: " .. tostring(report))
     end
     if HC.spec.diagnostics then
         lines[#lines + 1] = ""

@@ -31,7 +31,15 @@ for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
     eq(ns.hostFrame.setup:IsShown(), true, "main command opens game setup")
     eq(ns.hostFrame.play:IsShown(), false, "game controls wait for a game")
     ns.HammerCore.Minimap.button.scripts.OnClick(ns.HammerCore.Minimap.button, "RightButton")
-    eq(ns.HammerCore.Settings:IsShown(), true, "minimap right-click opens general settings")
+    eq(ns.HammerCore.Menu.frame:IsShown(), true, "minimap right-click opens the menu")
+    local menu = ns.HammerCore.Minimap:MenuItems()
+    eq(menu[1].text, "Loreforge settings", "HammerCore's settings item leads the menu")
+    for _, item in ipairs(menu) do
+        if item.text then eq(item.text == "Loreforge settings" and item ~= menu[1], false, "settings only once") end
+    end
+    eq(ns.HammerCore.spec.minimap.rightClick, nil, "no custom right-click")
+    menu[1].func()
+    eq(ns.HammerCore.Settings:IsShown(), true, "the menu's first item opens general settings")
     ns.HammerCore.Minimap.button.scripts.OnClick(ns.HammerCore.Minimap.button, "LeftButton")
     eq(ns.hostFrame.setup:IsShown(), true, "minimap left-click opens main setup")
     SlashCmdList.LOREFORGE("settings")

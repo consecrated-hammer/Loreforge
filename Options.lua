@@ -90,6 +90,99 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Sound, art and window s
     return y
 end)
 
+-- ── Quick play ─────────────────────────────────────────────────────────────
+
+local QUICK_ICONS = {
+    play = 'Interface\\Icons\\INV_Misc_PocketWatch_01',
+    look = 'Interface\\Icons\\INV_Misc_Spyglass_03',
+    flights = 'Interface\\Icons\\Ability_Mount_Gryphon_01',
+    daily = 'Interface\\Icons\\INV_Misc_Note_06',
+}
+
+local function quickChanged()
+    if ns.QuickCard then
+        if ns.QuickCard.Layout then ns.QuickCard.Layout() end
+        if ns.QuickCard.IsShown() then ns.QuickCard.Render() end
+        if ns.QuickCard.RefreshOptions then ns.QuickCard.RefreshOptions() end
+    end
+end
+
+local function seconds(value) return value .. ' s' end
+
+HC.Settings:NewPage({ name = 'Quick play', description = 'A solo quiz card for flights and idle moments. /lf quick opens it.' }, function(panel, y)
+    local db, Quick = ns.db, ns.Quick
+    local dependants = {}
+    local function hideWhen(row, test) dependants[#dependants + 1] = { row = row, test = test } end
+    _, y = UI.Header(panel, 'Play', y, QUICK_ICONS.play)
+    _, y = UI.Dropdown(panel, 'Timer', 'Quick play and Streak. Lightning and Flight challenge are always against the clock.', y,
+        { 'CLOCK', 'RELAXED' }, { 'Against the clock', 'Relaxed' },
+        function() return db.qpRelaxed and 'RELAXED' or 'CLOCK' end,
+        function(value) db.qpRelaxed = value == 'RELAXED'; quickChanged() end)
+    local row
+    row, y = UI.Slider(panel, 'Seconds per question', 'Time for each question when against the clock.', y, 5, 30, 1,
+        function() return db.qpSeconds end, function(value) db.qpSeconds = value end, seconds)
+    hideWhen(row, function() return not db.qpRelaxed end)
+    _, y = UI.Check(panel, 'Next question automatically', 'Off: click Next after each answer.', y,
+        function() return db.qpAutoNext end, function(value) db.qpAutoNext = value end)
+    row, y = UI.Slider(panel, 'Wait before next', 'Seconds the answer shows before the next question.', y, 1, 5, 1,
+        function() return db.qpNextDelay end, function(value) db.qpNextDelay = value end, seconds)
+    hideWhen(row, function() return db.qpAutoNext end)
+    _, y = UI.Slider(panel, 'Lightning length', 'How long a Lightning round lasts.', y, 30, 180, 10,
+        function() return db.qpLightning end, function(value) db.qpLightning = value end, seconds)
+    _, y = UI.Dropdown(panel, 'Main button when solo', 'The big button on the Play tab when you\'re not in a group.', y,
+        { 'QUICK', 'PRACTICE' }, { 'Quick play', 'Practice game' },
+        function() return db.soloMain end, function(value) db.soloMain = value; if ns.RefreshHost then ns.RefreshHost() end end,
+        nil, nil, 140)
+    y = UI.Flush(panel, y)
+    _, y = UI.ActionButton(panel, y, 'Categories & difficulty', function() HC.Settings:Hide(); ns.QuickCard.OpenCategories() end,
+        'Quick play uses the categories and difficulty from game setup.', nil, 180)
+    y = UI.Flush(panel, y)
+    _, y = UI.Header(panel, 'Look', y, QUICK_ICONS.look)
+    _, y = UI.Check(panel, 'Artwork', 'The category painting beside the question.', y,
+        function() return db.qpArt ~= false end, function(value) db.qpArt = value; quickChanged() end)
+    _, y = UI.Check(panel, 'Animations', 'Painting fades and the Touchdown! bounce.', y,
+        function() return db.qpAnimations ~= false end, function(value) db.qpAnimations = value end)
+    _, y = UI.Dropdown(panel, 'Card size', 'The Quick play card and the takeoff prompt.', y,
+        { 'SMALL', 'MEDIUM', 'LARGE' }, { 'Small', 'Medium', 'Large' },
+        function() return db.qpSize end, function(value) db.qpSize = value; quickChanged() end)
+    y = UI.Flush(panel, y)
+    _, y = UI.Header(panel, 'Flights', y, QUICK_ICONS.flights)
+    _, y = UI.Dropdown(panel, 'On flights', 'What happens when you take a flight path.', y,
+        Quick.ON_FLIGHTS, { Quick.ON_FLIGHTS_LABELS.OFFER, Quick.ON_FLIGHTS_LABELS.START, Quick.ON_FLIGHTS_LABELS.NONE },
+        function() return db.qpOnFlights end, function(value) db.qpOnFlights = value; quickChanged() end)
+    row, y = UI.Slider(panel, 'Shortest flight', 'Flights expected to be shorter than this don\'t start a challenge.', y, 0, 60, 5,
+        function() return db.qpShortest end, function(value) db.qpShortest = value end, seconds)
+    hideWhen(row, function() return db.qpOnFlights == 'START' end)
+    _, y = UI.Check(panel, 'Close on landing', 'After the last question and Touchdown!, the card closes.', y,
+        function() return db.qpCloseOnLanding ~= false end, function(value) db.qpCloseOnLanding = value; quickChanged() end)
+    _, y = UI.Slider(panel, 'Flight answer pause', 'Seconds each answer shows during a Flight challenge.', y, 1, 8, 1,
+        function() return db.qpFlightReveal end, function(value) db.qpFlightReveal = value end, seconds)
+    _, y = UI.Slider(panel, 'Landing grace', 'Seconds to finish the open question after you land. 0 ends it on landing.', y, 0, 30, 1,
+        function() return db.qpLandingGrace end, function(value) db.qpLandingGrace = value end, seconds)
+    if ns.era == 'retail' then
+        _, y = UI.Check(panel, 'Loremaster lines', 'Extra takeoff lines for characters with the Loremaster title.', y,
+            function() return db.qpLoremaster ~= false end, function(value) db.qpLoremaster = value end)
+    end
+    y = UI.Flush(panel, y)
+    _, y = UI.Header(panel, 'Daily question', y, QUICK_ICONS.daily)
+    _, y = UI.Check(panel, 'Daily question', 'One question a day, the same for everyone. Off hides it from the menu and the Play tab.', y,
+        function() return db.dailyOn ~= false end, function(value) db.dailyOn = value; if ns.RefreshHost then ns.RefreshHost() end end)
+    row, y = UI.Check(panel, 'Offer at login', 'Once a day, a few seconds after you log in. Never in combat or an instance.', y,
+        function() return db.dailyOffer ~= false end, function(value) db.dailyOffer = value end)
+    hideWhen(row, function() return db.dailyOn ~= false end)
+    UI.OnRefresh(panel, function()
+        for _, item in ipairs(dependants) do item.row:SetShown(item.test()) end
+    end)
+    for _, item in ipairs(dependants) do item.row:SetShown(item.test()) end
+    _, y = UI.PageReset(panel, y, function()
+        for key, value in pairs(Quick.DEFAULTS) do db[key] = value end
+        for key, value in pairs(ns.Daily.DEFAULTS) do db[key] = value end
+        quickChanged()
+        if ns.RefreshHost then ns.RefreshHost() end
+    end)
+    return y
+end)
+
 -- ── Key Bindings ───────────────────────────────────────────────────────────
 
 -- The four answer keys are Blizzard bindings (Bindings.xml); this page is
@@ -99,6 +192,9 @@ for i = 1, 4 do
     ANSWERS[i] = { id = 'LOREFORGE_ANSWER' .. i, name = 'Answer ' .. i,
         icon = 'Interface\\Icons\\INV_Misc_Book_09', detail = 'Picks answer ' .. i .. ' in the game window.' }
 end
+
+ANSWERS[5] = { id = 'LOREFORGE_QUICKPLAY', name = 'Quick play', icon = 'Interface\\Icons\\INV_Misc_Book_09',
+    detail = 'Opens or closes the Quick play card.' }
 
 local function saveBindings()
     if SaveBindings and GetCurrentBindingSet then SaveBindings(GetCurrentBindingSet()) end

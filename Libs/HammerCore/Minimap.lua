@@ -3,10 +3,78 @@ local HC = ns.HammerCore
 
 -- A hand-rolled minimap button: no LibDBIcon or LibDataBroker, so its
 -- position never depends on which other addons are loaded.  Left-click
--- opens settings by default; either click can run an addon action.
+-- opens settings by default.  Right-click opens a small menu (settings,
+-- Profiles, then the addon's own items from spec.minimap.menu) or, with the
+-- "Minimap right-click" setting on Settings, opens settings.  An addon that
+-- passes spec.minimap.rightClick keeps its own right-click and label.
 
 local MinimapButton = {}
 HC.Minimap = MinimapButton
+
+local RIGHT_CLICK = { menu = true, settings = true }
+
+local function minimapSpec()
+    return type(HC.spec.minimap) == "table" and HC.spec.minimap or {}
+end
+
+-- "menu" or "settings"; "custom" when the addon supplies its own rightClick.
+function MinimapButton.RightClickMode()
+    if minimapSpec().rightClick then return "custom" end
+    local state = HC.State and HC.State()
+    local mode = state and state.minimapRightClick
+    return RIGHT_CLICK[mode] and mode or "menu"
+end
+
+-- The default right-click menu: settings, Profiles when the addon has them,
+-- then the addon's items after a line.  Addons can open the same menu from
+-- their own frames, so every right-click menu matches.
+function MinimapButton:MenuItems()
+    local items = { { text = HC.name .. " settings", func = function() HC.Settings:Show() end } }
+    local profilesPage = HC.Settings and HC.Settings.ProfilesPageName and HC.Settings:ProfilesPageName()
+    if profilesPage and HC.Profiles and HC.Profiles.enabled then
+        items[#items + 1] = { text = "Profiles", func = function() HC.Settings:Show(profilesPage) end }
+    end
+    local extra = minimapSpec().menu
+    if type(extra) == "function" then
+        local ok, result = pcall(extra)
+        if ok then
+            extra = result
+        else
+            extra = nil
+            if geterrorhandler then geterrorhandler()(result) end
+        end
+    end
+    if type(extra) == "table" and #extra > 0 then
+        items[#items + 1] = { separator = true }
+        for _, item in ipairs(extra) do
+            if type(item) == "table" then items[#items + 1] = item end
+        end
+    end
+    return items
+end
+
+-- anchor: a frame to open beneath, or nil for the cursor.
+function MinimapButton:OpenMenu(anchor)
+    if not HC.Menu then return HC.Settings:Toggle() end
+    return HC.Menu:Open(self:MenuItems(), anchor)
+end
+
+function MinimapButton:RightClick()
+    local spec, mode = minimapSpec(), MinimapButton.RightClickMode()
+    if mode == "custom" then
+        spec.rightClick()
+    elseif mode == "settings" then
+        HC.Settings:Toggle()
+    else
+        self:OpenMenu()
+    end
+end
+
+function MinimapButton.RightClickLabel()
+    local mode = MinimapButton.RightClickMode()
+    if mode == "custom" then return tostring(minimapSpec().rightClickLabel or "options") end
+    return mode == "settings" and "settings" or "menu"
+end
 
 -- ☠ math.atan is unary in WoW's Lua 5.1; the two-argument form is 5.3+.
 local atan2 = math.atan2 or math.atan
@@ -68,7 +136,7 @@ function MinimapButton:Create()
     b:SetScript("OnClick", function(self, button)
         if self.hcDragged then self.hcDragged = nil; return end
         if button == "RightButton" then
-            if spec.rightClick then spec.rightClick() end
+            MinimapButton:RightClick()
         else
             if spec.leftClick then spec.leftClick() else HC.Settings:Toggle() end
         end
@@ -77,9 +145,7 @@ function MinimapButton:Create()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:SetText(HC.name)
         GameTooltip:AddLine("Click: " .. (spec.leftClick and tostring(spec.leftClickLabel) or "settings"), 0.85, 0.85, 0.85)
-        if spec.rightClick then
-            GameTooltip:AddLine("Right-click: " .. tostring(spec.rightClickLabel), 0.85, 0.85, 0.85)
-        end
+        GameTooltip:AddLine("Right-click: " .. MinimapButton.RightClickLabel(), 0.85, 0.85, 0.85)
         GameTooltip:AddLine("Drag: move", 0.85, 0.85, 0.85)
         GameTooltip:Show()
     end)

@@ -18,10 +18,13 @@ HC:Init({
     name = "Loreforge", command = "loreforge", aliases = { "lf" }, savedVariable = "LoreforgeDB",
     icon = "Interface\\Icons\\INV_Misc_Book_09", db = function() return ns.db end,
     whatsNew = ns.WHATS_NEW,
+    -- Flight challenge and the takeoff prompt; LibTaxiData is a dependency.
+    flights = true,
     resetSettings = function()
         local records, serial = ns.db.records, ns.db.gameSerial
         LoreforgeDB = { records = records, gameSerial = serial, matches = ns.db.matches, partySerial = ns.db.partySerial,
-            lastParty = ns.db.lastParty, pendingMatches = ns.db.pendingMatches, games = ns.db.games, activeGame = ns.db.activeGame }
+            lastParty = ns.db.lastParty, pendingMatches = ns.db.pendingMatches, games = ns.db.games, activeGame = ns.db.activeGame,
+            quickBests = ns.db.quickBests, daily = ns.db.daily, dailySchedule = ns.db.dailySchedule }
         ReloadUI()
     end,
     clientLabel = function() return ns.era == "classic" and "WoW Forever" or "Retail" end,
@@ -32,6 +35,7 @@ HC:Init({
         .. "\nChannel: " .. (ns.game and ns.game.config and ns.game.config.channel or ns.db.channel)
         .. "\nHost status: " .. (ns.game and ns.game.reason or "Ready")
         .. "\nLast unmatched quiz sender: " .. (ns.lastUnmatched or "None")
+        .. (ns.Quick and ("\n" .. ns.Quick.Report()) or "")
         .. partyReport() end,
     status = function() return ns.game and ("Game: " .. ns.game.phase) or "Ready to host" end,
     troubleshooting = function(panel, y) return ns.Probe.Troubleshooting(panel, y) end,
@@ -39,9 +43,36 @@ HC:Init({
         "Have you considered reading the quest text?", "The real loot was knowing who dropped it.",
         "Someone in this party has memorised every boss line.", "The Headless Horseman has requested a rematch." } },
     railButton = { label = "Back to game", run = function() HC.Settings:Hide(); ns.OpenMain() end },
-    minimap = { leftClick = function() ns.OpenMain() end, leftClickLabel = "open Loreforge",
-        rightClick = function() HC.Settings:Show() end, rightClickLabel = "settings" },
+    -- Left-click: the window, or Quick play when solo if that's the setting.
+    -- The label is read as the tooltip opens, so it follows the setting.
+    minimap = { leftClick = function() ns.MinimapLeftClick() end,
+        leftClickLabel = setmetatable({}, { __tostring = function()
+            return ns.SoloLeftClickQuick() and "Quick play" or "open Loreforge"
+        end }),
+        -- After HammerCore's "Loreforge settings": Hall of Fame, the daily
+        -- and the Quick play modes.
+        menu = function() return ns.QuickCard and ns.QuickCard.MenuItems() or {} end },
+    visibilityMinimap = function(panel, y)
+        local _
+        _, y = HC.UI.Dropdown(panel, "Minimap left-click when solo", "What a click on the minimap button opens when you're not in a group.", y,
+            { "WINDOW", "QUICK" }, { "Loreforge window", "Quick play" },
+            function() return ns.db.soloLeftClick end, function(value) ns.db.soloLeftClick = value end,
+            nil, nil, 140)
+        return y
+    end,
 })
+ns.DEFAULTS.soloLeftClick = "WINDOW"
+
+-- Not in a party or raid.
+function ns.Solo()
+    return not ((IsInGroup and IsInGroup()) or (IsInRaid and IsInRaid()))
+end
+function ns.SoloLeftClickQuick()
+    return ns.db ~= nil and ns.db.soloLeftClick == "QUICK" and ns.Solo()
+end
+function ns.MinimapLeftClick()
+    if ns.SoloLeftClickQuick() and ns.QuickCard then ns.QuickCard.Toggle() else ns.OpenMain() end
+end
 -- Loreforge's main action is the game table; settings remain a separate command.
 HC.Commands.byName[""].help = "Open Loreforge, or the Party game you joined"
 HC.Commands.byName[""].run = function() ns.OpenMain() end
@@ -88,8 +119,11 @@ function LoreforgeAnswer(index)
     local model = ns.Player and ns.Player.model
     if model and model.joined and model.state == "accepting" then ns.Player.Choose(index); return end
     local g = ns.game
-    if g and g.phase == "accepting" and g.config and g.config.hostParticipates then ns.SubmitHostAnswer(tostring(index)) end
+    if g and g.phase == "accepting" and g.config and g.config.hostParticipates then ns.SubmitHostAnswer(tostring(index)); return end
+    if ns.QuickCard and ns.QuickCard.Accepting() then ns.Quick.Answer(index) end
 end
+BINDING_NAME_LOREFORGE_QUICKPLAY = "Quick play"
+function LoreforgeQuickPlay() if ns.QuickCard then ns.QuickCard.Toggle() end end
 function ns.AnswerKey(index)
     local key = GetBindingKey and GetBindingKey("LOREFORGE_ANSWER" .. index)
     return type(key) == "string" and key ~= "" and key or nil
@@ -99,6 +133,52 @@ HC.LoginMessage = function(coloured) return (loginMessage(coloured):gsub(" for s
 HC.Commands:Add({ name = "settings", section = "Core", help = "Open general addon settings", run = function() HC.Settings:Show() end })
 HC.Commands:Add({ name = "host", section = "Trivia", help = "Open game setup", run = function() ns.OpenHost("play") end })
 HC.Commands:Add({ name = "records", section = "Trivia", help = "Open the Hall of Fame", run = function() ns.OpenHost("records") end })
+HC.Commands:Add({ name = "quick", section = "Trivia", help = "Open or close Quick play", run = function() ns.QuickCard.Toggle() end })
+HC.Commands:Add({ name = "daily", section = "Trivia", help = "Open today's daily question", run = function() ns.QuickCard.Show("daily") end })
+
+-- The welcome window: a new install sees every row, an update only the rows
+-- new since the release it last had. HammerCore adds /lf setup, "Setup on
+-- new features" and Run setup again on Visibility.
+HC.Welcome:Register({
+    banner = "Interface\\AddOns\\Loreforge\\Textures\\welcome-banner.tga",
+    bannerSize = { 1024, 256 },
+    tagline = "You read the quest text, right?",
+    intro = "Host trivia for your party, raid or guild, or play on your own with Quick play.",
+    update = "New in 1.3: Quick play, questions on flights and a daily question. Try /lf quick, or right-click the minimap button.",
+    rows = {
+        { key = "flights", label = "On a flight", since = "1.3.0",
+            subtext = "A few questions to pass the time on a taxi.",
+            choices = {
+                { value = "OFFER", label = "Ask me", sub = "Offer at takeoff",
+                    tip = "When you take a flight, a small prompt asks if you'd like some questions. Say no and it leaves you alone until the next flight." },
+                { value = "START", label = "Auto-start", sub = "Starts by itself",
+                    tip = "Flights long enough for a few questions start a Flight challenge straight away: answer as many as you can before you land." },
+                { value = "NONE", label = "Off", sub = "No questions",
+                    tip = "Flights stay quiet. You can still start Quick play yourself." },
+            },
+            get = function() return ns.db and ns.db.qpOnFlights end,
+            set = function(value)
+                ns.db.qpOnFlights = value
+                if ns.QuickCard and ns.QuickCard.RefreshOptions then ns.QuickCard.RefreshOptions() end
+            end },
+        { key = "daily", label = "Daily question", since = "1.3.0",
+            subtext = "A new question every day. Keep your streak going.",
+            choices = {
+                { value = "on", label = "On", sub = "Offer it at login",
+                    tip = "A question pops up once a day when you log in. Answer it right to keep your streak going." },
+                { value = "off", label = "Off", sub = "Find it in the menu",
+                    tip = "No login prompt. The daily question is still in the minimap menu and on the Play tab." },
+            },
+            -- The row is the login offer; On also turns the daily back on.
+            get = function() return ns.db and ns.db.dailyOffer ~= false and ns.db.dailyOn ~= false and "on" or "off" end,
+            set = function(value)
+                ns.db.dailyOffer = value == "on"
+                if value == "on" then ns.db.dailyOn = true end
+                if ns.RefreshHost then ns.RefreshHost() end
+            end },
+    },
+    footer = "You can change these in settings.",
+})
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, loaded)
@@ -162,6 +242,8 @@ loader:SetScript("OnEvent", function(self, _, loaded)
     ns.Probe.Initialise()
     ns.Party.Initialise()
     ns.Player.Initialise()
+    if ns.Quick then ns.Quick.Initialise() end
+    if ns.Daily then ns.Daily.Initialise() end
     local partyEvent = ns.game.onEvent
     ns.game.onEvent = function(event)
         if partyEvent then partyEvent(event) end

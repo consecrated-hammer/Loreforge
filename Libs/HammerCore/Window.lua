@@ -6,7 +6,7 @@ local T, UI = HC.Theme, HC.UI
 -- addon's name and lists its own pages under SETTINGS, a divider, then
 -- REFERENCE: What's new, any addon reference pages, then Commands,
 -- Troubleshooting and About.  The header band shows the page's title,
--- description and tabs; the footer has Reload UI, the support links and
+-- description and tabs; the footer has the support links and
 -- Close.  Blizzard's Options > AddOns entry is only a launcher.
 
 local Settings = { queue = {}, pages = {}, buttons = {} }
@@ -146,7 +146,7 @@ local function createBody(page, build, columns, top)
 
     content.hcSetBottom(build(content, -4) or -600)
     body:SetScript("OnShow", updateBar)
-    body.content = content
+    body.content, body.scroll = content, scroll
     return body
 end
 
@@ -352,6 +352,7 @@ function Settings:Create()
 
     -- ── Header band: title, description, scale, close, tabs ──
     local header = CreateFrame("Frame", nil, frame)
+    self.header, self.headerWidth = header, width - RAIL_WIDTH - 3
     header:SetPoint("TOPLEFT", RAIL_WIDTH + 2, -1)
     header:SetPoint("TOPRIGHT", -1, -1)
     header:SetHeight(HEADER_HEIGHT)
@@ -372,13 +373,11 @@ function Settings:Create()
     pageTitle:SetPoint("TOPLEFT", UI.PAD + 4, -20)
     local pageDescription = UI.FontString(header, "GameFontHighlightSmall", "muted")
     pageDescription:SetPoint("TOPLEFT", pageTitle, "BOTTOMLEFT", 1, -8)
-    pageDescription:SetPoint("RIGHT", header, "RIGHT", -260, 0)
     pageDescription:SetJustifyH("LEFT")
     if pageDescription.SetWordWrap then pageDescription:SetWordWrap(false) end
     self.pageTitle, self.pageDescription = pageTitle, pageDescription
 
-    -- Beside the title: the active profile, and whether this page's settings
-    -- are saved to it or shared by every profile.  Click for Profiles.
+    -- Beside the title: the active profile.  Click for Profiles.
     local tag = CreateFrame("Button", nil, header, "BackdropTemplate")
     tag:SetHeight(22)
     tag:SetPoint("LEFT", pageTitle, "RIGHT", 14, -1)
@@ -422,8 +421,8 @@ function Settings:Create()
 
     -- A page's own action (spec.headerAction), such as opening a live
     -- preview, on the right of the header under the window controls.
-    local action = UI.Button(header, 170, 26)
-    action:SetPoint("TOPRIGHT", close, "BOTTOMRIGHT", 0, -14)
+    local action = UI.Button(header, 170, 24)
+    action:SetPoint("TOPRIGHT", header, "TOPRIGHT", -UI.PAD, -52)
     action:Hide()
     action:SetScript("OnClick", function(self)
         local spec = self.hcSpec
@@ -442,6 +441,8 @@ function Settings:Create()
     scale:SetScript("OnMouseUp", function() Settings:ApplyScale() end)
     self.scaleSlider = scale
 
+    self:CreateSearch(header)
+
     self.tabButtons = {}
     local tabBar = CreateFrame("Frame", nil, header)
     tabBar:SetPoint("BOTTOMLEFT", UI.PAD, 0)
@@ -449,7 +450,7 @@ function Settings:Create()
     tabBar:SetHeight(32)
     self.tabBar = tabBar
 
-    -- ── Footer: reload, support links, close ──
+    -- ── Footer: support links, close; Reload UI only when one is needed ──
     local footer = CreateFrame("Frame", nil, frame)
     footer:SetPoint("BOTTOMLEFT", RAIL_WIDTH + 2, 1)
     footer:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -462,8 +463,9 @@ function Settings:Create()
     local reload = UI.Button(footer, 150, 30)
     reload:SetPoint("LEFT", UI.PAD, 0)
     reload:SetText("Reload UI")
-    UI.AttachHint(reload, "Reload UI", "Reload the interface, as /reload does.")
+    UI.AttachHint(reload, "Reload UI", function() return Settings.reloadReason or "Reload the interface, as /reload does." end)
     reload:SetScript("OnClick", function() if ReloadUI then ReloadUI() end end)
+    reload:SetShown(self.reloadReason ~= nil)
     local done = UI.Button(footer, 150, 30)
     done:SetPoint("RIGHT", -UI.PAD, 0)
     done:SetText("Close")
@@ -603,10 +605,12 @@ function Settings:Create()
         Settings:RefreshHeaderAction()
     end)
     frame:SetScript("OnHide", function()
+        Settings:ClearSearch()
         if HC.spec.onSettingsHidden then HC.spec.onSettingsHidden() end
     end)
     self:ApplyScale()
     self:RefreshFooter()
+    self:RefreshSearch()
     frame:Hide()
     -- Escape closes the window like any Blizzard panel.
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames + 1] = frame:GetName() end
@@ -727,9 +731,284 @@ function Settings:Select(name, tab)
     end
 end
 
--- spec.profileGroups = { "grid", ... }: the profile groups whose settings
--- live on this page.  Every main page of an addon with profiles shows the
--- tag; reference pages and the Profiles page itself don't.
+-- Open a page and draw the eye to one setting: scroll it into view and pulse
+-- its row twice.  `setting` is the row's label.  Returns the row, if found.
+local PULSE_TIME, PULSES = 1.6, 2
+local pulser = CreateFrame("Frame")
+pulser:Hide()
+pulser:SetScript("OnUpdate", function(self, elapsed)
+    local row = self.row
+    self.elapsed = (self.elapsed or 0) + elapsed
+    if not row or self.elapsed >= PULSE_TIME then
+        if row then row.hcPulse:Hide() end
+        self.row = nil
+        self:Hide()
+        return
+    end
+    local phase = self.elapsed / PULSE_TIME * PULSES * math.pi
+    row.hcPulse:SetAlpha(0.35 * math.abs(math.sin(phase)))
+end)
+Settings.pulser = pulser
+
+function Settings:Focus(name, setting, tab)
+    if not self:Show(name, tab) then return nil end
+    local page = self.pages[self.selected]
+    if not page then return nil end
+    local row, body
+    for tabName, candidate in pairs(page.bodies or {}) do
+        local found = candidate.hcRows and candidate.hcRows[setting]
+        if found then
+            row, body = found, candidate
+            if tabName ~= page.selectedTab then self:Select(self.selected, tabName) end
+            break
+        end
+    end
+    if not row then return nil end
+    -- Scroll so the row sits a little below the top of the view.
+    local scroll, content = body.scroll, body.content
+    if scroll and content and row.GetTop and content.GetTop then
+        local rowTop, contentTop = row:GetTop(), content:GetTop()
+        if rowTop and contentTop then
+            local range = scroll:GetVerticalScrollRange() or 0
+            scroll:SetVerticalScroll(math.max(0, math.min(range, contentTop - rowTop - 40)))
+        end
+    end
+    if not row.hcPulse then
+        row.hcPulse = row:CreateTexture(nil, "BACKGROUND", nil, 3)
+        row.hcPulse:SetAllPoints()
+        T.Fill(row.hcPulse, "accent")
+    end
+    if pulser.row and pulser.row ~= row then pulser.row.hcPulse:Hide() end
+    row.hcPulse:SetAlpha(0)
+    row.hcPulse:Show()
+    pulser.row, pulser.elapsed = row, 0
+    pulser:Show()
+    return row
+end
+
+-- The name of the profiles page, from the page list, so it works before the
+-- window is built.  nil for an addon without profiles.
+function Settings:ProfilesPageName()
+    for _, spec in ipairs(self.queue) do
+        if spec.profilesPage then return spec.name end
+    end
+    return self.profilesPageName
+end
+
+-- ── Settings search ────────────────────────────────────────────────────────
+-- A box in the header finds a setting by page, tab, label or tooltip text
+-- and jumps to it with Settings:Focus.  Every page builds when the window
+-- does, and each row registers its label in its body's hcRows, so the index
+-- is read fresh from those on every search.
+
+Settings.SEARCH_LIMIT = 8
+Settings.SEARCH_WIDTH = 220
+
+local function plain(value)
+    if type(value) == "function" then
+        local ok, result = pcall(value)
+        value = ok and result or nil
+    end
+    if type(value) ~= "string" then return "" end
+    return (value:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", ""))
+end
+
+local function words(query)
+    local list = {}
+    for word in tostring(query or ""):lower():gmatch("%S+") do list[#list + 1] = word end
+    return list
+end
+
+-- Matches for a query, best first: { page, title, tab, label, text }.
+-- A label that starts with the query ranks first, then a label containing
+-- it, then a match anywhere in page, tab, label and tooltip.
+function Settings:Search(query, limit)
+    local terms = words(query)
+    if #terms == 0 or not self.window then return {} end
+    local whole = table.concat(terms, " ")
+    local found = {}
+    for order, spec in ipairs(self.order or {}) do
+        local page = self.pages[spec.name]
+        local title = spec.title or spec.name
+        local multi = page and page.tabs and #page.tabs > 1
+        for tabIndex, tab in ipairs(page and page.tabs or {}) do
+            local body = page.bodies and page.bodies[tab]
+            for label, row in pairs(body and body.hcRows or {}) do
+                local visible = not (row.IsShown and row:IsShown() == false)
+                if visible and type(label) == "string" then
+                    local hay = (title .. " " .. (multi and tab or "") .. " " .. label .. " "
+                        .. plain(row.hcHint)):lower()
+                    local all = true
+                    for _, term in ipairs(terms) do
+                        if not hay:find(term, 1, true) then all = false; break end
+                    end
+                    if all then
+                        local lower = label:lower()
+                        local rank = lower:sub(1, #whole) == whole and 1 or (lower:find(whole, 1, true) and 2 or 3)
+                        found[#found + 1] = { page = spec.name, title = title, tab = tab, label = label,
+                            text = title .. " \226\128\186 " .. label,
+                            rank = rank, order = order, tabIndex = tabIndex }
+                    end
+                end
+            end
+        end
+    end
+    table.sort(found, function(a, b)
+        if a.rank ~= b.rank then return a.rank < b.rank end
+        if a.order ~= b.order then return a.order < b.order end
+        if a.tabIndex ~= b.tabIndex then return a.tabIndex < b.tabIndex end
+        return a.label < b.label
+    end)
+    limit = limit or self.SEARCH_LIMIT
+    for index = #found, limit + 1, -1 do found[index] = nil end
+    return found
+end
+
+function Settings:CreateSearch(header)
+    local box = CreateFrame("EditBox", nil, header, "BackdropTemplate")
+    box:SetSize(self.SEARCH_WIDTH, 24)
+    box:SetPoint("TOPRIGHT", header, "TOPRIGHT", -UI.PAD, -52)
+    box:SetAutoFocus(false)
+    box:SetFontObject(ChatFontNormal)
+    box:SetTextInsets(8, 8, 0, 0)
+    if box.SetMaxLetters then box:SetMaxLetters(60) end
+    T.Surface(box, "field", "edge")
+    local placeholder = UI.FontString(box, "GameFontHighlightSmall", "muted")
+    placeholder:SetPoint("LEFT", 9, 0)
+    placeholder:SetText("Search settings")
+    box.placeholder = placeholder
+
+    local dismiss = CreateFrame("Button", nil, UIParent)
+    dismiss:SetFrameStrata("FULLSCREEN_DIALOG")
+    dismiss:SetFrameLevel(199)
+    dismiss:SetAllPoints(UIParent)
+    dismiss:EnableMouse(true)
+    dismiss:Hide()
+    local results = CreateFrame("Frame", HC.FrameName("SettingsSearch"), UIParent, "BackdropTemplate")
+    results:SetFrameStrata("FULLSCREEN_DIALOG")
+    results:SetFrameLevel(200)
+    results:SetClampedToScreen(true)
+    results:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", 0, -4)
+    T.Surface(results, "menu", "menuEdge")
+    results:SetScript("OnHide", function() dismiss:Hide() end)
+    dismiss:SetScript("OnClick", function()
+        results:Hide()
+        if box.ClearFocus then box:ClearFocus() end
+    end)
+    results:Hide()
+    results.rows = {}
+    local empty = UI.FontString(results, "GameFontHighlightSmall", "muted")
+    empty:SetPoint("TOPLEFT", 12, -10)
+    empty:SetText("No matches")
+    results.empty = empty
+
+    box:SetScript("OnTextChanged", function() Settings:UpdateSearch() end)
+    box:SetScript("OnEnterPressed", function()
+        local first = results.matches and results.matches[1]
+        if first then Settings:PickSearch(first) else Settings:ClearSearch() end
+    end)
+    box:SetScript("OnEscapePressed", function() Settings:ClearSearch() end)
+    box:SetScript("OnEditFocusGained", function() Settings:UpdateSearch() end)
+    UI.AttachHint(box, "Settings search", "Find a setting by name. Enter opens the first match.")
+    self.searchBox, self.searchResults, self.searchDismiss = box, results, dismiss
+    return box
+end
+
+local function resultRow(results, index)
+    local row = results.rows[index]
+    if row then return row end
+    row = CreateFrame("Button", nil, results, "BackdropTemplate")
+    T.Surface(row, "transparent")
+    row.label = UI.FontString(row, "GameFontHighlightSmall")
+    row.label:SetPoint("LEFT", 8, 0)
+    row.label:SetPoint("RIGHT", -8, 0)
+    row.label:SetJustifyH("LEFT")
+    if row.label.SetWordWrap then row.label:SetWordWrap(false) end
+    row:HookScript("OnEnter", function(self) self:SetBackdropColor(T.Unpack("menuActive")) end)
+    row:HookScript("OnLeave", function(self) self:SetBackdropColor(T.Unpack("transparent")) end)
+    row:SetScript("OnClick", function(self)
+        if self.match then Settings:PickSearch(self.match) end
+    end)
+    results.rows[index] = row
+    return row
+end
+
+function Settings:UpdateSearch()
+    local box, results = self.searchBox, self.searchResults
+    if not (box and results) then return end
+    local text = box:GetText() or ""
+    box.placeholder:SetShown(text == "")
+    local ok, matches = pcall(self.Search, self, text)
+    if not ok then matches = {} end
+    results.matches = matches
+    if text:match("^%s*$") then results:Hide(); return end
+    local width = math.max(self.SEARCH_WIDTH, 300)
+    for index, match in ipairs(matches) do
+        local row = resultRow(results, index)
+        row.match = match
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 5, -5 - (index - 1) * 24)
+        row:SetSize(width - 10, 24)
+        row.label:SetText(match.text)
+        row:SetBackdropColor(T.Unpack("transparent"))
+        row:Show()
+    end
+    for index = #matches + 1, #results.rows do results.rows[index]:Hide() end
+    results.empty:SetShown(#matches == 0)
+    results:SetSize(width, math.max(1, #matches) * 24 + 10)
+    self.searchDismiss:Show()
+    results:Show()
+end
+
+function Settings:PickSearch(match)
+    self:ClearSearch()
+    return self:Focus(match.page, match.label, match.tab)
+end
+
+function Settings:ClearSearch()
+    local box = self.searchBox
+    if not box then return end
+    if self.searchResults then self.searchResults:Hide() end
+    if (box:GetText() or "") ~= "" then box:SetText("") end
+    box.placeholder:Show()
+    if box.ClearFocus then box:ClearFocus() end
+end
+
+-- The box follows the "Settings search" setting on Visibility.
+function Settings:RefreshSearch()
+    local box = self.searchBox
+    if not box then return end
+    local state = HC.State()
+    local shown = not (state and state.settingsSearch == false)
+    if not shown then self:ClearSearch() end
+    box:SetShown(shown)
+    self:LayoutHeaderTools()
+end
+
+-- Search and the optional page action share a row above the tabs. Reserve
+-- their actual space so the page description cannot run underneath them.
+function Settings:LayoutHeaderTools()
+    local header, action, box = self.header, self.headerAction, self.searchBox
+    if not header then return end
+    local searchShown = box and box:IsShown()
+    local actionShown = action and action:IsShown()
+    local reserved = searchShown and (box:GetWidth() + 12) or 0
+    if action then
+        action:ClearAllPoints()
+        if searchShown then
+            action:SetPoint("RIGHT", box, "LEFT", -12, 0)
+        else
+            action:SetPoint("TOPRIGHT", header, "TOPRIGHT", -UI.PAD, -52)
+        end
+        if actionShown then reserved = reserved + action:GetWidth() + 12 end
+    end
+    if self.pageDescription then
+        self.pageDescription:SetWidth(math.max(1, (self.headerWidth or 0) - UI.PAD * 2 - 5 - reserved))
+    end
+end
+
+-- Every main page of an addon with profiles shows the active profile;
+-- reference pages and the Profiles page itself don't.
 function Settings:RefreshProfileTag()
     local tag = self.profileTag
     if not tag then return end
@@ -739,31 +1018,13 @@ function Settings:RefreshProfileTag()
         if other.spec and other.spec.profilesPage then self.profilesPageName = other.spec.name end
     end
     local profiles = HC.Profiles
-    local active, saved
+    local active
     if profiles and profiles.PageStatus and spec.group == "main" and not spec.profilesPage then
-        active, saved = profiles:PageStatus(spec.profileGroups)
+        active = profiles:PageStatus()
     end
     if not active then tag:Hide(); return end
-    local hint
-    if #saved > 0 then
-        tag.Text:SetText("Saved to profile: " .. active)
-        T.Text(tag.Text, "accent")
-        T.Border(tag, "accent")
-        hint = "These settings on this page are saved to the " .. active .. " profile: "
-            .. table.concat(saved, ", ") .. "."
-        if #saved < #(spec.profileGroups or {}) or spec.profilePartial then
-            hint = hint .. " Everything else here is shared by all profiles."
-        end
-    else
-        tag.Text:SetText("Shared by all profiles (active: " .. active .. ")")
-        T.Text(tag.Text, "muted")
-        T.Border(tag, "edge")
-        hint = "Changes on this page apply to every profile."
-        if spec.profileGroups and #spec.profileGroups > 0 then
-            hint = hint .. " Tick it under Included in profiles to save it per profile."
-        end
-    end
-    tag.hcHintTitle, tag.hcHint = "Profile", hint .. " Click to manage profiles."
+    tag.Text:SetText("Profile: " .. active)
+    tag.hcHintTitle, tag.hcHint = "Profile", "Click to manage profiles."
     tag:SetWidth((tag.Text.GetStringWidth and tag.Text:GetStringWidth() or 160) + 20)
     tag:SetEnabled(self.profilesPageName ~= nil)
     tag:Show()
@@ -776,7 +1037,7 @@ function Settings:RefreshHeaderAction()
     local page = self.selected and self.pages[self.selected]
     local spec = page and page.spec and page.spec.headerAction
     button.hcSpec = spec
-    if not spec then button:Hide(); return end
+    if not spec then button:Hide(); self:LayoutHeaderTools(); return end
     local text = spec.text
     if type(text) == "function" then text = text() end
     button:SetText(tostring(text or ""))
@@ -788,6 +1049,15 @@ function Settings:RefreshHeaderAction()
         button.hcHint = nil
     end
     button:Show()
+    self:LayoutHeaderTools()
+end
+
+-- Shows Reload UI in the footer, with why as its hint.  No addon needs a
+-- reload button by default (Kevin, 2026-11-10): call this only when a change
+-- really takes effect after a reload.
+function Settings:RequestReload(reason)
+    self.reloadReason = reason or "Some changes take effect after a reload."
+    if self.reloadButton then self.reloadButton:Show() end
 end
 
 function Settings:IsShown()

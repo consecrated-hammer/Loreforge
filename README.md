@@ -1,10 +1,18 @@
 # Loreforge
 
-**Group and guild trivia, hosted from one window.**
+**You read the quest text, right?**
 
 _You have considered reading the quest text. Now make everyone else prove it._
 
 Loreforge runs on Retail and WoW Forever. The host picks Party, Raid, Instance or Guild output, categories, difficulty, game length and pacing. Other players answer with a number in chat; they don't need the addon.
+
+**Better with LibTaxiData.** Install the free
+[LibTaxiData](https://www.curseforge.com/wow/addons/libtaxidata) library and
+the Flight challenge counts down to landing from your very first flight.
+Without it, Loreforge learns each route's time the first time you fly it and
+shows "Until you land" until then. LibTaxiData has no WoW Forever release
+yet, so on Forever Loreforge learns as you go. Settings > Troubleshooting
+shows whether it's installed and has a **Get LibTaxiData** link.
 
 ## What it does
 
@@ -22,9 +30,69 @@ Loreforge runs on Retail and WoW Forever. The host picks Party, Raid, Instance o
 - **Sound cues and answer keys.** Optional sounds for invitations, new questions, the last five seconds, results and the finish. Bind **Answer 1** to **Answer 4** under Key Bindings > AddOns > Loreforge.
 - **The same HammerCore interface** as the other Consecrated Hammer addons: settings, commands, minimap button, diagnostics and About page.
 
+## Quick play
+
+A small solo quiz card for flights and idle moments, with no setup and
+nothing posted to chat. Open it with `/lf quick`, the **Quick play** button on
+the Play tab, the minimap button's right-click menu, or a key bound under Key
+Bindings.
+
+| Mode | How it works |
+| --- | --- |
+| Quick play | Endless questions. Timed unless Relaxed is on |
+| Streak | Keep going until your first miss |
+| Lightning | As many as you can in 60 seconds (30 to 180 on the settings page) |
+| Flight challenge | As many as you can before you land. Only on flights |
+
+- The question's category painting sits beside it, with the category name
+  across the bottom.
+- **Against the clock or Relaxed** switches the per-question timer for Quick
+  play and Streak.
+- The gear on the card slides out an **Options** tab: mode, timer, look
+  (Artwork, Animations, Card size) and flights.
+- **On flights**, Loreforge asks "Fancy a question?" when you take off. It
+  can start a Flight challenge straight away instead, or stay quiet. The
+  countdown to landing comes from LibTaxiData if it's installed, then from
+  the real time once you've flown the route.
+  Flights picked from a flight master's chat, like the druid flight out of
+  Moonglade, count too; with no flight map there's no time to show, so the
+  clock reads "Until you land".
+- **Landing grace** gives you 10 seconds after landing to finish the open
+  question (0 ends it on landing). Then it's Touchdown! with your flight
+  score, and **Close on landing** closes the card. **Keep going** stays open.
+- **Flight answer pause** sets how long each answer shows during a Flight
+  challenge (3 seconds by default). Lightning keeps its quick flash.
+- Personal bests (best streak, best Lightning, best flight with its route
+  and date) show on the card and in the Hall of Fame.
+- Quick play uses the categories and difficulty from game setup. It works
+  through every matching question before repeating one.
+- Everything is on the **Quick play** settings page.
+
+## Daily question and welcome
+
+The daily is one question a day, one try and no timer. Open `/lf daily`, use
+the **Daily question** button on Play, or pick it from the minimap menu. The
+server's calendar date picks the question. Everyone with the same question
+bank on a client gets the same one; Retail and Forever get different picks.
+Both clients' picks stay out of the running for the next 60 days.
+Question-bank updates can also shift later picks through that exclusion window,
+so matching daily questions assumes the same bank version.
+
+A correct answer on consecutive days grows your daily streak; a wrong answer
+or a missed day resets it. Today's answer and the best streak are shared
+across characters on the same client. The card shows **Daily #N**.
+After answering, it shows the
+right answer, your streak and when the next question arrives. Daily question
+and Offer at login are separate settings on Quick play.
+
+The welcome window lets you choose **Ask me**, **Auto-start** or **Off** for
+flights, and whether to offer the daily at login. Closing it keeps the
+defaults. Updating players see the new choices once. `/lf setup` opens it
+again, and **Setup on new features** controls future automatic welcomes.
+
 ## Getting started
 
-1. Join a party, raid, instance group or guild and open `/lf`. Ungrouped, the main button is **Practice solo**.
+1. Join a party, raid, instance group or guild and open `/lf`. When solo, **Quick play** leads, with **Practice solo** beside it. **Main button when solo** can put Practice solo first instead.
 2. Pick a preset or set the questions, themed rounds and answer time yourself, then choose categories and difficulty. Fresh settings select your current group's channel. If the channel doesn't match your group, the banner says so and **Use current group** fixes it. For Guild, **Refresh guild roster** updates the cached players.
 3. Click **Start game**. With Party output in Retail, the button is **Open lobby** first: players with Loreforge can join, the lobby shows who has, and **Start game** begins.
 4. The start countdown defaults to 30 seconds. Set **Start countdown** from 5 to 60 seconds, or disable **Countdown before starting** to skip it. The ready check posts. Players can type `ready`, `ready!`, `rdy` or `I'm ready`. **Start questions now** starts early. **Refresh players** adds anyone who joined the group since; enrolment is fixed once questions begin.
@@ -42,6 +110,9 @@ If a line may not have posted, the game pauses and one banner asks whether it ap
 | --- | --- |
 | `/loreforge` or `/lf` | Open Loreforge, or the Party game you joined |
 | `/lf host` | Open game setup |
+| `/lf quick` | Open or close Quick play |
+| `/lf daily` | Open today's daily question or its completed result |
+| `/lf setup` | Reopen the welcome choices |
 | `/lf records` | Open the Hall of Fame |
 | `/lf history` | Open your game history |
 | `/lf settings` | Open general settings |
@@ -49,7 +120,7 @@ If a line may not have posted, the game pauses and one banner asks whether it ap
 
 Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `startup`, `minimap` and `reset settings`. Reset settings keeps Loreforge's player records and history. Records are shared by host characters on the same WoW account, with Retail and Forever stored separately.
 
-The minimap button opens Loreforge on left-click and general settings on right-click. Settings holds sound, window sizes, Party invitations, record clearing and the standard pages; **Back to game** returns to the main window.
+The minimap button opens Loreforge on left-click. **Minimap left-click when solo** can open Quick play instead. Right-click opens the shared HammerCore menu with settings, the Hall of Fame, the daily and each Quick play mode. Settings holds search, sound, window sizes, Party invitations, record clearing and the standard pages; **Back to game** returns to the main window.
 
 ## Categories
 

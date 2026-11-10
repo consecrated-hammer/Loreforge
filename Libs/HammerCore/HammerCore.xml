@@ -8,6 +8,7 @@
     <Script file="Commands.lua"/>
     <Script file="Copy.lua"/>
     <Script file="WhatsNew.lua"/>
+    <Script file="Welcome.lua"/>
     <Script file="Dialog.lua"/>
     <Script file="Menu.lua"/>
     <Script file="Profiles.lua"/>
@@ -15,6 +16,7 @@
     <Script file="ProfilesPage.lua"/>
     <Script file="Bindings.lua"/>
     <Script file="Minimap.lua"/>
+    <Script file="Flights.lua"/>
     <Script file="QuizData.lua"/>
     <Script file="Quiz_bossquotes.lua"/>
     <Script file="Quiz_class.lua"/>

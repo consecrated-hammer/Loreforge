@@ -392,6 +392,16 @@ end
 
 -- A setting cell: title on the left, the control added by the caller on the
 -- right.  row.hcNextY is where the next setting goes.
+-- Rows remember their label on the page body, so a link elsewhere can jump
+-- to one (HC.Settings:Focus).
+function UI.RegisterRow(parent, row, label)
+    label = resolve(label)
+    if type(label) ~= "string" or label == "" then return end
+    local owner = parent.hcHeaderOwner or parent
+    owner.hcRows = owner.hcRows or {}
+    owner.hcRows[label] = row
+end
+
 function UI.Row(parent, y, height, title, hint, width)
     local cellHeight = math.max(height or UI.CELL_H, UI.CELL_H)
     local x, cellWidth, nextY, slot = UI.PlaceCell(parent, y, cellHeight)
@@ -410,6 +420,7 @@ function UI.Row(parent, y, height, title, hint, width)
     end
     row:EnableMouse(true)
     UI.AttachHint(row, title or HC.name, hint)
+    if title ~= nil then UI.RegisterRow(parent, row, title) end
     return row
 end
 
@@ -421,6 +432,7 @@ end
 function UI.Check(panel, label, hint, y, get, set, width)
     local row = UI.Row(panel, y, UI.CELL_H, nil, hint, width)
     row.hcHintTitle = label
+    UI.RegisterRow(panel, row, label)
     local btn
     if T.IsClassic() then
         -- Classic keeps Blizzard's own checkbox beside its label.
@@ -1075,6 +1087,16 @@ end
 function UI.PageLink(panel, y, text, page)
     y = UI.Flush(panel, y)
     local link = UI.Link(panel, resolve(text), function() HC.Settings:Show(page) end, "GameFontHighlight")
+    link:SetPoint("TOPLEFT", UI.PAD + 2, y - 4)
+    onRefresh(panel, function() link:SetText(resolve(text)) end)
+    return link, y - 28
+end
+
+-- A link to one setting on another page: opens it there and pulses it,
+-- e.g. "Right-click options" on Profiles -> Minimap right-click on Visibility.
+function UI.SettingLink(panel, y, text, page, setting)
+    y = UI.Flush(panel, y)
+    local link = UI.Link(panel, resolve(text), function() HC.Settings:Focus(page, setting) end, "GameFontHighlight")
     link:SetPoint("TOPLEFT", UI.PAD + 2, y - 4)
     onRefresh(panel, function() link:SetText(resolve(text)) end)
     return link, y - 28

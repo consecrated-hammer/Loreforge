@@ -28,6 +28,15 @@ Pages.visibility.build = function(panel, y)
             HC.State().minimap = value
             HC.Minimap:Update()
         end)
+    -- An addon with its own rightClick keeps its own setting for it.
+    if HC.Minimap and HC.Minimap.RightClickMode() ~= "custom" then
+        _, y = UI.Dropdown(panel, "Minimap right-click", "What right-clicking the minimap button opens.", y,
+            { "menu", "settings" }, { "Menu", "Settings" },
+            function() return HC.State().minimapRightClick end,
+            function(value) HC.State().minimapRightClick = value end)
+    end
+    -- Addon rows about the minimap button, such as what right-click does.
+    if HC.spec.visibilityMinimap then y = HC.spec.visibilityMinimap(panel, y) end
     _, y = UI.Check(panel, "Show startup message", "Print the loaded version when you log in.", y,
         function() return HC.State().startupMessage end,
         function(value) HC.State().startupMessage = value end)
@@ -48,6 +57,13 @@ Pages.visibility.build = function(panel, y)
             function() return HC.State().whatsNewSound ~= false end,
             function(value) HC.State().whatsNewSound = value end)
     end
+    if HC.Welcome and HC.Welcome.Enabled() then y = HC.Welcome:AddSettings(panel, y) end
+    _, y = UI.Check(panel, "Settings search", "Show a search box at the top of this window.", y,
+        function() return HC.State().settingsSearch ~= false end,
+        function(value)
+            HC.State().settingsSearch = value
+            HC.Settings:RefreshSearch()
+        end)
     _, y = UI.Check(panel, "Show support links",
         "Show the Discord and Buy me a coffee links at the bottom of this window.", y,
         function() return HC.State().supportLinks ~= false end,
@@ -170,6 +186,31 @@ troubleshooting.build = function(panel, y)
     UI.AttachHint(copy, "Copy report", "Open a report you can paste into a bug report.")
     copy:SetScript("OnClick", function() HC.Commands:Dispatch("debug") end)
     y = y - 38
+    -- Flights addons: whether LibTaxiData is there, and where to get it.
+    local flights = HC.Flights
+    if HC.spec.flights and flights and flights.Estimates() then
+        _, y = UI.Header(panel, "Flight times", y)
+        local note = UI.FontString(panel, "GameFontHighlightSmall")
+        note:SetPoint("TOPLEFT", UI.PAD, y)
+        note:SetWidth(UI.CONTENT_WIDTH or 500)
+        note:SetJustifyH("LEFT")
+        UI.OnRefresh(panel, function()
+            local learned = flights.enabled and flights:LearnedCount() or 0
+            note:SetText((flights.LibraryInstalled()
+                and "LibTaxiData is installed: flight times from your first flight."
+                or "LibTaxiData isn't installed: flight times are learned as you fly.")
+                .. " Routes learned: " .. learned .. ".")
+        end)
+        y = y - 22
+        local get = UI.Button(panel, 160, 22)
+        get:SetPoint("TOPLEFT", UI.PAD, y)
+        get:SetText("Get LibTaxiData")
+        UI.AttachHint(get, "LibTaxiData", "The free flight path library on CurseForge. Copy the link into your browser.")
+        get:SetScript("OnClick", function()
+            HC.Dialog:Link({ title = "LibTaxiData", url = flights.LIBRARY_URL, icon = "CurseForge.tga" })
+        end)
+        y = y - 38
+    end
     if HC.spec.troubleshooting then y = HC.spec.troubleshooting(panel, y) end
     return y
 end

@@ -220,8 +220,8 @@ end
 -- ── The page ───────────────────────────────────────────────────────────────
 
 -- spec = { name?, title?, description?, extra = function(frame, y) -> y }
--- extra adds addon-specific rows (such as quick-switch clicks) after
--- Included in profiles.
+-- extra adds addon-specific rows after the profile controls, such as a line
+-- saying what a profile saves.
 function Profiles:NewPage(spec)
     spec = spec or {}
     local function build(panel, tab)
@@ -285,19 +285,6 @@ function Profiles:NewPage(spec)
             function() return data().perCharacter end,
             function(value) Profiles:SetPerCharacter(value) end)
         add(manage, -y + 4)
-
-        -- Included ------------------------------------------------------------
-        local included = section(panel, 2)
-        y = -8
-        _, y = UI.Header(included, "Included in profiles", y)
-        _, y = UI.Text(included, "Settings switched off here are shared by every profile.", y)
-        for _, group in ipairs(Profiles.spec.groups) do
-            _, y = UI.Check(included, group.label, group.hint, y,
-                function() return Profiles:Included(group.key) end,
-                function(value) Profiles:SetIncluded(group.key, value) end)
-        end
-        y = UI.Flush(included, y)
-        add(included, -y + 4)
 
         -- Addon extras --------------------------------------------------------
         if spec.extra then

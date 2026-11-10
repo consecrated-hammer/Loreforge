@@ -1,9 +1,10 @@
 ## Interface: 120105
 ## Title: Loreforge
 ## Author: consecrated-hammer
-## Version: 1.1.0
-## X-ReleaseDate: 2026-11-09
+## Version: 1.3.0
+## X-ReleaseDate: 2026-11-10
 ## Notes: Host group and guild trivia with manual or automatic rounds, scores and records.
+## OptionalDeps: LibTaxiData
 ## SavedVariables: LoreforgeDB
 ## LoadSavedVariablesFirst: 1
 ## IconTexture: Interface\Icons\INV_Misc_Book_09
@@ -32,3 +33,6 @@ Options.lua
 Party.lua
 Player.lua
 Probe.lua
+QuickPlay.lua
+Daily.lua
+QuickCard.lua

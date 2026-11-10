@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.3.0] - 2026-11-10
+
+### Added
+
+- **Quick play.** A little solo quiz card for when you're hanging about.
+  One click, no setup, nothing posted to chat. `/lf quick`, the **Quick
+  play** button on the Play tab, a key binding or the minimap button opens
+  it. Right-click the minimap button for a menu of settings, the Hall of
+  Fame and every Quick play mode. Four modes:
+  - **Quick play:** endless questions.
+  - **Streak:** keep going until your first miss.
+  - **Lightning:** as many as you can in 60 seconds.
+  - **Flight challenge:** as many as you can before you land.
+- **Fancy a question?** Take a flight path and Loreforge offers a quiz,
+  with ten ways of asking (and five more if you're a Loremaster on Retail).
+  It can start a Flight challenge straight away instead, or keep quiet.
+  Your call, on the **Quick play** settings page or right on the prompt.
+- **Touchdown!** Land mid-question and you get a few seconds' grace to
+  finish it (**Landing grace**, 10 by default), then your flight score, and
+  the card closes unless you hit **Keep going**. No more card hovering over
+  the flight master forever.
+- **Time to read the answer.** Each answer in a Flight challenge stays up for
+  3 seconds (**Flight answer pause**) and gets two full lines, so the tavern
+  wit doesn't fall off the edge. Lose a Streak and the right answer stays on
+  the summary too.
+- **Druid flights count.** Flights picked from a flight master's chat, with no
+  flight map, now offer a question or start a Flight challenge as well.
+- **Against the clock or Relaxed.** One switch for the timer.
+- **The art came too.** Every question shows its category painting, with the
+  category name across the bottom. Prefer it plain? Turn Artwork off.
+- **Personal bests** for your best streak, best Lightning and best flight
+  (with where you flew and when), on the card and in the Hall of Fame.
+- **An Options tab** slides out of the card: mode, timer, look and flights,
+  without opening settings.
+- **Daily question.** One question each day, one try and no timer. Answer
+  correctly on consecutive days to grow your daily streak. Open `/lf daily`,
+  use the Play tab or pick it from the minimap menu. Your answer and streak
+  are shared across characters on the same client.
+- **A welcome at the tavern.** Choose what happens on flights and whether to
+  offer the daily at login. `/lf setup` opens those choices again.
+
+### Changed
+
+- **Better with LibTaxiData.** Install this free library of flight paths and
+  the Flight challenge counts down from your very first flight. Without it,
+  Loreforge learns each route as you fly it. Optional, and not on WoW
+  Forever yet. **Get LibTaxiData** on the Troubleshooting page has the link.
+- Diagnostics include Quick play, flights and whether your character has the
+  Loremaster title.
+- **Quick play first when solo.** The Play tab leads with Quick play, with
+  Practice solo beside it. Prefer practice first? Change Main button when
+  solo. You can also choose Quick play for a solo minimap left-click.
+- **Ask me, Auto-start or Off.** The flight choices use the same names on the
+  card, in settings and in the welcome window.
+- **One minimap menu.** The shared HammerCore menu includes settings, the
+  Hall of Fame, the daily and the Quick play modes. Settings also has search.
+
+### Fixed
+
+- Long settings labels have more room beside compact dropdowns, including
+  Main button when solo and Setup on new features.
+
 ## [1.1.0] - 2026-11-09
 
 ### Changed

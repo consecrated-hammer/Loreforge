@@ -3,4 +3,5 @@
     <Binding name="LOREFORGE_ANSWER2" category="ADDONS">LoreforgeAnswer(2)</Binding>
     <Binding name="LOREFORGE_ANSWER3" category="ADDONS">LoreforgeAnswer(3)</Binding>
     <Binding name="LOREFORGE_ANSWER4" category="ADDONS">LoreforgeAnswer(4)</Binding>
+    <Binding name="LOREFORGE_QUICKPLAY" category="ADDONS">LoreforgeQuickPlay()</Binding>
 </Bindings>

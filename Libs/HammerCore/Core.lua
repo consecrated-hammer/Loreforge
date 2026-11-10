@@ -8,7 +8,7 @@ local addonName, ns = ...
 local HC = {}
 ns.HammerCore = HC
 
-HC.VERSION = "0.3.1"
+HC.VERSION = "0.5.0"
 HC.addonName = addonName
 
 -- The one chat colour every addon uses for its name prefix.
@@ -28,6 +28,10 @@ local DEFAULTS = {
     supportLinks = true,
     -- The settings window's own scale, from its header slider.
     settingsScale = 1,
+    -- What right-clicking the minimap button does: "menu" or "settings".
+    minimapRightClick = "menu",
+    -- The search box in the settings header.
+    settingsSearch = true,
 }
 
 function HC.GetMetadata(key)
@@ -64,7 +68,14 @@ end
 --   status                   function returning the Troubleshooting status text
 --   about                    { note, tips, action, chat?, onApply?, credit? }
 --                            (see Pages.lua)
---   minimap                  { rightClick = fn, rightClickLabel = "..." }
+--   minimap                  { icon?, leftClick = fn?, leftClickLabel = "..."?,
+--                              menu = fn? returning HC.Menu items (or a table),
+--                              rightClick = fn?, rightClickLabel = "..."? }
+--                            Right-click opens a menu: "<name> settings",
+--                            "Profiles" with profiles, a line, then `menu`'s
+--                            items. The "Minimap right-click" setting (Menu or
+--                            Settings) picks it. `rightClick` replaces all of
+--                            that and hides the setting, as before 0.5.0.
 --   toggle, lock, unlock     { run = fn, help = "..." } shared verbs
 --   resetPosition            fn; resetSettings fn (defaults to a full wipe)
 --   window                   { width = n, height = n }
@@ -73,6 +84,10 @@ end
 --                            button in combat and refuses to open settings
 --   whatsNew                 { { version = "1.8.0", items = { { text, page? } } } }
 --                            post-update highlights (see WhatsNew.lua)
+--   flights                  true tracks flight paths (see Flights.lua); the
+--                            addon must declare LibTaxiData (required or optional).
+--                            { estimates = false } tracks takeoff and landing
+--                            only: no flight times and no LibTaxiData needed.
 function HC:Init(spec)
     assert(type(spec) == "table", "HammerCore:Init needs a spec")
     assert(type(spec.name) == "string", "HammerCore:Init needs a name")
@@ -121,6 +136,9 @@ function HC.State()
     local scale = tonumber(state.settingsScale)
     state.settingsScale = scale and math.max(0.7, math.min(1.3, scale)) or 1
     if HC.Theme and not HC.Theme.registry[state.theme] then state.theme = DEFAULTS.theme end
+    if state.minimapRightClick ~= "menu" and state.minimapRightClick ~= "settings" then
+        state.minimapRightClick = DEFAULTS.minimapRightClick
+    end
     return state
 end
 
@@ -167,6 +185,7 @@ function HC:Start()
     if self.Settings then self.Settings:CreateLauncher() end
     if state and state.startupMessage then print(HC.LoginMessage(true)) end
     if self.WhatsNew then self.WhatsNew:Check() end
+    if HC.spec.flights and self.Flights then self.Flights:Enable() end
 end
 
 function HC.SetStartupMessage(enabled)

@@ -258,7 +258,10 @@ local function shared()
 end
 
 -- Called from HC:Start.  Decides once per session whether to show anything.
+-- A welcome window opening at login (Welcome.lua) replaces the popup.
 function WhatsNew:Check()
+    self.checked = true
+    local welcome = HC.Welcome and HC.Welcome:Check()
     if not WhatsNew.Enabled() then return end
     local state = HC.State()
     if not state then return end
@@ -276,6 +279,14 @@ function WhatsNew:Check()
     local unseen = self:Unseen(state.whatsNewSeen, current, state.whatsNewSeenItems)
     if #unseen == 0 or state.whatsNew == false then
         self:MarkSeen(state, mark)
+        return
+    end
+    if welcome then
+        -- Seen once the welcome has shown; the page still lists the release.
+        HC.Welcome:OnLoginShown(function()
+            local live = HC.State()
+            if live then WhatsNew:MarkSeen(live, mark) end
+        end)
         return
     end
 
@@ -300,7 +311,14 @@ end
 -- with every addon's section.
 function WhatsNew:TryShow()
     if not self.registered then return end
+    self:Flush()
+end
+
+-- Shows whatever any copy left in the registry.  A welcome window that's
+-- waiting or open holds it back, and calls this when it closes.
+function WhatsNew:Flush()
     if inCombat() then return end   -- PLAYER_REGEN_ENABLED tries again
+    if HC.Welcome and HC.Welcome.Busy() then return end
     local registry = shared()
     local sections = registry.sections
     if #sections == 0 or not registry.render then return end

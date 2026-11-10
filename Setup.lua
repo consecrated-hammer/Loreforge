@@ -340,6 +340,21 @@ function ns.BuildSetup(host)
     setup.practice:SetPoint('BOTTOMLEFT', 228, 18); setup.practice:SetText('Practice solo')
     setup.practice:SetScript('OnClick', function() ns.StartGame(true) end)
     UI.AttachHint(setup.practice, 'Practice solo', 'A game just for you. Nothing is posted to chat.')
+    setup.quick = UI.Button(setup, 130, 34)
+    setup.quick:SetText('Quick play')
+    setup.quick:SetScript('OnClick', function() if ns.QuickCard then ns.QuickCard.Show() end end)
+    UI.AttachHint(setup.quick, 'Quick play', 'A small solo quiz card. No setup, nothing posted. /lf quick opens it too.')
+    -- Solo, Quick play can lead: the same action as a primary button.
+    setup.quickMain = UI.Button(setup, 200, 34, 'primary')
+    setup.quickMain:SetPoint('BOTTOMLEFT', MARGIN, 18); setup.quickMain:SetText('Quick play')
+    setup.quickMain:SetScript('OnClick', function() if ns.QuickCard then ns.QuickCard.Show() end end)
+    UI.AttachHint(setup.quickMain, 'Quick play', 'A small solo quiz card. No setup, nothing posted. /lf quick opens it too.')
+    setup.daily = UI.Button(setup, 150, 34)
+    setup.daily:SetScript('OnClick', function() if ns.QuickCard then ns.QuickCard.Show('daily') end end)
+    UI.AttachHint(setup.daily, 'Daily question', function()
+        if ns.Daily and ns.Daily.Done() then return 'Done for today. ' .. ns.Daily.NextText() .. '.' end
+        return 'Today\'s question, the same for everyone. One try, no timer. /lf daily opens it too.'
+    end)
     setup.lobby = UI.Button(setup, 170, 34)
     setup.lobby:SetPoint('BOTTOMLEFT', 228, 18); setup.lobby:SetText('Invite new arrivals')
     setup.lobby:SetScript('OnClick', function() if ns.Party then ns.Party.OpenLobby() end end)
@@ -483,8 +498,30 @@ function ns.BuildSetup(host)
             setup.startHint = isOpen and 'Starts with everyone who joined. Others answer in chat.' or nil
         end
         setup.start:SetEnabled(not issue)
-        setup.practice:SetShown(not setup.solo and not isOpen)
-        setup.practice:SetEnabled(not restricted and not poolIssue)
+        -- Solo, Quick play leads unless Main button when solo says Practice
+        -- game; Practice solo then takes the second spot. Grouped, the
+        -- game's start button always leads.
+        local quickFirst = setup.solo and not isOpen and ns.db.soloMain ~= 'PRACTICE'
+        setup.start:SetShown(not quickFirst)
+        setup.quickMain:SetShown(quickFirst)
+        setup.practice:SetShown(quickFirst or (not setup.solo and not isOpen))
+        setup.practice:ClearAllPoints()
+        setup.practice:SetPoint('BOTTOMLEFT', 228, 18)
+        setup.practice:SetEnabled(not restricted and not poolIssue and not (quickFirst and issue))
+        setup.quick:ClearAllPoints()
+        setup.quick:SetPoint('BOTTOMLEFT', setup.practice:IsShown() and 388 or 228, 18)
+        setup.quick:SetShown(not isOpen and not quickFirst)
+        -- Daily sits after the last of them, with a tick once it's done.
+        local daily = ns.Daily and ns.Daily.Enabled() and not isOpen
+        setup.daily:SetShown(daily and true or false)
+        if daily then
+            local x = quickFirst and 388 or (setup.quick:IsShown() and (setup.practice:IsShown() and 528 or 368)) or 228
+            setup.daily:ClearAllPoints()
+            setup.daily:SetPoint('BOTTOMLEFT', x, 18)
+            local done = ns.Daily.Done()
+            setup.daily:SetText(done and 'Daily question |TInterface\\RaidFrame\\ReadyCheck-Ready:14|t' or 'Daily question')
+            setup.daily.done = done
+        end
         setup.lobby:SetShown(isOpen)
         setup.closeLobby:SetShown(isOpen)
     end

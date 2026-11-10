@@ -193,7 +193,7 @@ function ns.BuildRecords(host)
         local h = label(view, "GameFontHighlightSmall", "muted", c[3])
         h:SetPoint("TOPLEFT", c[2], -116); h:SetText(c[1])
     end
-    local _, list, setHeight = ns.ScrollArea(view, 0, -134, L.width - 30, L.height - 200)
+    local _, list, setHeight = ns.ScrollArea(view, 0, -134, L.width - 30, L.height - 250)
     view.rows = {}
     local function row(i)
         if view.rows[i] then return view.rows[i] end
@@ -210,6 +210,32 @@ function ns.BuildRecords(host)
     view.empty = label(view, "GameFontHighlight", "muted", 500)
     view.empty:SetPoint("TOPLEFT", 18, -150)
     view.empty:SetText("No records yet. Finish a game to start the Hall of Fame.")
+    -- Quick play's personal bests, one hover each for where and when.
+    view.bestsHeading = label(view, "GameFontNormal", "flavour", 300)
+    view.bestsHeading:SetPoint("BOTTOMLEFT", 18, 84)
+    view.bestsHeading:SetText("Personal bests")
+    view.bests = {}
+    for index, mode in ipairs({ "streak", "lightning", "flight", "daily" }) do
+        local cell = CreateFrame("Frame", nil, view)
+        cell:SetSize(205, 20)
+        cell:SetPoint("BOTTOMLEFT", 18 + (index - 1) * 220, 60)
+        cell.text = label(cell, "GameFontHighlight", "text", 205)
+        cell.text:SetPoint("LEFT")
+        cell:EnableMouse(true)
+        cell:SetScript("OnEnter", function(self)
+            local best = ns.Quick and ns.Quick.BestLine(mode)
+            if not (best and GameTooltip) then return end
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(best.text, T.Unpack("accent"))
+            for _, line in ipairs(best.detail or {}) do GameTooltip:AddLine(line, 1, 1, 1, true) end
+            GameTooltip:Show()
+        end)
+        cell:SetScript("OnLeave", function(self)
+            if GameTooltip and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+        end)
+        cell.mode = mode
+        view.bests[index] = cell
+    end
     view.copy = UI.Button(view, 150, 30)
     view.copy:SetPoint("BOTTOMLEFT", 18, 18); view.copy:SetText("Copy as text")
     view.copy:SetScript("OnClick", ns.ShowRecords)
@@ -243,6 +269,13 @@ function ns.BuildRecords(host)
         for i = shown + 1, #view.rows do view.rows[i]:Hide() end
         setHeight(shown * 24, true)
         view.clear:SetEnabled(#rows > 0 and not ns.game:Active())
+        local empty = { streak = "Best streak: none yet", lightning = "Best Lightning: none yet", flight = "Best flight: none yet",
+            daily = "Daily streak: none yet" }
+        for _, cell in ipairs(view.bests) do
+            local best = ns.Quick and ns.Quick.BestLine(cell.mode)
+            cell.text:SetText(best and best.text or empty[cell.mode])
+            T.Text(cell.text, best and "text" or "muted")
+        end
     end
     view:Hide()
     return view
