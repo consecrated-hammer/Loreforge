@@ -4,6 +4,12 @@
 
 _You have considered reading the quest text. Now make everyone else prove it._
 
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/z3xKxRygDc) [![Retail](https://img.shields.io/badge/retail-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/loreforge) [![WoW Forever](https://img.shields.io/badge/wow%20forever-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/loreforge) [![Release](https://img.shields.io/github/v/release/consecrated-hammer/Loreforge?style=flat-square&color=4c9a7a&label=release)](https://github.com/consecrated-hammer/Loreforge/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](https://github.com/consecrated-hammer/Loreforge/blob/main/LICENSE.txt)
+
+Questions, bugs or ideas? Come say hi on the [Consecrated Hammer Discord](https://discord.gg/z3xKxRygDc). Bug reports go in `#bug-reports`, or you can open a [GitHub issue](https://github.com/consecrated-hammer/Loreforge/issues).
+
+---
+
 Loreforge runs on Retail and WoW Forever. The host picks Party, Raid, Instance or Guild output, categories, difficulty, game length and pacing. Other players answer with a number in chat; they don't need the addon.
 
 **Better with LibTaxiData.** Install the free
@@ -145,27 +151,21 @@ Lua tests and staged-file checks do not prove chat permissions, rendering, event
 
 See [chat-bot interaction notes](docs/chat-bot-interactions.md) for the research and possible future modes.
 
-## Party player beta
+## Party play (beta)
 
-With 0.2.0-beta or later on the host and addon participants, choose Party
-output and **Open lobby**. Players get an invitation near the top of the
-screen with **Join quiz** and **Decline**, then the host clicks **Start game**.
-Use `/lf` to reopen a pending invitation. Invitations appear above the main window and also print a chat notice. `/lf debug` includes Party delivery and window errors if no prompt appears.
-With the staged question-sync update on all addon participants, the current
-question is prepared offscreen before posting and appears as its first chat
-line arrives. The playing host sees it at that same milestone. Mixed older
-clients retain the earlier delivery path. A failed preparation has a bounded
-chat fallback rather than an unlimited wait.
-Joined players get clickable questions, confirmed answer locking, tinted
-reveals, streaks, shared scores and a finish headline. Chat-only players can
-still answer normally. `/lf play` restores a joined game and `/lf history`
-opens your history.
+On Retail, party members with Loreforge can join the game properly instead of
+typing numbers. Choose Party output and click **Open lobby**. Players get an
+invitation with **Join quiz** and **Decline**, and once everyone's in you click
+**Start game**. Joined players get clickable answers, locked-in answers,
+streaks and shared scores. Anyone without the addon still answers in chat as
+usual.
 
-This beta uses Retail home Parties, including premade Parties in dungeons
-when combat and activity restrictions are inactive. Queued Instance groups,
-raids and Forever player UI remain unsupported. The dungeon transport probe has passed; the
-complete player flow still needs an in-game test. See [Party player
-behaviour and protocol](docs/party-client.md).
+It works in Retail home Parties, including premade Parties in dungeons outside
+combat. Raids, queued Instance groups and WoW Forever aren't supported yet.
+`/lf` reopens a pending invitation, `/lf play` gets you back into a joined game,
+and `/lf debug` helps if an invitation doesn't show up.
+[Party player behaviour and protocol](docs/party-client.md) has the technical
+detail.
 
 ## Development
 
