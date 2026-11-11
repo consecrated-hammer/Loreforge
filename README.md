@@ -1,6 +1,6 @@
 # Loreforge
 
-**You read the quest text, right?**
+**Trivia for your party, raid or guild.**
 
 _You are not prepared! (For question seven)_
 
