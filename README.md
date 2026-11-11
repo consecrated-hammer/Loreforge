@@ -2,7 +2,7 @@
 
 **You read the quest text, right?**
 
-_You have considered reading the quest text. Now make everyone else prove it._
+_You are not prepared! (For question seven)_
 
 [![Retail](https://img.shields.io/badge/retail-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/loreforge) [![WoW Forever](https://img.shields.io/badge/wow%20forever-supported-4c9a7a?style=flat-square)](https://www.curseforge.com/wow/addons/loreforge) [![Release](https://img.shields.io/github/v/release/consecrated-hammer/Loreforge?style=flat-square&color=4c9a7a&label=release)](https://github.com/consecrated-hammer/Loreforge/releases) [![License](https://img.shields.io/badge/license-GPL--3.0-4c9a7a?style=flat-square)](https://github.com/consecrated-hammer/Loreforge/blob/main/LICENSE.txt)
 
