@@ -61,6 +61,11 @@ function ns.HistoryEntries()
     return list
 end
 
+local function gameLength(rounds, perRound)
+    if tonumber(rounds) == 1 then return tostring(perRound) .. ' questions' end
+    return tostring(rounds) .. ' rounds of ' .. tostring(perRound)
+end
+
 -- What an entry shows: a title line, a detail line, and standings rows of
 -- { name, total, bestStreak, mine }.
 local function describe(entry)
@@ -71,13 +76,13 @@ local function describe(entry)
         for _, row in ipairs(type(g.rows) == "table" and g.rows or {}) do rows[#rows + 1] = { key = row.key, name = row.name, total = row.total or 0, bestStreak = row.bestStreak } end
         local channel = g.practice and "Practice" or (ns.Game.CHANNELS[g.channel] and ns.Game.CHANNELS[g.channel].label or "?")
         out.where = "Hosted · " .. channel
-        out.length = tostring(g.rounds) .. " x " .. tostring(g.perRound)
+        out.length = gameLength(g.rounds, g.perRound)
         out.players = g.players or #rows
     else
         local r = entry.result
         for _, row in ipairs(r.rows or {}) do rows[#rows + 1] = { key = row.key, name = row.name, total = row.total or 0, bestStreak = row.bestStreak, rank = row.rank } end
         out.where = "Party · " .. tostring(r.host)
-        out.length = r.config and (tostring(r.config.rounds) .. " x " .. tostring(r.config.perRound)) or ""
+        out.length = r.config and gameLength(r.config.rounds, r.config.perRound) or ""
         out.players = #rows
     end
     ranked(rows)
@@ -215,7 +220,7 @@ function ns.BuildRecords(host)
     end
     view.empty = label(view, "GameFontHighlight", "muted", 500)
     view.empty:SetPoint("TOPLEFT", 18, -150)
-    view.empty:SetText("No records yet. Finish a game to start the Hall of Fame.")
+    view.empty:SetText("No leaderboard yet. Host a game and everyone who plays lands here.")
     -- Quick play's personal bests, one hover each for where and when.
     view.bestsHeading = label(view, "GameFontNormal", "flavour", 300)
     view.bestsHeading:SetPoint("BOTTOMLEFT", 18, 84)

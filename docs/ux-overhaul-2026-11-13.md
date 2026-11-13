@@ -11,12 +11,12 @@ The audit considered information architecture, progressive disclosure, visual hi
 | Surface | Finding and decision |
 | --- | --- |
 | Main Play, History, Hall of Fame | Keep the three task tabs. Solo Quick play already has a direct primary action; preserve Solo Main. Explain endless card versus privately practising a configured game and one untimed Daily attempt. Keep the restore-running-game path. |
-| Game setup | Preserve Output, host participation, difficulty, count, answer time and countdown. Keep Quick/Standard/Marathon visible. Name the active preset or Custom in the existing duration summary; tooltips state that only count/time change. No new wizard. |
+| Game setup | Preserve Play in, host participation, difficulty, count, answer time and countdown. Keep Short/Standard/Marathon visible. Name the active preset or Custom in the existing duration summary; tooltips state that only count/time change. No new wizard. |
 | Categories | Preserve bank, overlapping selections, All/None, difficulty-filtered counts and insufficient-pool errors. Keep full category labels and count reservations. Keep Categories available when Party lobby opens. Existing paintings remain the category identity during play; no new catalogue/art. |
 | Pacing & chat | Explain auto-advance versus Ask next question directly. Disable Question gap and Pause when quiet while host-paced, including mouse-wheel changes. Keep choice formatting and record announcements separate. |
 | Party lobby | Open once into its own tab, with Categories still alongside it. Preserve invitation/join state, expiry, Keep lobby open, invite-new-arrivals and output-change confirmation. Do not label unknown clients as ready or available. Readiness belongs to the start countdown. |
 | Live host console | Existing phase-specific action, scores, timer, response counts and pause/recovery are appropriate. Preserve sending, pending echo, confirmed post, refusal, timeout and explicit manual fallback. No timer starts or automatic retries changed. |
-| Party invitation and joined quiz | Existing question scroll layout, answer pending/confirmed states, score/streak, results, Leave confirmation and restore are retained. Restore-button pulse now respects Lively animations, including an already running pulse. |
+| Party invitation and joined quiz | Existing question scroll layout, answer pending/confirmed states, score/streak, results, Leave confirmation and restore are retained. Restore-button pulse now respects Animations, including an already running pulse. |
 | Quick play | Fixed question/answer/footer coordinates could collide, especially without artwork. Measure wrapped question, equal-height answer rows, full reveal and summary notes; grow the reading side and retain a square painting. Preserve endless/manual/automatic behaviour and timer rules. |
 | Streak | Keep first-miss ending and correct answer in the summary. Give its long answer note measured room and celebrate a new best once per summary, without replay on redraw. |
 | Lightning | Keep 30–180-second game clock, immediate feedback, rapid transition and deadline-owned final score. Layout changes do not restart the clock. |
@@ -39,7 +39,7 @@ Essential controls stay directly visible for their task. Standard preferences li
 
 | Before | Candidate location | Controls and level |
 | --- | --- | --- |
-| Interface / Sound, Game window, Flair | Interface > Presentation | Sound cues, Theme art, Round intros, Storybook style, Lively animations, Tavern banter, Streak flair. Standard. |
+| Interface / Sound, Game window, Flair | Interface > Presentation | Sound cues, Artwork, Round intros, Storybook style, Animations, Tavern banter, Streak flair. Standard. |
 | Interface / Window size and Game window behaviour | Interface > Windows | Main window, Player window, Window opacity, Minimise when playing along. Standard. |
 | Quick play / Play | Quick play > Play | Timer, Seconds per question, Next question automatically, Wait before next, Lightning length, Main button when solo, Categories & difficulty. Timer/next are standard; seconds/delay are dependent. |
 | Quick play / Look | Quick play > Card | Artwork, Animations, Card size. Standard and shared with Options. |
@@ -49,7 +49,7 @@ Essential controls stay directly visible for their task. Standard preferences li
 | Player records | Same page | Open Hall of Fame, confirmed Clear player records. View is standard; clear remains secondary/destructive. |
 | Party games | Same page | Show Party game invitations, Open History and support/privacy explanation. Standard. |
 | Visibility/reference | Same shared pages | Minimap, solo left-click, update/setup/search/window preferences, Commands, Troubleshooting, About and What's new. Unchanged ownership. |
-| Hosted setup presets | Same header and summary | Quick/Standard/Marathon and Custom, question count and estimate. Essential starting point. |
+| Hosted setup presets | Same header and summary | Short/Standard/Marathon and Custom, question count and estimate. Essential starting point. |
 | Hosted Game/Categories/Pacing | Same task tabs, plus lobby | Existing setup controls retained. Categories no longer disappears; pacing-only steppers disable in host-paced mode. |
 
 Settings labels are unique within each tab. Standard controls register with HammerCore; custom binding tiles and active-row actions register locally and clear stale entries. Hidden timer/next/shortest-flight/daily controls point at their enabling row. Search focuses the actual control, or the visible enabling row. The category shortcut opens the existing shared setup state rather than duplicating category/difficulty preferences.

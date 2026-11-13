@@ -498,9 +498,9 @@ local function winners(model)
     return names, best
 end
 
--- Completion view: "Game complete", then the winner or a shared win.
+-- Completion view: "Final scores", then the winner or a shared win.
 local function headlineText(model)
-    return model.state == "finished" and "Game complete" or ""
+    return model.state == "finished" and "Final scores" or ""
 end
 
 local function winnerText(model)

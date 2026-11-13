@@ -373,7 +373,7 @@ function Card.Render()
         if s.phase == "reveal" then
             local text
             if s.lastRight then text = "Correct!"
-            elseif s.choice then text = "It was " .. q.choices[q.correct] .. "."
+            elseif s.choice then text = "Not quite. It was " .. q.choices[q.correct] .. "."
             else text = "Time's up. It was " .. q.choices[q.correct] .. "." end
             local bucket = ns.Flair.RevealBucket(s.choice, q.correct, s.streak)
             local quip = bucket and ns.Flair.Quip(bucket, tostring(s.answered), s.streak) or ""

@@ -67,7 +67,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     local S = ns.HammerCore.Settings
     local function rows(page, tab) return S.pages[page].bodies[tab].hcRows end
     local interface = rows('Interface', 'Presentation')
-    assert(interface['Lively animations'] and interface['Theme art'] and interface['Sound cues'])
+    assert(interface['Animations'] and interface['Artwork'] and interface['Sound cues'])
     assert(rows('Interface', 'Windows')['Player window'])
     for _, tab in ipairs({ 'Play', 'Card', 'Flights', 'Daily question' }) do assert(S.pages['Quick play'].bodies[tab]) end
     -- Every registered control can be found and focused, across all tabs and pages.

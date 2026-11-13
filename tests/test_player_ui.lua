@@ -329,7 +329,7 @@ local final = {
 }
 P.Render(as(model('finished', { rows = final })))
 assert(f:IsShown(), 'final results open once')
-eq(f.headline:GetText(), 'Game complete', 'the finish has a large headline')
+eq(f.headline:GetText(), 'Final scores', 'the finish has a large headline')
 eq(f.winner:GetText(), 'Shared win: Guest-Away, Chatonly, 4 points each.', 'a tie is a shared win')
 eq(f.you:GetText(), 'You shared the win with 4 points · best streak 3', 'the local result and best streak')
 assert(not f.question:IsShown() and not f.answers[1]:IsShown() and not f.feedback:IsShown(), 'no stale question, choices or reveal')

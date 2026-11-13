@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use clearer settings labels, a Short game preset and question counts in History. Wrong answers say "Not quite", and joined games finish on "Final scores".
+
 - Split Interface into Presentation and Windows, and Quick play into Play, Card, Flights and Daily question. Each tab resets only its own preferences.
 - Make hidden timer, next-question, flight and daily preferences searchable through their enabling control. Search also finds individual binding tiles and live Change/Remove actions.
 - Measure Quick play questions, answer rows, reveals and summaries so long text has room. Keep category artwork square and open Options on the side with space.

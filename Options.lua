@@ -55,7 +55,7 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Make the quiz your own.
         function() return ns.db.sound ~= false end, function(value) ns.db.sound = value end)
     y = UI.Flush(panel, y)
     _, y = UI.Header(panel, 'Game window', y, ICONS.game)
-    _, y = UI.Check(panel, 'Theme art', 'A painting beside the question.', y,
+    _, y = UI.Check(panel, 'Artwork', 'A painting beside the question.', y,
         function() return ns.db.questionArt ~= false end, function(value)
             ns.db.questionArt = value
             redraw()
@@ -66,7 +66,7 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Make the quiz your own.
     _, y = UI.Header(panel, 'Flair', y, ICONS.flair)
     for _, spec in ipairs({
         { 'storybook', 'Storybook style', 'Fancy titles, parchment and numbered answers.' },
-        { 'livelyAnimations', 'Lively animations', 'Pops, sparkles, shakes and a bouncing crown.' },
+        { 'livelyAnimations', 'Animations', 'Pops, sparkles, shakes and a bouncing crown.' },
         { 'tavernBanter', 'Tavern banter', 'Quips after answers and results. Only you see them.' },
         { 'streakFlair', 'Streak flair', 'A flame beside your score from 3 in a row.' },
     }) do
@@ -258,7 +258,7 @@ local function setAnswer(item, key)
     end
     local current = GetBindingAction and GetBindingAction(key)
     if current and current ~= '' and current ~= item.id then
-        return false, HC.Bindings.Label(key) .. ' already does ' .. bindingName(current) .. '.', apply
+        return false, HC.Bindings.Label(key) .. ' is bound to ' .. bindingName(current) .. '.', apply
     end
     return apply()
 end
@@ -340,6 +340,6 @@ HC.Settings:NewPage({ name = 'Party games', columns = 1, description = 'Invitati
     _, y = UI.Text(panel, 'Joining gives you clickable questions and sends your answers to the host. Other addons in the group can read Party addon messages.', y)
     _, y = UI.ActionButton(panel, y, 'Open History', function() HC.Settings:Hide(); ns.OpenHost('history') end,
         'Past games, hosted and joined.', 'primary', 180)
-    _, y = UI.PageReset(panel, y, function() ns.db.partyInvites = true end)
+    _, y = UI.PageReset(panel, y, function() ns.db.partyInvites = true end, 'Reset Party games')
     return y
 end)

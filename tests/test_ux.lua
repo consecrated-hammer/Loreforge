@@ -644,7 +644,7 @@ eq(P.frame.status:GetText(), 'Next question in 5s.', 'auto-advance counts down')
 P.Render(model('between', { correct = 1, hostPaced = true }))
 eq(P.frame.status:GetText(), 'The host will start the next question.', 'host pacing is explained')
 P.Render(model('finished', { correct = 1, id = 'pg-final' }))
-eq(P.frame.headline:GetText(), 'Game complete', 'the finish has a large headline')
+eq(P.frame.headline:GetText(), 'Final scores', 'the finish has a large headline')
 eq(P.frame.winner:GetText(), 'Host wins with 3 points.', 'the winner is named under it')
 eq(P.frame.you:GetText(), 'You won with 3 points', 'and the local result')
 assert(not P.frame.question:IsShown() and not P.frame.answers[1]:IsShown() and not P.frame.feedback:IsShown(),

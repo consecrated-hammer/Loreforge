@@ -3,7 +3,7 @@ local wow = require('wow')
 assert(loadfile('tests/flair-harness.lua'))()(wow)
 local function eq(a, b, why) assert(a == b, why .. ': ' .. tostring(a) .. ' ~= ' .. tostring(b)) end
 
--- Storybook style, Lively animations, Tavern banter and Streak flair: on by
+-- Storybook style, Animations, Tavern banter and Streak flair: on by
 -- default, each one off on its own, banter never sent anywhere.
 for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     for _, theme in ipairs({ 'modern', 'classic' }) do
@@ -263,7 +263,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         local Settings = ns.HammerCore.Settings
         Settings:Show('Interface')
         eq(next(Settings.errors or {}), nil, label .. 'the Interface page builds')
-        for _, name in ipairs({ 'FLAIR', 'Storybook style', 'Lively animations', 'Tavern banter', 'Streak flair' }) do
+        for _, name in ipairs({ 'FLAIR', 'Storybook style', 'Animations', 'Tavern banter', 'Streak flair' }) do
             assert(wow.FindText(name), label .. 'Interface shows ' .. name)
         end
         Settings:Hide()

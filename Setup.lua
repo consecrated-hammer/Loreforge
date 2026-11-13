@@ -7,7 +7,7 @@ local T = HC.Theme
 -- Categories, Pacing & chat), each using the full window width.
 
 local PRESETS = {
-    { name = 'Quick', hint = '5 questions, 20 seconds each.', rounds = 1, perRound = 5, seconds = 20 },
+    { name = 'Short', hint = '5 questions, 20 seconds each.', rounds = 1, perRound = 5, seconds = 20 },
     { name = 'Standard', hint = '15 questions, 20 seconds each.', rounds = 1, perRound = 15, seconds = 20 },
     { name = 'Marathon', hint = '50 questions, 25 seconds each.', rounds = 1, perRound = 50, seconds = 25 },
 }
@@ -149,7 +149,7 @@ function ns.BuildSetup(host)
         setup.presets[i] = b
     end
     local presetLabel = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
-    presetLabel:SetPoint('RIGHT', setup.presets[1], 'LEFT', -10, 0); presetLabel:SetText('Quick start')
+    presetLabel:SetPoint('RIGHT', setup.presets[1], 'LEFT', -10, 0); presetLabel:SetText('Length')
 
     -- One banner for anything blocking the start, or an interrupted game.
     local banner = CreateFrame('Frame', nil, setup, 'BackdropTemplate')
@@ -213,7 +213,7 @@ function ns.BuildSetup(host)
     setup.columns.game, setup.columns.length = gameCol, lengthCol
     local _, y
     y = section(gameCol, 'Game', 0, colWidth)
-    _, y = Dropdown(gameCol, 'Output', 'Where questions are posted and players answer.', y,
+    _, y = Dropdown(gameCol, 'Play in', 'Where questions are posted and players answer.', y,
         { 'PARTY', 'RAID', 'INSTANCE_CHAT', 'GUILD' }, { 'Party', 'Raid', 'Instance', 'Guild' },
         function() return ns.db.channel end, function(value) setup.SetOutput(value) end, colWidth, 190, 160)
     -- Switching away from Party would close an open lobby; ask first.
