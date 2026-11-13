@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the Daily question login offer clear of the streak text when its message wraps.
+
 ## [1.4.0] - 2026-11-13
 
 - Open Quick play above the Play window when launched, reopened or restored after combat. Timer redraws do not steal focus.

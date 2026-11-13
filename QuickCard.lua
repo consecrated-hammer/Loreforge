@@ -1052,6 +1052,16 @@ function Card.DailyPrompt(today)
     p.line:SetText(streak > 0 and "Today's question is ready. Keep your streak going?"
         or "Today's question is ready. Fancy it?")
     p.streak:SetText(ns.Daily.FooterText(today))
+    -- Font wrapping varies by client. Place the rest of the offer below
+    -- the measured text instead of reserving a fixed one-line slot.
+    local y = 54 + textHeight(p.line, 20) + 8
+    top(p.streak, 20, y)
+    y = y + textHeight(p.streak, 14) + 16
+    top(p.play, 20, y)
+    top(p.later, PROMPT_W - 200, y)
+    y = y + 46 + 16
+    top(p.dontOffer, 22, y)
+    p:SetHeight(y + math.max(20, p.dontOffer:GetHeight() or 0) + 18)
     p.dontOffer:SetChecked(ns.db.dailyOffer == false)
     if Card.dailyAfterCombat then return end
     ns.Daily.State().offered = today.number

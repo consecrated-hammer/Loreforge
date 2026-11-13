@@ -336,5 +336,23 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     host:Raise()
     wow.Click(host.setup.quick)
     eq(front, f, 'grouped Play opens the same card in front')
+    -- The login offer must accommodate a wrapped question without covering
+    -- the streak, buttons or opt-out, on either client.
+    local streak = ns.Daily.Streak
+    ns.Daily.Streak = function() return 1 end
+    card.DailyPrompt()
+    local prompt = card.dailyPrompt
+    measured(prompt.line); measured(prompt.streak)
+    for _, width in ipairs({ 380, 180, 120 }) do
+        prompt.line:SetWidth(width)
+        card.DailyPrompt()
+        below(prompt.streak, prompt.line, nil, 'daily streak clears wrapped offer text')
+        below(prompt.play, prompt.streak, nil, 'daily buttons clear streak text')
+        eq(y(prompt.play), y(prompt.later), 'daily actions remain aligned')
+        below(prompt.dontOffer, prompt.play, 46, 'daily opt-out clears buttons')
+        assert(prompt:GetHeight() >= y(prompt.dontOffer) + 20 + 12, 'daily offer contains its opt-out')
+    end
+    ns.Daily.Streak = streak
+    card.HideDailyPrompt()
 end
 io.write('test_quick_card_layout: ok\n')
