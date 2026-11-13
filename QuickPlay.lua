@@ -557,7 +557,13 @@ function Quick.Takeoff(info)
 end
 
 function Quick.Landed(info)
-    if ns.QuickCard then ns.QuickCard.HidePrompt() end
+    if ns.QuickCard then
+        ns.QuickCard.HidePrompt(true)
+        ns.QuickCard.HideLauncher()
+        if Quick.state and Quick.state.pausedAt and not ns.QuickCard.IsShown() and not ns.QuickCard.combatHidden then
+            Quick.Close()
+        end
+    end
     local s = Quick.state
     if not (s and s.mode == "flight") then changed(); return end
     s.landed = info or {}

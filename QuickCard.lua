@@ -206,7 +206,7 @@ local function create()
     f:SetScript("OnUpdate", function(_, elapsed) Card.Update(elapsed) end)
     f:SetScript("OnHide", function()
         if Card.combatHidden then return end
-        Quick.Close()
+        if Card.frame then Card.Dismiss() end
         if Card.options then Card.options:Hide() end
     end)
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames + 1] = "LoreforgeQuickCard" end
@@ -411,7 +411,8 @@ end
 function Card.Show(mode, options)
     if InCombatLockdown and InCombatLockdown() then HC.Print("Quick play opens after combat."); return end
     local f = create()
-    Card.HidePrompt()
+    Card.HideLauncher()
+    Card.HidePrompt(true)
     Card.HideDailyPrompt()
     Card.Layout()
     Quick.Start(mode or ns.db.qpMode, options)
@@ -419,9 +420,60 @@ function Card.Show(mode, options)
     Card.Render()
 end
 
+-- Esc and the close button share the same dismissal path.
+function Card.Dismiss()
+    if Quick.Flying() then
+        Quick.Pause()
+        Card.ShowLauncher()
+    else
+        Quick.Close()
+    end
+end
+
 function Card.Hide()
-    if Card.frame then Card.frame:Hide() end
-    Quick.Close()
+    if Card.frame and Card.frame:IsShown() then Card.frame:Hide()
+    else Card.Dismiss() end
+end
+
+function Card.HideLauncher()
+    if Card.launcher then Card.launcher:Hide() end
+end
+
+function Card.ResumeQuiz()
+    if not Quick.Flying() or (InCombatLockdown and InCombatLockdown()) then return end
+    if not Quick.state then Card.Show("flight"); return end
+    Card.HideLauncher()
+    Quick.Resume()
+    Card.Layout()
+    Card.frame:Show()
+    Card.Render()
+end
+
+function Card.ShowLauncher()
+    if not Quick.Flying() or Card.IsShown() then return end
+    watchCombat()
+    if not Card.launcher then
+        local b = CreateFrame("Button", nil, UIParent, "BackdropTemplate")
+        b:SetSize(36, 36)
+        b:SetPoint("TOP", UIParent, "TOP", 0, -160)
+        b:SetFrameStrata("DIALOG")
+        b:SetClampedToScreen(true)
+        local icon = b:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+        hover(b, function(self)
+            tooltip(self, "Loreforge", { "Resume your quiz or start a new one." })
+        end)
+        b:SetScript("OnClick", function(self)
+            HC.Menu:Open({
+                { text = "Resume quiz", disabled = not Quick.state,
+                    func = function() Card.ResumeQuiz() end },
+                { text = "New quiz", func = function() Card.Show("flight") end },
+            }, self, 160)
+        end)
+        Card.launcher = b
+    end
+    if not (InCombatLockdown and InCombatLockdown()) then Card.launcher:Show() end
 end
 
 function Card.Toggle()
@@ -431,6 +483,7 @@ end
 -- Combat hides the card and the prompt; both come back after.
 function Card.OnCombat(event)
     if event == "PLAYER_REGEN_DISABLED" then
+        Card.HideLauncher()
         if Card.IsShown() then
             Card.combatHidden = true
             Quick.Pause()
@@ -446,6 +499,9 @@ function Card.OnCombat(event)
             Card.frame:Show()
             Card.Render()
         end
+    end
+    if event == "PLAYER_REGEN_ENABLED" and Card.launcher and Quick.Flying() and not Card.IsShown() then
+        Card.ShowLauncher()
     end
     if event == "PLAYER_REGEN_ENABLED" and Card.promptAfterCombat then
         Card.promptAfterCombat = nil
@@ -763,9 +819,10 @@ function Card.Prompt()
     p:Show()
 end
 
-function Card.HidePrompt()
+function Card.HidePrompt(silent)
     Card.promptAfterCombat = nil
     if Card.prompt then Card.prompt:Hide() end
+    if not silent then Card.ShowLauncher() end
 end
 
 -- ── Daily question offer ───────────────────────────────────────────────────

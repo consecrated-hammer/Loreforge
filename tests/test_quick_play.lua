@@ -471,6 +471,40 @@ do
     eq(ns.QuickCard.frame.feedback:GetWidth(), 348, "feedback spans the card")
 end
 
+-- Dismissed flight quizzes retain their exact state on both clients.
+for _, client in ipairs({ "retail", "classic" }) do
+    local ns = load({ era = client })
+    takeOff(ns)
+    ns.QuickCard.Show("flight")
+    answer(ns, true)
+    local saved = ns.Quick.state
+    ns.QuickCard.Hide()
+    eq(ns.Quick.state, saved, "dismiss keeps progress")
+    eq(ns.QuickCard.launcher:IsShown(), true, "flight launcher appears")
+    clock = clock + 30
+    ns.QuickCard.ResumeQuiz()
+    eq(ns.Quick.state, saved, "resume keeps question and score")
+    eq(saved.correct, 1, "score retained")
+    eq(saved.phase, "reveal", "resume retains feedback")
+    eq(saved.pausedAt, nil, "resume restarts quiz clock")
+    eq(ns.QuickCard.launcher:IsShown(), false, "launcher hides on resume")
+    ns.QuickCard.frame:Hide() -- Escape uses OnHide too.
+    eq(ns.QuickCard.launcher:IsShown(), true, "Escape leaves launcher")
+    ns.QuickCard.Show("flight")
+    assert(ns.Quick.state ~= saved, "new quiz replaces saved progress")
+    eq(ns.Quick.state.correct, 0, "new quiz resets score")
+    ns.QuickCard.Hide()
+    combat = true
+    ns.QuickCard.OnCombat("PLAYER_REGEN_DISABLED")
+    eq(ns.QuickCard.launcher:IsShown(), false, "launcher hides in combat")
+    combat = false
+    ns.QuickCard.OnCombat("PLAYER_REGEN_ENABLED")
+    eq(ns.QuickCard.launcher:IsShown(), true, "launcher returns after combat")
+    land(ns, 1)
+    eq(ns.QuickCard.launcher:IsShown(), false, "landing removes launcher")
+    eq(ns.Quick.state, nil, "landing clears dismissed quiz")
+end
+
 -- The settings page builds.
 do
     local ns = load()
