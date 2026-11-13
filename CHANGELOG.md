@@ -2,9 +2,11 @@
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-13
+
 ### Fixed
 
-- Keep the Daily question login offer clear of the streak text when its message wraps.
+- The Daily question prompt no longer overlaps your streak when its message wraps.
 
 ## [1.4.0] - 2026-11-13
 

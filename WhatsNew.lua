@@ -5,6 +5,9 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
+    { version = "1.4.1", date = "2026-11-13", items = {
+        { text = "The Daily question prompt no longer overlaps your streak when its message wraps.", kind = "fixed", page = "Quick play", tab = "Daily question" },
+    } },
     { version = "1.4.0", date = "2026-11-13", items = {
         { title = "A little more reading room", text = "Quick play keeps ordinary answer buttons in place, with stable answer numbers, a large X on wrong picks, stronger correct-answer pops and bigger streak badges. The painting stays square, and Options opens on the side with space.", page = "Quick play", tab = "Card" },
         { title = "Choose your next game", text = "Solo Play leads with Quick play, Daily question and Practice. Hall of Fame leads with your personal bests, and records and Party settings share Games and records.", page = "Games and records" },
