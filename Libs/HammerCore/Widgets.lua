@@ -124,6 +124,8 @@ end
 function UI.AttachHint(control, title, hint)
     if not hint then return end
     control.hcHintTitle, control.hcHint = title, hint
+    if control.hcHintAttached then return end
+    control.hcHintAttached = true
     control:HookScript("OnEnter", function(self)
         if not self.hcHint then return end
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
@@ -394,7 +396,53 @@ end
 -- right.  row.hcNextY is where the next setting goes.
 -- Rows remember their label on the page body, so a link elsewhere can jump
 -- to one (HC.Settings:Focus).
+local PROFILE_GLYPH = "Interface\\FriendsFrame\\UI-Toast-ChatInviteIcon"
+
+-- Scope applies to subsequently built rows and is inherited by child sections.
+-- Shared is the default; scope describes storage, never changes it.
+function UI.SetScope(panel, scope)
+    assert(scope == "profile" or scope == "shared", "setting scope must be profile or shared")
+    panel.hcSettingScope = scope
+end
+
+local function settingScope(panel)
+    local seen = {}
+    while panel and not seen[panel] do
+        seen[panel] = true
+        if panel.hcSettingScope then return panel.hcSettingScope end
+        panel = panel.GetParent and panel:GetParent()
+    end
+    return "shared"
+end
+
+-- Call once near the top of a visible page/tab containing profile-owned rows.
+function UI.ScopeLegend(panel, y)
+    local owner = panel.hcHeaderOwner or panel
+    if owner.hcScopeLegend then return owner.hcScopeLegend, y end
+    local text, nextY = UI.Text(panel, "|T" .. PROFILE_GLYPH .. ":12:12|t Profile icon: saved in this profile. Other settings are shared.", y)
+    owner.hcScopeLegend = text
+    return text, nextY
+end
+
 function UI.RegisterRow(parent, row, label)
+    local container = row.GetParent and row:GetParent() or parent
+    local scope = settingScope(container)
+    row.hcSettingScope = scope
+    if scope == "profile" and not row.hcScopeIcon then
+        -- The switch fills its cell on a child frame. Keep this non-interactive
+        -- glyph above that child, in the gutter before the 14px label inset.
+        local marker = CreateFrame("Frame", nil, row)
+        marker:SetSize(12, 12)
+        marker:SetPoint("LEFT", row, "LEFT", 0, 0)
+        marker:SetFrameLevel((row:GetFrameLevel() or 0) + 10)
+        marker:EnableMouse(false)
+        local icon = marker:CreateTexture(nil, "OVERLAY")
+        icon:SetTexture(PROFILE_GLYPH)
+        icon:SetAllPoints(marker)
+        row.hcScopeMarker = marker
+        row.hcScopeIcon = icon
+    end
+    if row.hcScopeIcon then row.hcScopeIcon:SetShown(scope == "profile") end
     label = resolve(label)
     if type(label) ~= "string" or label == "" then return end
     local owner = parent.hcHeaderOwner or parent
