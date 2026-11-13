@@ -609,9 +609,14 @@ eq(#ns.HistoryEntries(), 2, 'hosted and Party games share one list')
 assert(f.history.entries[1].sub:GetText():find('Winner: Guest', 1, true), 'the newest game first')
 wow.Click(f.history.entries[2])
 assert(f.history.detail.rows[1].name:GetText():find('(you)', 1, true), 'the detail marks you')
+assert(f.history.detail.winner:GetText():find('Winner: Host', 1, true), 'detail has a crowned winner')
+assert(f.history.detail.mine:GetText():find('You: 1st of 1', 1, true), 'detail names your place')
+assert(f.history.detail.mine:GetText():find('best streak 0', 1, true), 'old entries without streaks remain readable')
+assert(f.history.detail.sub:GetText():find('3 questions', 1, true), 'history length is readable')
 ns.db.records.retail['zed-realm'] = { name = 'Zed-Realm', games = 5, wins = 4, correct = 9, answered = 10, bestStreak = 3 }
 ns.OpenHost('records')
 assert(f.records:IsShown(), 'Hall of Fame tab')
+eq(f.records.clear, nil, 'record clearing stays in settings')
 eq(f.records.rows[1].cells[1]:GetText(), '1.  Zed', 'most wins first')
 eq(f.records.rows[1].cells[5]:GetText(), '90%', 'accuracy is shown')
 
@@ -619,6 +624,8 @@ eq(f.records.rows[1].cells[5]:GetText(), '90%', 'accuracy is shown')
 ns.db.games.retail[1].rows[2] = { key = 'other-realm', name = 'Other-Realm', total = ns.db.games.retail[1].rows[1].total }
 ns.OpenHost('history')
 assert(f.history.entries[1].sub:GetText():find('Shared win: 2 players', 1, true), 'History recognises tied winners')
+wow.Click(f.history.entries[1])
+assert(f.history.detail.winner:GetText():find('Shared win: Guest, Other', 1, true), 'detail names tied winners')
 ns.db.games.retail[1].rows[2] = nil
 
 -- ── Player window ──

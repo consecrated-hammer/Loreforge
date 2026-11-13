@@ -117,6 +117,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     S:Show('Key Bindings')
     local bindingRows = rows('Key Bindings', 'Key Bindings')
     assert(bindingRows['Bind Answer 1'] and bindingRows['Bind Quick play'], 'all binding tiles searchable')
+    eq(bindingRows['Bind Answer 1'].lfAnswerNumber:GetText(), '1', 'answer tiles show their number')
     local originalEnter = bindingRows['Bind Answer 1'].scripts.OnEnter
     S:Show('Key Bindings'); S:Show('Key Bindings')
     eq(bindingRows['Bind Answer 1'].scripts.OnEnter, originalEnter, 'refresh does not accumulate tooltip hooks')
@@ -163,6 +164,8 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     local records, matches, dailyStore = ns.db.records, ns.db.matches, ns.db.daily
     ns.db.qpSize, ns.db.qpOnFlights, ns.db.qpSeconds = 'LARGE', 'NONE', 29
     S:Show('Quick play', 'Card')
+    assert(rows('Quick play', 'Card')['Banter frequency'], 'banter frequency is searchable')
+    ns.db.qpBanterEvery = 1
     local reset = rows('Quick play', 'Card')['Reset card']
     assert(reset, 'tab reset is searchable')
     wow.Click(reset)
@@ -172,6 +175,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     wow.Click(reset)
     wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpSize, ns.Quick.DEFAULTS.qpSize, 'Card reset restores card size')
+    eq(ns.db.qpBanterEvery, 3, 'Card reset restores less frequent banter')
     eq(ns.db.qpOnFlights, 'NONE', 'Card reset preserves flight preference')
     eq(ns.db.qpSeconds, 29, 'Card reset preserves play timing')
     eq(ns.db.records, records, 'Card reset preserves records')
@@ -183,6 +187,16 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.qpMode, 'lightning', 'Play reset waits for confirmation')
     wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpMode, 'quick', 'Play reset includes the saved solo mode')
+    assert(S.pages['Games and records'] and not S.pages['Player records'] and not S.pages['Party games'], 'records and invitations share one page')
+    ns.db.partyInvites = false
+    S:Show('Games and records')
+    wow.Click(rows('Games and records', 'Games and records')['Reset party games'])
+    eq(ns.db.partyInvites, false, 'invitation reset waits for confirmation')
+    wow.Click(ns.HammerCore.Dialog.frame.accept)
+    eq(ns.db.partyInvites, true, 'invitation reset restores only its own preference')
+    eq(ns.db.records, records, 'merged-page reset preserves records')
+    eq(ns.db.matches, matches, 'merged-page reset preserves history')
+    eq(ns.db.daily, dailyStore, 'merged-page reset preserves daily data')
 
 end
 io.write('test_settings_ux: ok\n')

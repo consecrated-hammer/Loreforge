@@ -178,14 +178,17 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
     _, y = UI.Header(panel, 'Look', y, QUICK_ICONS.look)
     _, y = UI.Check(panel, 'Artwork', 'The category painting beside the question.', y,
         function() return db.qpArt ~= false end, function(value) db.qpArt = value; quickChanged() end)
-    _, y = UI.Check(panel, 'Animations', 'Painting fades and the Touchdown! bounce.', y,
+    _, y = UI.Check(panel, 'Animations', 'Pops, sparkles, shakes and fades on the card.', y,
         function() return db.qpAnimations ~= false end, function(value) db.qpAnimations = value; quickChanged() end)
+    _, y = UI.Dropdown(panel, 'Banter frequency', 'How often a reveal has a local quip. Lightning stays quiet. Tavern banter on Interface must also be on.', y,
+        { 0, 1, 2, 3, 4, 5 }, { 'Off', 'Every answer', 'Every second answer', 'Every third answer', 'Every fourth answer', 'Every fifth answer' },
+        function() return db.qpBanterEvery end, function(value) db.qpBanterEvery = value; quickChanged() end)
     _, y = UI.Dropdown(panel, 'Card size', 'The Quick play card and the takeoff prompt.', y,
         { 'SMALL', 'MEDIUM', 'LARGE' }, { 'Small', 'Medium', 'Large' },
         function() return db.qpSize end, function(value) db.qpSize = value; quickChanged() end)
     y = UI.Flush(panel, y)
     return y
-    end, { 'qpArt', 'qpAnimations', 'qpSize' }),
+    end, { 'qpArt', 'qpAnimations', 'qpSize', 'qpBanterEvery' }),
     quickTab('Flights', function(panel, y, db, Quick, hideWhen)
     local _, row
     _, y = UI.Header(panel, 'Flights', y, QUICK_ICONS.flights)
@@ -308,6 +311,19 @@ HC.Settings:NewPage({ name = 'Key Bindings', columns = 1, description = 'Answer 
             for _, widget in ipairs({ parent:GetChildren() }) do
                 if widget.item and widget.item.name and widget:IsShown() then
                     local name = widget.item.name
+                    local number = widget.item.id and widget.item.id:match('^LOREFORGE_ANSWER([1-4])$')
+                    if number and widget.icon and not widget.remove then
+                        if not widget.lfAnswerNumber then
+                            widget.lfAnswerNumber = UI.FontString(widget, 'GameFontNormalHuge', 'accent')
+                            widget.lfAnswerNumber:SetPoint('CENTER', widget.icon, 'CENTER')
+                        end
+                        widget.icon:Hide()
+                        widget.lfAnswerNumber:SetText(number)
+                        widget.lfAnswerNumber:Show()
+                    elseif widget.lfAnswerNumber then
+                        widget.lfAnswerNumber:Hide()
+                        if widget.icon then widget.icon:Show() end
+                    end
                     add(widget, (widget.remove and 'Change ' or 'Bind ') .. name,
                         'Keyboard or mouse shortcut. ' .. (widget.item.detail or name))
                     if widget.remove then add(widget.remove, 'Remove ' .. name, 'Unbind this shortcut.') end
@@ -321,7 +337,7 @@ HC.Settings:NewPage({ name = 'Key Bindings', columns = 1, description = 'Answer 
     return y
 end)
 
-HC.Settings:NewPage({ name = 'Player records', columns = 1, description = 'The Hall of Fame tab in the main window shows these.' }, function(panel, y)
+HC.Settings:NewPage({ name = 'Games and records', columns = 1, description = 'Player records, game history and Party invitations.' }, function(panel, y)
     _, y = UI.Header(panel, 'Player records', y, ICONS.records)
     _, y = UI.Text(panel, 'Games you host save each player\'s games, wins, correct answers and best streak.', y)
     _, y = UI.Text(panel, 'Records are shared by your characters on this account, separately for each client.', y)
@@ -330,10 +346,7 @@ HC.Settings:NewPage({ name = 'Player records', columns = 1, description = 'The H
         'The Hall of Fame tab in the main window.', 'primary', 180)
     _, y = UI.ActionButton(panel, y, 'Clear player records', ns.ConfirmClearRecords,
         'Removes this client\'s records. Asks first.', 'danger', 180)
-    return y
-end)
-
-HC.Settings:NewPage({ name = 'Party games', columns = 1, description = 'Invitations to other hosts\' Party games.' }, function(panel, y)
+    y = UI.Flush(panel, y)
     _, y = UI.Header(panel, 'Party invitations', y, ICONS.party)
     _, y = UI.Check(panel, 'Show Party game invitations', 'Ask before joining another player\'s game. Party games work in Retail home Parties, including dungeons when activity restrictions are inactive.', y,
         function() return ns.db.partyInvites ~= false end, function(value) ns.db.partyInvites = value end)

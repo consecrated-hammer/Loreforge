@@ -23,7 +23,7 @@ shows whether it's installed and has a **Get LibTaxiData** link.
 ## What it does
 
 - **One main window.** `/lf` opens Loreforge with three tabs: **Play** for setup and the live game, **History** for finished games and **Hall of Fame** for saved player records.
-- **Quick setup.** **Quick**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. Setup is split into **Game**, **Categories** and **Pacing & chat** tabs, and reopens on the one you used last. The Party lobby gets its own tab while it's open.
+- **Quick setup.** **Short**, **Standard** and **Marathon** presets set the length in one click, and the summary line shows the question count, an estimated time in minutes and how many players are in the channel. Each category shows how many questions it has. Setup is split into **Game**, **Categories** and **Pacing & chat** tabs, and reopens on the one you used last. The Party lobby gets its own tab while it's open.
 - **Host-paced or auto-advance games.** Questions, choices and results post automatically in both modes. Auto-advance (the default) continues after a short gap; host-paced games wait at **Ask next question**. The pacing switch changes mode mid-game.
 - **The host plays along** by default, answering by click, chat or an answer key. **Practice solo** runs a private game that posts nothing to chat.
 - **Separate answer lines.** The question posts first, then each numbered choice on its own line. **Choices on one line** on the Pacing & chat tab enables the compact layout.
@@ -54,7 +54,7 @@ Bindings.
   across the bottom.
 - **Against the clock or Relaxed** switches the per-question timer for Quick
   play and Streak.
-- The gear on the card slides out an **Options** tab: mode, timer, look
+- The gear on the card slides out an **Options** tab: mode, timer, card
   (Artwork, Animations, Card size) and flights.
 - **On flights**, Loreforge asks "Fancy a question?" when you take off. It
   can start a Flight challenge straight away instead, or stay quiet. The
@@ -72,9 +72,11 @@ Bindings.
 - **Flight answer pause** sets how long each answer shows during a Flight
   challenge (3 seconds by default). Lightning keeps its quick flash.
 - Personal bests (best streak, best Lightning, best flight with its route
-  and date) show on the card and in the Hall of Fame.
+  and date) lead the Hall of Fame. A new Streak or Lightning best gets its own headline, previous record and win sound.
 - Quick play uses the categories and difficulty from game setup. It works
   through every matching question before repeating one.
+- The card keeps ordinary questions and answer buttons in place, with room for the reveal. Correct answers sparkle, wrong picks shake, and ticks/crosses make the result clear. Card **Animations** controls these independently of the game windows.
+- **Banter frequency** under Quick play > Card defaults to every third reveal, with Off and every-answer choices. Lightning stays quiet.
 - Everything is on the **Quick play** settings page.
 
 ## Daily question and welcome
@@ -101,7 +103,7 @@ again, and **Setup on new features** controls future automatic welcomes.
 
 ## Getting started
 
-1. Join a party, raid, instance group or guild and open `/lf`. When solo, **Quick play** leads, with **Practice solo** beside it. **Main button when solo** can put Practice solo first instead.
+1. Join a party, raid, instance group or guild and open `/lf`. When solo, Quick play, Daily question and Practice a full game lead the Play tab, with your records beside the choices. **Main button when solo** chooses which action comes first; the hosting setup sits below.
 2. Pick a preset or set the questions, themed rounds and answer time yourself, then choose categories and difficulty. Fresh settings select your current group's channel. If the channel doesn't match your group, the banner says so and **Use current group** fixes it. For Guild, **Refresh guild roster** updates the cached players.
 3. Click **Start game**. With Party output in Retail, the button is **Open lobby** first: players with Loreforge can join, the lobby shows who has, and **Start game** begins.
 4. The start countdown defaults to 30 seconds. Set **Start countdown** from 5 to 60 seconds, or disable **Countdown before starting** to skip it. The ready check posts. Players can type `ready`, `ready!`, `rdy` or `I'm ready`. **Start questions now** starts early. **Refresh players** adds anyone who joined the group since; enrolment is fixed once questions begin.
@@ -129,7 +131,7 @@ If a line may not have posted, the game pauses and one banner asks whether it ap
 
 Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `startup`, `minimap` and `reset settings`. Reset settings keeps Loreforge's player records and history. Records are shared by host characters on the same WoW account, with Retail and Forever stored separately.
 
-The minimap button opens Loreforge on left-click. **Minimap left-click when solo** can open Quick play instead. Right-click opens the shared HammerCore menu with settings, the Hall of Fame, the daily and each Quick play mode. Settings holds searchable presentation, window, Quick play, Party invitation and record controls; **Back to game** returns to the main window.
+The minimap button opens Loreforge on left-click. **Minimap left-click when solo** can open Quick play instead. Right-click opens the shared HammerCore menu with settings, the Hall of Fame, the daily and each Quick play mode. Settings holds searchable presentation, window, Quick play, and Games and records controls; **Back to game** returns to the main window.
 
 ## Settings
 

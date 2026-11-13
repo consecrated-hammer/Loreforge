@@ -24,14 +24,14 @@ local LOREMASTER_SHARE = 3   -- one prompt in this many uses a Loremaster line
 
 Quick.DEFAULTS = {
     qpMode = "quick", qpRelaxed = false, qpSeconds = 15, qpLightning = 60, qpAutoNext = true, qpNextDelay = 2,
-    qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpOnFlights = "OFFER", qpShortest = 20,
+    qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpBanterEvery = 3, qpOnFlights = "OFFER", qpShortest = 20,
     qpCloseOnLanding = true, qpLoremaster = true,
     qpFlightReveal = 3,   -- seconds an answer shows in Flight challenge
     qpLandingGrace = 10,  -- seconds to finish the open question after landing (0 ends straight away)
     soloMain = "QUICK",   -- the Play tab's main button when solo: QUICK or PRACTICE
 }
 Quick.LIMITS = { qpSeconds = { 5, 30 }, qpLightning = { 30, 180 }, qpNextDelay = { 1, 5 }, qpShortest = { 0, 60 },
-    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 } }
+    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 }, qpBanterEvery = { 0, 5 } }
 Quick.SIZES = { SMALL = 0.85, MEDIUM = 1, LARGE = 1.2 }
 Quick.ON_FLIGHTS = { "OFFER", "START", "NONE" }
 Quick.ON_FLIGHTS_LABELS = { OFFER = "Ask me", START = "Auto-start", NONE = "Off" }
@@ -339,10 +339,13 @@ local function finish(s, kind)
         summary.lines = { s.correct .. " in a row" }
         -- The miss that ended it stays readable after the reveal.
         if s.missedAnswer then summary.note = s.missedAnswer end
+        summary.previousBest = Quick.Bests().streak and Quick.Bests().streak.value or 0
         summary.newBest = setBest("streak", s.correct)
     elseif kind == "lightning" then
         summary.title = "Time!"
         summary.lines = { s.correct .. " right in " .. s.length .. "s" }
+        local previous = Quick.LightningBest(s.length)
+        summary.previousBest = previous and previous.value or 0
         summary.newBest = setLightningBest(s.length, s.correct)
     elseif kind == "daily" then
         summary = ns.Daily.Summary() or { kind = "daily", title = "Daily question", lines = {} }
@@ -354,9 +357,16 @@ local function finish(s, kind)
             from = s.flight and s.flight.from, to = s.flight and s.flight.to })
         if ns.db.qpCloseOnLanding then summary.closeAt = now() + TOUCHDOWN_CLOSE end
     end
-    if summary.newBest then summary.lines[#summary.lines + 1] = "New best!" end
+    if summary.newBest then
+        if kind == "streak" then summary.title = "New best streak!"
+        elseif kind == "lightning" then summary.title = "New Lightning best!"
+        else summary.lines[#summary.lines + 1] = "New best!" end
+        if summary.previousBest ~= nil then
+            summary.note = "Previous best " .. summary.previousBest .. (summary.note and ("\n" .. summary.note) or "")
+        end
+    end
     s.phase, s.summary, s.question = "over", summary, nil
-    ns.Sound("finish")
+    ns.Sound(summary.newBest and "win" or "finish")
 end
 
 -- index 1-4, or nil when the question timed out.

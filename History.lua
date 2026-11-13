@@ -99,6 +99,18 @@ local function describe(entry)
     end
     local outcome = winners > 1 and ('Shared win: ' .. winners .. ' players')
         or (out.winner and ('Winner: ' .. ns.DisplayName(out.winner)) or 'No correct answers')
+    local names = {}
+    if top and top.total > 0 then
+        for _, row in ipairs(out.rows) do
+            if row.total == top.total then names[#names + 1] = ns.DisplayName(row.name) end
+            if row.mine then out.mine = 'You: ' .. ordinal(row.rank) .. ' of ' .. out.players .. ' · best streak ' .. (row.bestStreak or 0) end
+        end
+    else
+        for _, row in ipairs(out.rows) do
+            if row.mine then out.mine = 'You: ' .. ordinal(row.rank) .. ' of ' .. out.players .. ' · best streak ' .. (row.bestStreak or 0) end
+        end
+    end
+    out.winnerLine = #names > 0 and ((#names > 1 and 'Shared win: ' or 'Winner: ') .. table.concat(names, ', ')) or 'No correct answers'
     out.title = when(entry.date) .. "   " .. out.where
     out.summary = (out.place and ("You: " .. ordinal(out.place)) or outcome)
         .. "  ·  " .. out.length
@@ -143,10 +155,15 @@ function ns.BuildHistory(host)
     detail.title:SetPoint("TOPLEFT", 12, -12)
     detail.sub = label(detail, "GameFontHighlightSmall", "muted", inner)
     detail.sub:SetPoint("TOPLEFT", 12, -32)
+    detail.winner = label(detail, "GameFontHighlight", "accent", inner)
+    detail.winner:SetPoint("TOPLEFT", 12, -54)
+    if detail.winner.SetWordWrap then detail.winner:SetWordWrap(true) end
+    detail.mine = label(detail, "GameFontHighlightSmall", "text", inner)
+    detail.mine:SetPoint("TOPLEFT", detail.winner, "BOTTOMLEFT", 0, -8)
     detail.rows = {}
     for i = 1, DETAIL_ROWS do
         local row = CreateFrame("Frame", nil, detail)
-        row:SetSize(inner, 22); row:SetPoint("TOPLEFT", 12, -62 - (i - 1) * 24)
+        row:SetSize(inner, 22); row:SetPoint("TOPLEFT", detail.mine, "BOTTOMLEFT", 0, -16 - (i - 1) * 24)
         row.name = label(row, "GameFontHighlight", "text", inner - 90); row.name:SetPoint("LEFT", 0, 0)
         row.score = label(row, "GameFontHighlightSmall", "muted", 80); row.score:SetPoint("RIGHT", 0, 0); row.score:SetJustifyH("RIGHT")
         detail.rows[i] = row
@@ -174,6 +191,8 @@ function ns.BuildHistory(host)
         local d = describe(entry)
         detail.title:SetText(d.where)
         detail.sub:SetText(when(entry.date) .. "  ·  " .. d.length .. "  ·  " .. d.players .. (d.players == 1 and " player" or " players"))
+        detail.winner:SetText((d.winner and "|TInterface\\Icons\\INV_Crown_01:18|t " or "") .. d.winnerLine)
+        detail.mine:SetText(d.mine or "You didn't play in this game.")
         for i, row in ipairs(detail.rows) do
             local data = d.rows[i]
             row:SetShown(data ~= nil)
@@ -202,9 +221,9 @@ function ns.BuildRecords(host)
         { "Accuracy", 640, 90 }, { "Best streak", 750, 120 } }
     for _, c in ipairs(columns) do
         local h = label(view, "GameFontHighlightSmall", "muted", c[3])
-        h:SetPoint("TOPLEFT", c[2], -116); h:SetText(c[1])
+        h:SetPoint("TOPLEFT", c[2], -270); h:SetText(c[1])
     end
-    local _, list, setHeight = ns.ScrollArea(view, 0, -134, L.width - 30, L.height - 250)
+    local _, list, setHeight = ns.ScrollArea(view, 0, -290, L.width - 30, L.height - 350)
     view.rows = {}
     local function row(i)
         if view.rows[i] then return view.rows[i] end
@@ -219,19 +238,29 @@ function ns.BuildRecords(host)
         return r
     end
     view.empty = label(view, "GameFontHighlight", "muted", 500)
-    view.empty:SetPoint("TOPLEFT", 18, -150)
+    view.empty:SetPoint("TOPLEFT", 18, -310)
     view.empty:SetText("No leaderboard yet. Host a game and everyone who plays lands here.")
     -- Quick play's personal bests, one hover each for where and when.
     view.bestsHeading = label(view, "GameFontNormal", "flavour", 300)
-    view.bestsHeading:SetPoint("BOTTOMLEFT", 18, 84)
+    view.bestsHeading:SetPoint("TOPLEFT", 18, -112)
     view.bestsHeading:SetText("Personal bests")
     view.bests = {}
     for index, mode in ipairs({ "streak", "lightning", "flight", "daily" }) do
         local cell = CreateFrame("Frame", nil, view)
-        cell:SetSize(205, 20)
-        cell:SetPoint("BOTTOMLEFT", 18 + (index - 1) * 220, 60)
-        cell.text = label(cell, "GameFontHighlight", "text", 205)
-        cell.text:SetPoint("LEFT")
+        cell:SetSize(205, 88)
+        cell:SetPoint("TOPLEFT", 18 + (index - 1) * 220, -138)
+        T.Surface(cell, "raised", "edge")
+        cell.icon = cell:CreateTexture(nil, "ARTWORK")
+        cell.icon:SetSize(24, 24); cell.icon:SetPoint("TOPLEFT", 10, -10)
+        local icons = { streak = "Interface\\Icons\\Spell_Fire_Fire", lightning = "Interface\\Icons\\Spell_Nature_Lightning",
+            flight = "Interface\\Icons\\Ability_Mount_Gryphon_01", daily = "Interface\\Icons\\INV_Misc_Note_06" }
+        cell.icon:SetTexture(icons[mode])
+        cell.text = label(cell, "GameFontHighlightSmall", "muted", 153)
+        cell.text:SetPoint("TOPLEFT", 42, -10)
+        cell.value = label(cell, "GameFontNormalHuge", "accent", 153)
+        cell.value:SetPoint("TOPLEFT", 42, -29)
+        cell.detail = label(cell, "GameFontHighlightSmall", "muted", 185)
+        cell.detail:SetPoint("TOPLEFT", 10, -67)
         cell:EnableMouse(true)
         cell:SetScript("OnEnter", function(self)
             local best = ns.Quick and ns.Quick.BestLine(mode)
@@ -250,9 +279,9 @@ function ns.BuildRecords(host)
     view.copy = UI.Button(view, 150, 30)
     view.copy:SetPoint("BOTTOMLEFT", 18, 18); view.copy:SetText("Copy as text")
     view.copy:SetScript("OnClick", ns.ShowRecords)
-    view.clear = UI.Button(view, 150, 30, "danger")
-    view.clear:SetPoint("BOTTOMRIGHT", -18, 18); view.clear:SetText("Clear records")
-    view.clear:SetScript("OnClick", ns.ConfirmClearRecords)
+    view.leaderboardHeading = label(view, "GameFontNormal", "flavour", 300)
+    view.leaderboardHeading:SetPoint("TOPLEFT", 18, -244)
+    view.leaderboardHeading:SetText("Leaderboard")
 
     view.Refresh = function()
         local rows = {}
@@ -279,13 +308,18 @@ function ns.BuildRecords(host)
         end
         for i = shown + 1, #view.rows do view.rows[i]:Hide() end
         setHeight(shown * 24, true)
-        view.clear:SetEnabled(#rows > 0 and not ns.game:Active())
-        local empty = { streak = "Best streak: none yet", lightning = "Best Lightning: none yet", flight = "Best flight: none yet",
-            daily = "Daily streak: none yet" }
+        local names = { streak = "Best streak", lightning = "Best Lightning", flight = "Best flight", daily = "Daily streak" }
         for _, cell in ipairs(view.bests) do
             local best = ns.Quick and ns.Quick.BestLine(cell.mode)
-            cell.text:SetText(best and best.text or empty[cell.mode])
-            T.Text(cell.text, best and "text" or "muted")
+            local bests = ns.Quick and ns.Quick.Bests()
+            local record = ns.Quick and (cell.mode == "lightning" and ns.Quick.LightningBest() or bests and bests[cell.mode])
+            local value = cell.mode == "daily" and ns.Daily and ns.Daily.Streak() or record and record.value
+            cell.text:SetText(names[cell.mode])
+            cell.value:SetText(value ~= nil and tostring(value) or "-")
+            local detail = best and (best.short or best.detail and best.detail[1]) or "None yet"
+            if cell.mode == "lightning" and record then detail = record.length .. "s · " .. (detail or "") end
+            if cell.mode == "daily" and ns.Daily then detail = "Best " .. ns.Daily.Best() end
+            cell.detail:SetText(detail or "")
         end
     end
     view:Hide()

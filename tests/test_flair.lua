@@ -163,9 +163,9 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         assert(member('timeout', f.quip:GetText()), label .. 'out of time banter')
         P.Render(question({ index = 4, deadline = now + 20 }))
         P.Render(question({ index = 5, deadline = now + 20 }))
-        rows[2].streak = 4
+        rows[2].streak = 5
         P.Render(question({ state = 'revealing', index = 5, selected = 1, locked = 1, correct = 1 }))
-        assert(f.quip:GetText():find('^4 in a row!'), label .. 'a streak call-out: ' .. f.quip:GetText())
+        assert(f.quip:GetText():find('^5 in a row!'), label .. 'a streak call-out: ' .. f.quip:GetText())
 
         -- Streak flair: a flame at 3, bigger at 5 and 10, gone after a miss.
         local function streakAt(n)

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Give the Quick play card readable verdicts, tick/cross cues, familiar answer effects and stable space for ordinary questions and reveals. Card animations work independently of Interface animations.
+- Add Banter frequency, defaulting to every third reveal; keep Lightning quiet and save streak callouts for milestones.
+- Lead solo Play with Quick play, Daily question and Practice choices, with records and the hosting form below. The saved main-button preference still chooses what comes first.
+- Lead Hall of Fame with personal-best tiles. New Streak and Lightning bests get a headline, previous record and win sound; History details name winners and your place and streak.
+- Combine records and Party preferences in Games and records, number answer binding tiles, and add Not now to the takeoff prompt.
+
 - Use clearer settings labels, a Short game preset and question counts in History. Wrong answers say "Not quite", and joined games finish on "Final scores".
 
 - Split Interface into Presentation and Windows, and Quick play into Play, Card, Flights and Daily question. Each tab resets only its own preferences.

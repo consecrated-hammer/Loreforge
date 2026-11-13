@@ -326,11 +326,12 @@ do
     -- Hall of Fame: the fourth personal best.
     SlashCmdList.LOREFORGE("records")
     local cell = ns.hostFrame.records.bests[4]
-    eq(cell.text.text, "Daily streak: 1 (best 3)", "Hall of Fame daily streak")
+    eq(cell.value.text, "1", "Hall of Fame daily streak")
+    eq(cell.detail.text, "Best 3", "Hall of Fame best daily streak")
     cell.scripts.OnEnter(cell)
     local fresh = load()
     SlashCmdList.LOREFORGE("records")
-    eq(fresh.hostFrame.records.bests[4].text.text, "Daily streak: none yet", "no daily yet")
+    eq(fresh.hostFrame.records.bests[4].value.text, "0", "no daily yet")
 end
 
 -- Account-wide: one character's answer counts for the others; clients apart.
@@ -474,41 +475,33 @@ do
     SlashCmdList.LOREFORGE("")
     local setup = ns.hostFrame.setup
     eq(setup.solo, true, "solo")
-    eq(setup.quickMain:IsShown(), true, "Quick play is the main button")
-    eq(setup.quickMain.text, "Quick play", "labelled Quick play")
-    eq(setup.start:IsShown(), false, "the game start button steps aside")
-    eq(setup.practice:IsShown(), true, "Practice solo second")
-    eq(point(setup.practice), 228, "in the second spot")
-    eq(setup.quick:IsShown(), false, "no second Quick play button")
-    eq(setup.daily:IsShown(), true, "Daily beside them")
-    eq(point(setup.daily), 388, "after Practice solo")
-    eq(setup.daily.text, "Daily question", "no tick yet")
-    setup.quickMain.scripts.OnClick(setup.quickMain)
-    eq(ns.Quick.state.mode, "quick", "the main button opens Quick play")
+    local choices = setup.playChoices
+    eq(setup.soloChoices:IsShown(), true, "solo play choices lead")
+    eq(point(choices.quick), 0, "Quick play leads by default")
+    eq(setup.start:IsShown(), true, "configured practice remains under the hosting form")
+    eq(setup.formScroll:IsShown(), true, "solo hosting form can scroll")
+    eq(setup.quickMain:IsShown(), false, "no duplicate Quick play footer action")
+    choices.quick.scripts.OnClick(choices.quick)
+    eq(ns.Quick.state.mode, "quick", "the first choice opens Quick play")
     ns.QuickCard.Hide()
-    setup.practice.scripts.OnClick(setup.practice)
-    eq(ns.game.phase ~= "setup", true, "Practice solo starts a practice game")
+    choices.practice.scripts.OnClick(choices.practice)
+    eq(ns.game.phase ~= "setup", true, "practice choice starts a private game")
     ns.game:Stop()
     SlashCmdList.LOREFORGE("")
-    setup.daily.scripts.OnClick(setup.daily)
+    choices.daily.scripts.OnClick(choices.daily)
     eq(ns.Quick.state.mode, "daily", "Daily opens the daily")
     answer(ns, true); tick(ns, 2.1)
     ns.QuickCard.Hide()
     ns.RefreshHost()
-    has(setup.daily.text, "ReadyCheck-Ready", "a tick once done")
-    -- Main button when solo: Practice game.
+    has(choices.daily.record.text, "Done today", "daily choice shows completion")
     ns.db.soloMain = "PRACTICE"
     ns.RefreshHost()
-    eq(setup.start:IsShown(), true, "Practice solo leads")
-    eq(setup.start.text, "Practice solo", "as the main button")
-    eq(setup.quickMain:IsShown(), false, "no main Quick play")
-    eq(setup.quick:IsShown(), true, "Quick play second")
-    eq(point(setup.quick), 228, "in the second spot")
-    eq(point(setup.daily), 368, "Daily after it")
-    -- Daily question off hides the button.
+    eq(point(choices.practice), 0, "saved preference puts practice first")
+    eq(choices.quick:IsShown(), true, "Quick play remains available")
     ns.db.dailyOn = false
     ns.RefreshHost()
-    eq(setup.daily:IsShown(), false, "no Daily button with the daily off")
+    eq(choices.daily:IsShown(), false, "no Daily choice with the daily off")
+
 end
 do
     local ns = load({ grouped = true })

@@ -150,6 +150,31 @@ function ns.BuildSetup(host)
     end
     local presetLabel = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
     presetLabel:SetPoint('RIGHT', setup.presets[1], 'LEFT', -10, 0); presetLabel:SetText('Length')
+    setup.soloChoices = CreateFrame('Frame', nil, setup)
+    setup.soloChoices:SetPoint('TOPLEFT', MARGIN, -108)
+    setup.soloChoices:SetSize(fullWidth, 86)
+    setup.playChoices = {}
+    for _, choice in ipairs({ { 'quick', 'Quick play' }, { 'daily', 'Daily question' }, { 'practice', 'Practice a full game' } }) do
+        local button = UI.Button(setup.soloChoices, math.floor((fullWidth - 20) / 3), 86)
+        button.Text:ClearAllPoints(); button.Text:SetPoint('TOPLEFT', 12, -12)
+        button.Text:SetJustifyH('LEFT')
+        button:SetText(choice[2])
+        button.line = UI.FontString(button, 'GameFontHighlightSmall', 'muted')
+        button.line:SetPoint('TOPLEFT', 12, -37); button.line:SetWidth(button:GetWidth() - 24)
+        if button.line.SetWordWrap then button.line:SetWordWrap(false) end
+        button.record = UI.FontString(button, 'GameFontHighlightSmall', 'accent')
+        button.record:SetPoint('TOPLEFT', 12, -59); button.record:SetWidth(button:GetWidth() - 24)
+        button.record:SetJustifyH('LEFT')
+        local mode = choice[1]
+        button:SetScript('OnClick', function()
+            if mode == 'practice' then ns.StartGame(true)
+            elseif ns.QuickCard then ns.QuickCard.Show(mode == 'daily' and 'daily' or nil) end
+        end)
+        setup.playChoices[mode] = button
+    end
+    setup.hostHeading = UI.FontString(setup, 'GameFontNormal', 'flavour')
+    setup.hostHeading:SetPoint('TOPLEFT', MARGIN, -212)
+    setup.hostHeading:SetText('Host a game')
 
     -- One banner for anything blocking the start, or an interrupted game.
     local banner = CreateFrame('Frame', nil, setup, 'BackdropTemplate')
@@ -189,6 +214,11 @@ function ns.BuildSetup(host)
         strip.Add(key, spec[2], function() setup.SelectTab(key) end)
     end
     setup.tabStrip, setup.subtabs = strip, strip.buttons
+
+    -- The solo choices get first place; the unchanged setup form scrolls below.
+    local soloScroll, soloBody, setSoloHeight = ns.ScrollArea(setup, 0, -300, L.width - 18, 260)
+    soloScroll:Hide(); soloScroll.bar:Hide()
+    setup.formScroll = soloScroll
 
     setup.pages, setup.columns = {}, {}
     local function page(key)
@@ -249,6 +279,7 @@ function ns.BuildSetup(host)
     _, y = Check(lengthCol, 'Countdown before starting', 'Players can join and type ready before the first question.', y,
         function() return ns.db.readyCheck end, function(value) ns.db.readyCheck = value end, colWidth)
     setup.countdown, y = stepper(lengthCol, 'Start countdown', 'Seconds before the first question. You can start sooner; disable the countdown above to skip it.', y, 'readySeconds', seconds, colWidth)
+    gamePage.contentHeight = -y + 12
 
     -- ── Categories: two columns of switches with their question counts ──
     local categoryPage = page('categories')
@@ -283,6 +314,7 @@ function ns.BuildSetup(host)
         check.Text:SetPoint('RIGHT', row.count, 'LEFT', -8, 0)
         setup.categoryRows[key] = row
     end
+    categoryPage.contentHeight = -math.min(columnY[catLeft], columnY[catRight]) + 12
 
     -- ── Party lobby ──
     local lobby = page('lobby')
@@ -319,6 +351,7 @@ function ns.BuildSetup(host)
     _, a = stepper(pacingCol, 'Question gap', 'Seconds between questions with auto-advance.', a, 'questionGap', seconds, colWidth)
     _, a = stepper(pacingCol, 'Pause when quiet', 'Auto-advance pauses after this many questions with no answers.', a, 'idleLimit',
         function(v) return v == 0 and 'Off' or plural(v, 'question') end, colWidth)
+    pacingPage.contentHeight = -a + 12
     a = section(chatCol, 'Chat', 0, colWidth)
     _, a = Check(chatCol, 'Choices on one line', 'Posts the four choices on one line instead of four.', a,
         function() return ns.db.compactChoices end, function(value) ns.db.compactChoices = value end, colWidth)
@@ -440,7 +473,40 @@ function ns.BuildSetup(host)
         local isOpen = lobbyOpen()
         local party = ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available() or false
 
-        host.status:SetText(isOpen and 'Lobby open' or 'Set up a game')
+        local grouped = IsInGroup and (IsInGroup(LE_PARTY_CATEGORY_HOME or 1) or IsInGroup(LE_PARTY_CATEGORY_INSTANCE or 2))
+        local soloScreen = not isOpen and not grouped and not (IsInRaid and IsInRaid())
+        setup.soloScreen = soloScreen
+        host.status:SetText(isOpen and 'Lobby open' or soloScreen and 'Play' or 'Set up a game')
+        setup.soloChoices:SetShown(soloScreen)
+        setup.hostHeading:SetShown(soloScreen)
+        local choiceOrder = ns.db.soloMain == 'PRACTICE' and { 'practice', 'daily', 'quick' } or { 'quick', 'daily', 'practice' }
+        local visibleChoice = 0
+        for i, mode in ipairs(choiceOrder) do
+            local button = setup.playChoices[mode]
+            local visible = soloScreen and (mode ~= 'daily' or ns.Daily and ns.Daily.Enabled())
+            button:SetShown(visible and true or false)
+            button:ClearAllPoints(); button:SetPoint('TOPLEFT', visibleChoice * (button:GetWidth() + 10), 0)
+            if visible then visibleChoice = visibleChoice + 1 end
+            T.Border(button, i == 1 and 'accent' or 'edge')
+            button:SetEnabled(mode == 'practice' and not restricted and not poolIssue or mode == 'daily' and ns.Daily and ns.Daily.Enabled() or mode == 'quick')
+        end
+        local streak = ns.Quick and ns.Quick.BestLine('streak')
+        setup.playChoices.quick.line:SetText('Endless questions')
+        setup.playChoices.quick.record:SetText(streak and streak.text or 'Best streak: none yet')
+        setup.playChoices.daily.line:SetText('One a day, same for everyone')
+        setup.playChoices.daily.record:SetText(ns.Daily and (ns.Daily.Done() and 'Done today · ' or '') .. ns.Daily.FooterText() or '')
+        setup.playChoices.practice.line:SetText('Your setup, nothing posted')
+        local practiceBest
+        for _, game in ipairs(ns.db.games[ns.era] or {}) do
+            if game.practice then
+                for _, player in ipairs(game.rows or {}) do practiceBest = math.max(practiceBest or 0, tonumber(player.total) or 0) end
+            end
+        end
+        setup.playChoices.practice.record:SetText(practiceBest and ('Best score: ' .. practiceBest) or 'No practice games yet')
+        for i, button in ipairs(setup.presets) do
+            button:ClearAllPoints(); button:SetPoint('TOPRIGHT', -(MARGIN + (#PRESETS - i) * 102), soloScreen and -206 or -58)
+        end
+        banner:ClearAllPoints(); banner:SetPoint('TOPLEFT', MARGIN, soloScreen and -248 or -112)
         host.tags:SetText(plural(needed, 'question') .. '  ·  about ' .. plural(ns.EstimateMinutes(ns.db), 'minute')
             .. '  ·  ' .. (localOnly and 'Practice, no group' or plural(math.max(0, #rosterRows - (ns.db.hostParticipates and 1 or 0)), 'other player')
                 .. ' in ' .. ns.Game.CHANNELS[ns.db.channel].label))
@@ -481,12 +547,20 @@ function ns.BuildSetup(host)
             banner.second:SetText('Dismiss'); banner.second:SetScript('OnClick', ns.DismissInterrupted); banner.second:Show()
         end
         -- The sub-tabs and their pages sit below the banner when it shows.
-        local tabTop = banner:IsShown() and -164 or -108
+        local tabTop = soloScreen and (banner:IsShown() and -300 or -240) or (banner:IsShown() and -164 or -108)
         bar:ClearAllPoints(); bar:SetPoint('TOPLEFT', MARGIN, tabTop)
+        local formTop = tabTop - TAB_H - 14
+        soloScroll:ClearAllPoints(); soloScroll:SetPoint('TOPLEFT', 0, formTop)
+        soloScroll:SetHeight(L.height + formTop - 88)
+        soloScroll.bar:SetHeight(soloScroll:GetHeight())
+        soloScroll:SetShown(soloScreen)
         for _, frame in pairs(setup.pages) do
-            frame:ClearAllPoints(); frame:SetPoint('TOPLEFT', 0, tabTop - TAB_H - 14)
+            frame:SetParent(soloScreen and soloBody or setup)
+            frame:ClearAllPoints(); frame:SetPoint('TOPLEFT', 0, soloScreen and 0 or formTop)
         end
         showTab(isOpen)
+        if soloScreen then setSoloHeight(setup.pages[setup.current].contentHeight or 300, true)
+        else soloScroll.bar:Hide() end
         if isOpen then drawLobby() end
 
         if setup.solo then
@@ -526,6 +600,18 @@ function ns.BuildSetup(host)
         end
         setup.lobby:SetShown(isOpen)
         setup.closeLobby:SetShown(isOpen)
+        if soloScreen then
+            setup.quickMain:Hide(); setup.quick:Hide(); setup.daily:Hide(); setup.practice:Hide()
+            setup.start:Show(); setup.start:SetText('Practice a full game')
+            setup.start:SetEnabled(not restricted and not poolIssue)
+            setup.start:SetScript('OnClick', function() ns.StartGame(true) end)
+        else
+            setup.start:SetScript('OnClick', function()
+                if setup.solo then ns.StartGame()
+                elseif ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available() and not lobbyOpen() then ns.Party.OpenLobby()
+                else ns.StartGame() end
+            end)
+        end
     end
     local function changed() ns.setupError = nil; refreshAll() end
     for _, panel in ipairs(panels) do panel.hcRefreshAll = changed end

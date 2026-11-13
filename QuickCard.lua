@@ -106,7 +106,10 @@ local function answerButton(parent, index)
     b:SetHeight(46)
     b.Text:SetWidth(COL_W - 46)
     b.badge:Hide()
-    b:SetScript("OnClick", function() Quick.Answer(index) end)
+    b:SetScript("OnClick", function()
+        if Card.Accepting() and animated() then ns.Flair.Pop(Card.frame, b) end
+        Quick.Answer(index)
+    end)
     return b
 end
 
@@ -132,6 +135,7 @@ local function create()
         moved = savePosition })
     local inset, bar = f.inset or 1, ns.WINDOW_BAR
     f.top = inset + bar
+    f.lfAnimations = function() return animated() and f:IsShown() end
 
     f.gear = CreateFrame("Button", nil, f.header)
     f.gear:SetSize(22, 22)
@@ -175,6 +179,8 @@ local function create()
     f.streak = label(f.body, "GameFontHighlight", "muted", 140)
     f.streak:SetPoint("TOPRIGHT", -PAD, -12)
     f.streak:SetJustifyH("RIGHT")
+    f.streakBadge = ns.Flair.StreakBadge(f, f.body)
+    f.streakBadge:SetPoint("TOPRIGHT", -PAD, -8)
     f.question = T.Font(label(f.body, "GameFontHighlight", "text", CONTENT), 14)
     f.question:SetPoint("TOPLEFT", PAD, -36)
     if f.question.SetWordWrap then f.question:SetWordWrap(true) end
@@ -187,9 +193,14 @@ local function create()
     end
     -- Keep the full answer before its optional quip. Layout measures both;
     -- the text narrows only while the Next button shares the row.
-    f.feedback = label(f.body, "GameFontHighlightSmall", "muted", CONTENT)
+    f.feedback = label(f.body, "GameFontHighlight", "text", CONTENT - 90)
     f.feedback:SetPoint("TOPLEFT", PAD, -198)
     if f.feedback.SetWordWrap then f.feedback:SetWordWrap(true) end
+    f.feedbackProbe = label(f.body, "GameFontHighlight", "text", CONTENT - 90)
+    if f.feedbackProbe.SetWordWrap then f.feedbackProbe:SetWordWrap(true) end
+    f.feedbackProbe:Hide()
+    f.quip = label(f.body, "GameFontHighlightSmall", "muted", CONTENT)
+    if f.quip.SetWordWrap then f.quip:SetWordWrap(true) end
     f.next = UI.Button(f.body, 80, 22)
     f.next:SetPoint("TOPRIGHT", -PAD, -200)
     f.next:SetText("Next")
@@ -256,18 +267,22 @@ function Card.Layout()
     top(f.clock, PAD, clockY)
     f.streak:ClearAllPoints()
     f.streak:SetPoint("TOPRIGHT", -PAD, -clockY)
+    f.streakBadge:ClearAllPoints()
+    f.streakBadge:SetPoint("TOPRIGHT", -PAD, -(clockY - 4))
     local s = Quick.state
     local question = not s or s.phase == "question" or s.phase == "reveal"
     f.heading:SetShown(question and not art)
     local height
     if question then
-        local questionY = clockY + math.max(textHeight(f.clock, 16), textHeight(f.streak, 16)) + 10
+        local timerY = clockY + math.max(textHeight(f.clock, 24), textHeight(f.streak, 24)) + 6
+        top(f.timer, PAD, timerY)
+        local questionY = timerY + 4 + 10
         top(f.question, PAD, questionY)
-        local y = questionY + textHeight(f.question, 42) + 12
+        local y = questionY + textHeight(f.question, 48) + 12
         for row = 0, 1 do
             local first, second = f.answers[row * 2 + 1], f.answers[row * 2 + 2]
             first:Fit(); second:Fit()
-            local rowHeight = math.max(46, first:GetHeight(), second:GetHeight())
+            local rowHeight = math.max(54, first:GetHeight(), second:GetHeight())
             first:SetHeight(rowHeight); second:SetHeight(rowHeight)
             top(first, PAD, y); top(second, PAD + COL_W + 8, y)
             y = y + rowHeight + 6
@@ -275,11 +290,12 @@ function Card.Layout()
         top(f.feedback, PAD, y + 4)
         f.next:ClearAllPoints()
         f.next:SetPoint("TOPRIGHT", -PAD, -(y + 4))
-        y = y + 4 + math.max(24, textHeight(f.feedback, 24)) + 10
+        y = y + 4 + math.max(32, textHeight(f.feedback, 32), textHeight(f.feedbackProbe, 32)) + 4
+        top(f.quip, PAD, y)
+        y = y + textHeight(f.quip, 32) + 10
         top(f.footer, PAD, y)
         y = y + textHeight(f.footer, 14) + 8
-        top(f.timer, PAD, y)
-        height = math.max(ART, y + 4 + 10)
+        height = math.max(ART, y + 10)
     else
         top(f.overTitle, PAD, 26)
         local y = 26 + textHeight(f.overTitle, 28) + 14
@@ -287,12 +303,18 @@ function Card.Layout()
         y = y + textHeight(f.overLines, 24) + 16
         top(f.overNote, PAD, y)
         y = y + textHeight(f.overNote, 28) + 16
-        top(f.primary, 42, y); top(f.secondary, 198, y)
+        local actionX = (RIGHT_W - f.primary:GetWidth() - f.secondary:GetWidth() - 12) / 2
+        top(f.primary, actionX, y); top(f.secondary, actionX + f.primary:GetWidth() + 12, y)
         y = y + 30 + 14
         top(f.footer, PAD, y)
         height = math.max(ART, y + textHeight(f.footer, 14) + 14)
     end
     f.body:SetHeight(height)
+    -- Keep the square painting centred beside the standard reading block.
+    for _, painting in ipairs({ f.art, f.artNext }) do
+        painting:ClearAllPoints()
+        painting:SetPoint("TOPLEFT", inset, -(f.top + (height - ART) / 2))
+    end
     f:SetSize(inset * 2 + (art and ART or 0) + RIGHT_W, f.top + height + inset)
     if Card.options then Card.PlaceOptions() end
 end
@@ -302,7 +324,7 @@ local function setArt(f, key)
     if f.artPath == path then return end
     local first = f.artPath == nil
     f.artPath = path
-    if first or not animated() then
+    if first or not animated() or not f:IsShown() then
         f.art:SetTexture(path); f.art:SetAlpha(1); f.artNext:SetAlpha(0); f.fading = nil
         return
     end
@@ -349,16 +371,20 @@ function Card.Render()
         f.caption:SetText("A bit of everything")
     end
     local question = s.phase == "question" or s.phase == "reveal"
-    for _, region in ipairs({ f.question, f.feedback, f.timer, f.clock, f.streak }) do region:SetShown(question) end
+    for _, region in ipairs({ f.question, f.feedback, f.quip, f.timer, f.clock, f.streak }) do region:SetShown(question) end
+    if not question then f.streakBadge:Hide() end
     for _, b in ipairs(f.answers) do b:SetShown(question) end
     f.heading:SetShown(question and not artOn())
     local manualNext = s.phase == "reveal" and not s.revealUntil
     f.next:SetShown(manualNext)
-    f.feedback:SetWidth(manualNext and (CONTENT - 90) or CONTENT)
+    local roomForNext = manualNext or ((s.mode == "quick" or s.mode == "streak") and not ns.db.qpAutoNext)
+    f.feedback:SetWidth(roomForNext and CONTENT - 90 or CONTENT)
+    f.feedbackProbe:SetWidth(f.feedback:GetWidth())
     f.footer:SetShown(s.phase ~= "countdown")
     f.over:SetShown(s.phase == "over" or s.phase == "countdown")
     if question and q then
         f.question:SetText(q.text)
+        f.feedbackProbe:SetText("Time's up. It was " .. q.choices[q.correct] .. ".")
         for index, b in ipairs(f.answers) do
             b:SetText(q.choices[index])
             b:SetEnabled(s.phase == "question")
@@ -369,28 +395,46 @@ function Card.Render()
             else
                 b:Mark(nil)
             end
+            local verdict = s.phase == "reveal" and (index == q.correct and "ready" or index == s.choice and "wrong")
+            b.num:SetText(verdict and (verdict == "ready" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:18|t" or "|TInterface\\RaidFrame\\ReadyCheck-NotReady:18|t") or tostring(index))
         end
         if s.phase == "reveal" then
             local text
-            if s.lastRight then text = "Correct!"
+            if s.lastRight then text = "Correct! " .. q.choices[q.correct] .. "."
             elseif s.choice then text = "Not quite. It was " .. q.choices[q.correct] .. "."
             else text = "Time's up. It was " .. q.choices[q.correct] .. "." end
             local bucket = ns.Flair.RevealBucket(s.choice, q.correct, s.streak)
-            local quip = bucket and ns.Flair.Quip(bucket, tostring(s.answered), s.streak) or ""
-            f.feedback:SetText(text .. (quip ~= "" and ("\n" .. quip) or ""))
-            T.Text(f.feedback, s.lastRight and "accent" or "muted")
+            local every = tonumber(ns.db.qpBanterEvery) or 3
+            local banter = s.mode ~= "lightning" and every > 0 and s.answered % every == 0
+            local quip = banter and bucket and ns.Flair.Quip(bucket, tostring(s) .. ":" .. s.answered, s.streak) or ""
+            local verdict, answer = text:match("^(.-[!.])%s+(.*)$")
+            local r, g, b = T.Unpack(s.lastRight and "accent" or "danger")
+            local colour = string.format("|cff%02x%02x%02x", math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+            f.feedback:SetText(colour .. (verdict or text) .. "|r" .. (answer and (" " .. answer) or ""))
+            T.Text(f.feedback, "text")
+            f.quip:SetText(quip)
+            if f:IsShown() and animated() and f.animatedReveal ~= tostring(s) .. ":" .. s.answered then
+                f.animatedReveal = tostring(s) .. ":" .. s.answered
+                if s.lastRight then ns.Flair.Sparkle(f, f.answers[q.correct])
+                elseif s.choice then ns.Flair.Shake(f, f.answers[s.choice]) end
+            end
         else
+            f.quip:SetText("")
             f.feedback:SetText(s.landed and "Last question!" or (s.pendingMode and
                 ("Next: " .. Quick.MODE[s.pendingMode].label) or ""))
             T.Text(f.feedback, "muted")
         end
-        local flame = s.streak >= 3 and ns.Flair.On("streak") and " |TInterface\\Icons\\Spell_Fire_Fire:12|t" or ""
-        f.streak:SetText(s.streak > 0 and ("Streak " .. s.streak .. flame) or "")
+        f.streakBadge:SetStreak(s.streak)
+        f.streak:SetShown(not f.streakBadge:IsShown())
+        f.streak:SetText(s.streak > 0 and ("Streak " .. s.streak) or "")
     end
     f.footer:SetText(footerText(s))
     if s.phase == "over" and s.summary then
         local summary = s.summary
+        f.primary:SetWidth(summary.kind == "empty" and 180 or 140)
+        f.secondary:SetWidth(summary.kind == "empty" and 100 or 140)
         f.overTitle:SetText(summary.title or "")
+        T.Text(f.overTitle, summary.newBest and "accent" or "flavour")
         f.overLines:SetText(table.concat(summary.lines or {}, "\n"))
         f.overNote:SetText(summary.note or "")
         if summary.kind == "daily" then
@@ -403,6 +447,11 @@ function Card.Render()
             f.primary:SetScript("OnClick", function() Quick.KeepGoing() end)
             f.secondary:SetText("Close")
             f.secondary:SetScript("OnClick", function() Card.Hide() end)
+        elseif summary.kind == "empty" then
+            f.primary:SetText("Categories & difficulty")
+            f.primary:SetScript("OnClick", Card.OpenCategories)
+            f.secondary:SetText("Close")
+            f.secondary:SetScript("OnClick", Card.Hide)
         else
             f.primary:SetText("Play again")
             f.primary:SetScript("OnClick", function() Quick.Start(s.mode == "flight" and "quick" or s.mode) end)
@@ -413,6 +462,7 @@ function Card.Render()
         if f.celebratedSummary ~= summary and summary.newBest and f:IsShown() and animated()
             and ns.Flair.BounceIn and ns.Flair.BounceIn(f, f.overTitle) then
             f.celebratedSummary = summary
+            ns.Flair.Sparkle(f, f.overLines)
         end
     elseif s.phase == "countdown" then
         f.overTitle:SetText(spec.label)
@@ -462,6 +512,7 @@ function Card.Update(elapsed)
         f.timer.fill:SetWidth(math.max(1, CONTENT * fraction))
         ns.TimerColour(f.timer.fill, left or 0, s.mode == "flight" and 999 or s.mode == "lightning" and s.length or ns.db.qpSeconds)
     end
+    ns.Flair.Pulse(f, f.timer.fill, f:IsShown() and animated() and s.phase == "question" and left ~= nil and left > 0 and left <= 5)
 end
 
 -- ── Showing and hiding ─────────────────────────────────────────────────────
@@ -580,7 +631,8 @@ end
 -- ── Options tab ────────────────────────────────────────────────────────────
 
 local function check(parent, text, y, get, set)
-    local b = UI.CheckButton(parent)
+    local b = UI.Switch(parent)
+    b:SetSize(OPTIONS_W - 28, 24)
     b:SetPoint("TOPLEFT", 14, y)
     b.Text:SetText(text)
     b:SetScript("OnClick", function(self)
@@ -732,7 +784,7 @@ local function buildOptions()
     section(o, "Timer", y); y = y - 18
     o.timer = timerSwitch(o, y); y = y - 34
     o.controls[#o.controls + 1] = o.timer
-    section(o, "Look", y); y = y - 20
+    section(o, "Card", y); y = y - 20
     o.controls[#o.controls + 1] = check(o, "Artwork", y, function() return artOn() end,
         function(value) ns.db.qpArt = value end); y = y - 24
     o.controls[#o.controls + 1] = check(o, "Animations", y, function() return animated() end,
@@ -881,6 +933,11 @@ local function createPrompt()
         ns.db.qpOnFlights = self:GetChecked() and "OFFER" or "START"
         refresh()
     end)
+    p.decline = UI.Button(p, 100, 24)
+    p.decline:SetPoint("BOTTOMRIGHT", -20, 14)
+    p.decline:SetText("Not now")
+    p.decline:SetScript("OnClick", function() Card.HidePrompt() end)
+    p:SetHeight(258)
     p.Refresh = refresh
     p:SetPoint("TOP", UIParent, "TOP", 0, -180)
     p:Hide()

@@ -38,7 +38,8 @@ end
 local function measured(fs)
     rawset(fs, 'GetStringHeight', function(self)
         local lines = 0
-        for line in ((self:GetText() or '') .. '\n'):gmatch('(.-)\n') do
+        local plain = (self:GetText() or ''):gsub('|c%x%x%x%x%x%x%x%x', ''):gsub('|r', '')
+        for line in (plain .. '\n'):gmatch('(.-)\n') do
             lines = lines + math.max(1, math.ceil(#line * 7 / math.max(1, self:GetWidth())))
         end
         return lines * 16
@@ -56,7 +57,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     local ns = load(toc)
     local card, f, s = ns.QuickCard, ns.QuickCard.frame, ns.Quick.state
     for _, fs in ipairs({ f.question, f.feedback, f.footer, f.heading, f.clock, f.streak,
-        f.overTitle, f.overLines, f.overNote }) do measured(fs) end
+        f.overTitle, f.overLines, f.overNote, f.feedbackProbe, f.quip }) do measured(fs) end
     for _, b in ipairs(f.answers) do measured(b.Text) end
     local q = s.question
     q.text = string.rep('A long but readable Warcraft question. ', 8)
@@ -76,8 +77,9 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
             below(f.answers[3], f.answers[1], f.answers[1]:GetHeight(), 'rows do not overlap')
             below(f.feedback, f.answers[3], f.answers[3]:GetHeight(), 'feedback clears answers')
             below(f.footer, f.feedback, nil, 'footer clears feedback')
-            below(f.timer, f.footer, nil, 'timer clears footer')
-            assert(f.body:GetHeight() >= y(f.timer) + f.timer:GetHeight(), 'all question content fits body')
+            below(f.timer, f.clock, nil, 'timer follows clock')
+            below(f.question, f.timer, f.timer:GetHeight(), 'question clears timer')
+            assert(f.body:GetHeight() >= y(f.footer) + f.footer:GetStringHeight(), 'all question content fits body')
             eq(f.art:GetWidth(), 250, 'painting remains square at every card size')
             eq(f.art:GetHeight(), 250, 'painting remains square')
         end
@@ -181,5 +183,71 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     card.Hide()
     eq(bounce.playing, false, 'closing card stops effects')
     eq(o:IsShown(), false, 'closing card hides Options')
+end
+-- Ordinary question lengths retain fixed click targets; overflow still grows.
+for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
+    local ns = load(toc)
+    local card, f = ns.QuickCard, ns.QuickCard.frame
+    local s = ns.Quick.state
+    for _, fs in ipairs({ f.question, f.feedback, f.feedbackProbe, f.quip, f.clock, f.streak, f.footer }) do measured(fs) end
+    for _, b in ipairs(f.answers) do measured(b.Text) end
+    local q, deadline = s.question, s.questionDeadline
+    q.correct = 1
+    local baselineY, baselineHeight
+    for _, count in ipairs({ 10, 60, 110 }) do
+        q.text = string.rep('a', count)
+        for i = 1, 4 do q.choices[i] = string.rep('b', count == 110 and 30 or 10) end
+        card.Render()
+        baselineY, baselineHeight = baselineY or y(f.answers[1]), baselineHeight or f:GetHeight()
+        eq(y(f.answers[1]), baselineY, 'one to three question lines keep answer targets stable')
+        eq(f:GetHeight(), baselineHeight, 'ordinary answer wraps keep card height stable')
+    end
+    ns.db.livelyAnimations = false
+    wow.Click(f.answers[1])
+    eq(f:GetHeight(), baselineHeight, 'reveal uses its reserved reading space')
+    eq(s.questionDeadline, deadline, 'effects and reveal layout do not restart timer')
+    assert(f.answers[1].lfPop and f.answers[1].lfPop.playing, 'card click pops independently of Interface animations')
+    assert(f.lfSparkle and f.lfSparkle.groups[1].playing, 'correct card answer sparkles')
+    assert(f.answers[1].num:GetText():find('ReadyCheck-Ready', 1, true), 'correct answer has a tick')
+    eq(f.quip:GetText(), '', 'default skips first quip')
+    local plays = f.lfSparkle.groups[1].plays
+    card.Render()
+    eq(f.lfSparkle.groups[1].plays, plays, 'same reveal never repeats effect')
+    ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
+    eq(f.quip:GetText(), '', 'default skips second quip')
+    ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
+    assert(f.quip:GetText() ~= '', 'default includes every third quip')
+    ns.db.qpBanterEvery = 0
+    card.Render(); eq(f.quip:GetText(), '', 'zero disables card quips')
+    ns.db.qpBanterEvery = 1
+    card.Render(); assert(f.quip:GetText() ~= '', 'frequency can show every quip')
+    ns.Quick.Next()
+    local wrong = ns.Quick.state.question.correct % 4 + 1
+    wow.Click(f.answers[wrong])
+    assert(f.answers[wrong].lfShake and f.answers[wrong].lfShake.playing, 'wrong card answer shakes')
+    assert(f.answers[wrong].num:GetText():find('ReadyCheck-NotReady', 1, true), 'wrong answer has a cross')
+    ns.db.qpAnimations = false
+    card.Layout()
+    for _, group in ipairs(f.lfGroups or {}) do eq(group.playing, false, 'card switch stops all effects') end
+    ns.db.livelyAnimations = true
+    ns.Quick.Next(); wow.Click(f.answers[ns.Quick.state.question.correct])
+    for _, group in ipairs(f.lfGroups or {}) do eq(group.playing, false, 'Interface switch never overrides card off') end
+    ns.db.qpAnimations = true
+    card.Show('lightning')
+    ns.Quick.Answer(ns.Quick.state.question.correct)
+    eq(f.quip:GetText(), '', 'Lightning never shows a quip')
+    card.Show('quick')
+    ns.Quick.state.questionDeadline = 104
+    card.Update(0)
+    assert(f.timer.fill.lfPulsing, 'last five seconds pulse')
+    card.Hide()
+    for _, group in ipairs(f.lfGroups or {}) do eq(group.playing, false, 'hiding stops all card effects') end
+    card.Show('quick')
+    ns.Quick.state.phase, ns.Quick.state.summary = 'over', { kind = 'empty', title = 'No questions', lines = {} }
+    card.Render()
+    eq(f.primary:GetText(), 'Categories & difficulty', 'empty pool offers a way to fix it')
+    eq(f.secondary:GetText(), 'Close', 'empty pool can be closed')
+    for _, streak in ipairs({ 3, 5, 10, 15, 20 }) do eq(ns.Flair.RevealBucket(1, 1, streak), 'streak', 'milestone quip') end
+    for _, streak in ipairs({ 4, 6, 9, 11 }) do eq(ns.Flair.RevealBucket(1, 1, streak), 'correct', 'ordinary quip between milestones') end
 end
 io.write('test_quick_card_layout: ok\n')

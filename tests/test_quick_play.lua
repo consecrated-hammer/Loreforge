@@ -109,7 +109,7 @@ do
     eq(card.caption.text, s.question.categoryLabel, "caption names the category")
     answer(ns, true)
     eq(s.phase, "reveal", "answer revealed")
-    eq(card.feedback.text:sub(1, 8), "Correct!", "feedback")
+    has(card.feedback.text, "Correct!", "feedback")
     tick(ns, 2.1)
     eq(s.phase, "question", "next question after the wait")
     eq(s.answered, 1, "one answered")
@@ -208,6 +208,9 @@ end
 do
     local ns = load()
     ns.QuickCard.Show("streak")
+    local sound, oldSound
+    oldSound = ns.Sound
+    ns.Sound = function(kind) sound = kind; oldSound(kind) end
     local card = ns.QuickCard.frame
     answer(ns, true); tick(ns, 2.1)
     answer(ns, true); tick(ns, 2.1)
@@ -217,9 +220,10 @@ do
     local s = ns.Quick.state
     eq(s.phase, "over", "a miss ends the streak")
     has(card.overNote.text, "It was ", "the summary keeps the right answer")
-    eq(card.overTitle.text, "Streak over", "summary title")
+    eq(card.overTitle.text, "New best streak!", "summary title")
+    eq(sound, "win", "a new best uses the win sound")
     has(card.overLines.text, "2 in a row", "summary score")
-    has(card.overLines.text, "New best!", "a new best")
+    has(card.overNote.text, "Previous best 0", "a new best names its previous record")
     eq(ns.Quick.BestLine("streak").text, "Best streak: 2", "best streak line")
     assert(ns.Quick.BestLine("streak").detail[1], "best streak has a date")
     card.primary.scripts.OnClick(card.primary)
@@ -397,8 +401,8 @@ do
     answer(ns, false); tick(ns, 2.6)
     SlashCmdList.LOREFORGE("records")
     local records = ns.hostFrame.records
-    eq(records.bests[1].text.text, "Best streak: 1", "Hall of Fame streak best")
-    eq(records.bests[3].text.text, "Best flight: none yet", "no flight best yet")
+    eq(records.bests[1].value.text, "1", "Hall of Fame streak best")
+    eq(records.bests[3].value.text, "-", "no flight best yet")
     records.bests[1].scripts.OnEnter(records.bests[1])
 end
 

@@ -6,7 +6,9 @@ local addonName, ns = ...
 -- link to that settings page.
 ns.WHATS_NEW = {
     { version = "1.4.0", date = "2026-11-13", items = {
-        { title = "A little more reading room", text = "Quick play now makes room for long questions, answers and reveals. The painting stays square, and Options opens on the side with space.", page = "Quick play", tab = "Card" },
+        { title = "A little more reading room", text = "Quick play keeps ordinary answer buttons in place, with clear verdicts, tick/cross cues and familiar pops and sparkles. The painting stays square, and Options opens on the side with space.", page = "Quick play", tab = "Card" },
+        { title = "Choose your next game", text = "Solo Play leads with Quick play, Daily question and Practice. Hall of Fame leads with your personal bests, and records and Party settings share Games and records.", page = "Games and records" },
+        { title = "A little less tavern chatter", text = "Card banter defaults to every third reveal. Choose how often under Card; Lightning stays quiet.", page = "Quick play", tab = "Card" },
         { title = "Find your favourite settings", text = "Quick play has Play, Card, Flights and Daily question tabs. Interface separates Presentation from Windows. Search finds hidden options and individual answer bindings.", page = "Quick play", tab = "Play" },
         { title = "A clearer host table", text = "Categories stays available with the lobby open. The game summary names the selected preset, or Custom after you change its question count or answer time." },
         { title = "Pick up where you left off", text = "Dismiss a quiz during a flight and a small book lets you resume it or start a new challenge. Effects stop when hidden, and personal bests celebrate once.", page = "Quick play", tab = "Flights" },

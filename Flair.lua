@@ -18,6 +18,12 @@ function Flair.On(name)
     return key ~= nil and not (ns.db and ns.db[key] == false)
 end
 
+-- A card owns its animation preference independently of the Party windows.
+local function animations(owner)
+    if owner and owner.lfAnimations then return owner.lfAnimations() end
+    return Flair.On("lively")
+end
+
 -- Textures shared by Retail and Forever.
 Flair.STORY_FONT = "Fonts\\MORPHEUS.TTF"
 Flair.BOOK = "Interface\\Icons\\INV_Misc_Book_09"
@@ -133,7 +139,7 @@ end
 
 -- A quick scale pulse when an answer is picked.
 function Flair.Pop(owner, b)
-    if not (owner and b) or not Flair.On("lively") then return false end
+    if not (owner and b) or not animations(owner) then return false end
     if not b.lfPop then
         local g = track(owner, b:CreateAnimationGroup())
         scale(step(g, "Scale", 1, 0.07, "OUT"), 1, 1.06)
@@ -145,7 +151,7 @@ end
 
 -- A short side-to-side shake for a wrong answer; it ends where it started.
 function Flair.Shake(owner, b)
-    if not (owner and b) or not Flair.On("lively") then return false end
+    if not (owner and b) or not animations(owner) then return false end
     if not b.lfShake then
         local g = track(owner, b:CreateAnimationGroup())
         for i, x in ipairs({ 6, -12, 10, -6, 2 }) do step(g, "Translation", i, 0.05):SetOffset(x, 0) end
@@ -156,7 +162,7 @@ end
 
 -- A burst of three stars over a region, for a correct answer.
 function Flair.Sparkle(owner, anchor)
-    if not (owner and anchor) or not Flair.On("lively") then return false end
+    if not (owner and anchor) or not animations(owner) then return false end
     local burst = owner.lfSparkle
     if not burst then
         burst = CreateFrame("Frame", nil, owner)
@@ -198,7 +204,7 @@ end
 -- A looping pulse while on; the timer uses it in the last five seconds.
 function Flair.Pulse(owner, region, on)
     if not (owner and region) then return false end
-    on = on and Flair.On("lively") or false
+    on = on and animations(owner) or false
     if not region.lfPulse then
         if not on then return false end
         local g = track(owner, region:CreateAnimationGroup())
@@ -220,7 +226,7 @@ end
 
 -- The winner's crown drops in and settles.
 function Flair.BounceIn(owner, region)
-    if not (owner and region) or not Flair.On("lively") then return false end
+    if not (owner and region) or not animations(owner) then return false end
     if not region.lfBounce then
         local g = track(owner, region:CreateAnimationGroup())
         local appear = step(g, "Alpha", 1, 0.15); fade(appear, 0, 1)
@@ -374,7 +380,10 @@ end
 -- Which bucket a reveal belongs to for this player.
 function Flair.RevealBucket(choice, correct, streak)
     if not correct then return nil end
-    if choice == correct then return (tonumber(streak) or 0) >= 3 and "streak" or "correct" end
+    if choice == correct then
+        streak = tonumber(streak) or 0
+        return (streak == 3 or streak == 5 or (streak >= 10 and streak % 5 == 0)) and "streak" or "correct"
+    end
     if choice then return "wrong" end
     return "timeout"
 end

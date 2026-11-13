@@ -2,6 +2,13 @@
 
 Check Retail and Forever separately after delivery and `/reload`. Record `/lf version`, client/build and any errors. These checks are outstanding until Kevin runs them.
 
+- While solo, check the three play choices, current records and the scrollable Host a game form. Change Main button when solo and confirm the preferred choice leads; join a group and check the original hosting layout returns.
+- On the card, compare one-, two- and three-line questions, wrapped answers and reveals. Ordinary answer buttons should stay still; long text must still fit. Check tick/cross cues, separate verdict/quip, timer placement and the centred painting.
+- With Interface Animations off and card Animations on, check pop, sparkle, shake, timer pulse and streak tiers. Reverse the switches and check the card stays still. Hide it during each effect.
+- Set Banter frequency to Off, every answer and every third answer; Lightning must stay quiet. Check streak callouts at 3, 5, 10 and 15.
+- Beat a Streak and Lightning best: check headline, previous best, sparkle and win sound. Open Hall of Fame and inspect all four best tiles, dates/routes and the leaderboard; clearing belongs only in Games and records.
+- Open a saved game with a winner, tie and your own entry: check crown, winner names, your place, best streak and readable length. Confirm takeoff Not now retains the launcher and preferences.
+
 - Open `/lf`; switch Play, History and Hall of Fame and return to a running game. Check empty and populated lists, long character/realm names, ties and round details.
 - Start Quick play immediately. Try Relaxed and manual Next, long questions/answers, each card size, artwork off, and the Options panel near both screen edges.
 - Play Streak through a first miss and Lightning through its deadline. Check retained correct answer, final score and a new-best celebration that runs once.
