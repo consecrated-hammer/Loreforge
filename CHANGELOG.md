@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+- Split Interface into Presentation and Windows, and Quick play into Play, Card, Flights and Daily question. Each tab resets only its own preferences.
+- Make hidden timer, next-question, flight and daily preferences searchable through their enabling control. Search also finds individual binding tiles and live Change/Remove actions.
+- Measure Quick play questions, answer rows, reveals and summaries so long text has room. Keep category artwork square and open Options on the side with space.
+- Keep Categories available with an open Party lobby. Show the active preset or Custom beside the game length; explain which settings presets change.
+- Preserve a dismissed flight quiz behind a small book with Resume quiz and New quiz. Landing clears a dismissed quiz, and combat hides and restores the launcher.
+- Stop card effects when hidden or animations are off; celebrate a new best once. Make the Party restore pulse respect Lively animations, and recognise shared wins in History.
+- Use the same timer preference behaviour in card Options and general settings. Recheck combat before applying a confirmed binding replacement.
+- Vendor clean HammerCore 0.5.2 at 3c1eeeb for current settings search, tab links and binding controls. No changes to scoring, Party protocol, question data or saved-record formats.
+
 ## [1.3.0] - 2026-11-10
 
 ### Added

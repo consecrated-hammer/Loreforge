@@ -63,6 +63,70 @@ function Bindings.Label(key)
     return table.concat(parts, "+")
 end
 
+-- ── Game key bindings for a command ───────────────────────────────────────
+-- For an addon command declared in its Bindings.xml, usually a
+-- "CLICK SomeButton:LeftButton" for a secure button. These write the game's
+-- own key bindings, so the key also shows under Options > Keybindings, and
+-- save them to the binding set in use (account or character).
+
+local function bindingKeys(command)
+    if not GetBindingKey then return {} end
+    return { GetBindingKey(command) }
+end
+
+-- The first key bound to `command`, or nil.
+function Bindings.CommandKey(command)
+    return bindingKeys(command)[1]
+end
+
+function Bindings.CommandLabel(command)
+    local key = Bindings.CommandKey(command)
+    return key and Bindings.Label(key) or "Not bound"
+end
+
+local function saveBindings()
+    if SaveBindings then SaveBindings(GetCurrentBindingSet and GetCurrentBindingSet() or 1) end
+end
+
+-- Binds `key` to `command`, replacing any other key it had.
+-- Returns true, or false, message[, "conflict"] where "conflict" means the
+-- key belongs to something else and BindCommand(command, key, true) would
+-- take it anyway.
+function Bindings.BindCommand(command, key, replace)
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "Key bindings can't change in combat."
+    end
+    if type(key) ~= "string" or key == "" then return false, "No key." end
+    -- Bare left or right click would stop the mouse clicking anything else.
+    if key == "BUTTON1" or key == "BUTTON2" then
+        return false, "Add Shift, Ctrl or Alt to bind a left or right click."
+    end
+    local existing = GetBindingAction and GetBindingAction(key) or ""
+    if existing ~= "" and existing ~= command and not replace then
+        local name = GetBindingName and GetBindingName(existing) or existing
+        return false, Bindings.Label(key) .. " is bound to " .. tostring(name), "conflict"
+    end
+    if not (SetBinding and SetBinding(key, command)) then
+        return false, "The game refused that key."
+    end
+    for _, old in ipairs(bindingKeys(command)) do
+        if old ~= key then SetBinding(old, nil) end
+    end
+    saveBindings()
+    return true
+end
+
+-- Removes every key bound to `command`.
+function Bindings.ClearCommand(command)
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "Key bindings can't change in combat."
+    end
+    local keys = bindingKeys(command)
+    for _, key in ipairs(keys) do SetBinding(key, nil) end
+    if #keys > 0 then saveBindings() end
+    return true
+end
+
 -- ── The capture prompt ─────────────────────────────────────────────────────
 -- A full-screen catcher takes the next input; the prompt sits above it with
 -- Unbind and Cancel.  Escape cancels.
@@ -218,7 +282,8 @@ local ROW_H, TILE_W, TILE_H, GAP = 46, 96, 84, 8
 
 -- spec = {
 --   inputs = { keys, mouse, wheel },
---   pool = function() -> { { title, items = { { id, name, icon, detail? } } } },
+--   pool = function() -> { { title, items = { { id, name, icon, detail?, inputs? } } } },
+--          (an item's own inputs override the page's, say keys for one item)
 --   bound = function() -> { { id, name, icon, key } } in display order,
 --   bind = function(item, key) -> true | false, error, replace? (a function that
 --          takes the key anyway; the prompt shows Replace),
@@ -242,6 +307,10 @@ function Bindings.Page(panel, y, spec)
     local right = CreateFrame("Frame", nil, panel)
     right:SetPoint("TOPLEFT", left, "TOPRIGHT", 24, 0)
     right:SetWidth(rightWidth)
+    UI.RegisterRow(panel, left, "Active bindings")
+    UI.AttachHint(left, "Active bindings", "Change or remove an existing key binding.")
+    UI.RegisterRow(panel, right, spec.poolTitle or "Available")
+    UI.AttachHint(right, spec.poolTitle or "Available", spec.poolHint or "Click one to bind it.")
 
     local heading = T.Font(UI.FontString(left, "GameFontHighlight", "accent"), 14)
     heading:SetPoint("TOPLEFT", 14, -14)
@@ -260,6 +329,8 @@ function Bindings.Page(panel, y, spec)
         T.Text(clearAll.Text, "danger")
         clearAll:SetScript("OnLeave", function() T.Text(clearAll.Text, "danger") end)
         clearAll:SetPoint("TOPRIGHT", -14, -16)
+        clearAll.hcParentRow = left
+        UI.RegisterRow(panel, clearAll, "Clear all bindings")
     end
     local empty = UI.FontString(left, "GameFontHighlightSmall", "muted")
     empty:SetPoint("TOPLEFT", 14, -58)
@@ -276,7 +347,7 @@ function Bindings.Page(panel, y, spec)
 
     local function capture(item, current)
         Capture:Start({
-            title = item.name, icon = item.icon, inputs = spec.inputs,
+            title = item.name, icon = item.icon, inputs = item.inputs or spec.inputs,
             current = current and label(current) or nil,
             -- bind(item, key) -> false, problem, replace? refuses the key;
             -- replace() (same returns) takes it anyway, from the Replace button.

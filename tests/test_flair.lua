@@ -216,6 +216,19 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         f.scripts.OnUpdate(f, 0.2)
         assert(f.timer.lfPulse.playing, label .. 'the pulse restarts when shown again')
 
+        -- The hidden-quiz restore pulse follows the same animation switch.
+        P.Render(question({ index = 80, deadline = now + 20 }))
+        P.Hide()
+        assert(P.restore:IsShown() and P.restore.pulsing, label .. 'unanswered hidden quiz offers restore')
+        P.restore.scripts.OnUpdate(P.restore, 0.2)
+        assert(P.restore:GetAlpha() < 1, label .. 'restore pulses with animations on')
+        ns.db.livelyAnimations = false
+        P.restore.scripts.OnUpdate(P.restore, 0.2)
+        eq(P.restore:GetAlpha(), 1, label .. 'turning animations off stops restore immediately')
+        P.RefreshRestore()
+        assert(not P.restore.pulsing, label .. 'refresh keeps restore still with animations off')
+        P.Show()
+
         -- Each switch off suppresses its own effect.
         ns.db.livelyAnimations = false
         ns.ApplyFlair()

@@ -505,6 +505,26 @@ for _, client in ipairs({ "retail", "classic" }) do
     eq(ns.Quick.state, nil, "landing clears dismissed quiz")
 end
 
+-- Combat hiding is not user dismissal: landing retains the existing grace
+-- and the visible quiz resumes into Touchdown, rather than leaving a stale quiz.
+for _, client in ipairs({ "retail", "classic" }) do
+    local ns = load({ era = client })
+    takeOff(ns)
+    ns.QuickCard.Show("flight")
+    local saved = ns.Quick.state
+    combat = true
+    ns.QuickCard.OnCombat("PLAYER_REGEN_DISABLED")
+    land(ns, 1)
+    eq(ns.Quick.state, saved, "combat landing preserves the visible flight question")
+    assert(saved.landed and saved.landedDeadline, "combat landing retains existing grace")
+    combat = false
+    ns.QuickCard.OnCombat("PLAYER_REGEN_ENABLED")
+    assert(ns.QuickCard.IsShown(), "combat-hidden quiz restores after landing")
+    tick(ns, ns.db.qpLandingGrace + 1)
+    eq(saved.phase, "over", "restored landed quiz finishes after grace")
+    eq(saved.summary.kind, "touchdown", "combat landing ends in Touchdown")
+end
+
 -- The settings page builds.
 do
     local ns = load()

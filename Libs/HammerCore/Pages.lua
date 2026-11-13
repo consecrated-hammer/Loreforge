@@ -18,10 +18,10 @@ HC.Pages = Pages
 Pages.visibility = { name = "Visibility", group = "main", standard = true,
     description = "When things show." }
 Pages.visibility.build = function(panel, y)
-    -- The addon's own sections come first; the shared toggles sit under
-    -- "Other" at the bottom, in the order Salve established.
+    -- The addon's own sections come first, followed by shared settings
+    -- grouped by what they control.
     if HC.spec.visibility then y = HC.spec.visibility(panel, y) - 8 end
-    _, y = UI.Header(panel, "Other", y)
+    _, y = UI.Header(panel, "Minimap button", y)
     _, y = UI.Check(panel, "Show minimap button", "Show the " .. HC.name .. " button on the minimap.", y,
         function() return HC.State().minimap end,
         function(value)
@@ -37,6 +37,7 @@ Pages.visibility.build = function(panel, y)
     end
     -- Addon rows about the minimap button, such as what right-click does.
     if HC.spec.visibilityMinimap then y = HC.spec.visibilityMinimap(panel, y) end
+    _, y = UI.Header(panel, "Updates", y)
     _, y = UI.Check(panel, "Show startup message", "Print the loaded version when you log in.", y,
         function() return HC.State().startupMessage end,
         function(value) HC.State().startupMessage = value end)
@@ -58,6 +59,7 @@ Pages.visibility.build = function(panel, y)
             function(value) HC.State().whatsNewSound = value end)
     end
     if HC.Welcome and HC.Welcome.Enabled() then y = HC.Welcome:AddSettings(panel, y) end
+    _, y = UI.Header(panel, "Settings window", y)
     _, y = UI.Check(panel, "Settings search", "Show a search box at the top of this window.", y,
         function() return HC.State().settingsSearch ~= false end,
         function(value)
@@ -409,7 +411,7 @@ local function releaseCard(panel, release, newest, relayout)
     rule:SetHeight(1)
     local bottom = W.DrawItems(body, 16, -14, width - 32, release, {
         pageTitle = W.PageTitle,
-        openPage = function(page) HC.Settings:Show(page) end,
+        openPage = function(page, tab) HC.Settings:Show(page, tab) end,
     })
     local bodyHeight = -bottom + 6
     body:SetHeight(bodyHeight)

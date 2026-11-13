@@ -129,7 +129,22 @@ If a line may not have posted, the game pauses and one banner asks whether it ap
 
 Every Consecrated Hammer addon also has `help`, `version`, `about`, `debug`, `startup`, `minimap` and `reset settings`. Reset settings keeps Loreforge's player records and history. Records are shared by host characters on the same WoW account, with Retail and Forever stored separately.
 
-The minimap button opens Loreforge on left-click. **Minimap left-click when solo** can open Quick play instead. Right-click opens the shared HammerCore menu with settings, the Hall of Fame, the daily and each Quick play mode. Settings holds search, sound, window sizes, Party invitations, record clearing and the standard pages; **Back to game** returns to the main window.
+The minimap button opens Loreforge on left-click. **Minimap left-click when solo** can open Quick play instead. Right-click opens the shared HammerCore menu with settings, the Hall of Fame, the daily and each Quick play mode. Settings holds searchable presentation, window, Quick play, Party invitation and record controls; **Back to game** returns to the main window.
+
+## Settings
+
+Open `/lf settings`, then use search or these tabs:
+
+- **Interface > Presentation:** sound, theme art, round intros, storybook style, lively animations, tavern banter and streak flair.
+- **Interface > Windows:** host/player size, opacity and minimising while playing along.
+- **Quick play > Play:** timer, automatic/manual next question, Lightning length, solo main-button preference, and Categories & difficulty.
+- **Quick play > Card:** artwork, animations and Small/Medium/Large size.
+- **Quick play > Flights:** takeoff behaviour, shortest flight, answer pause, landing grace, close on landing and Retail Loremaster lines.
+- **Quick play > Daily question:** enable the daily and offer it at login.
+
+Each tab's reset changes only its own preferences. It keeps scores, daily attempts, history and the other tabs' settings. Card Options and the main settings use the same saved preferences. Search can find a dependent control while it is hidden and highlight the switch that enables it. Answer bindings and their current Change/Remove actions are searchable too.
+
+Hosted-game setup stays on **Play > Game, Categories, Pacing & chat**, with **Party lobby** alongside them when open. Quick, Standard and Marathon set question count and answer time; categories, difficulty and pacing stay as chosen. The summary names the preset, or **Custom** after a count/time change, and estimates the duration. Quick play is the endless solo card; Practice solo uses hosted-game settings privately; the Daily is one untimed attempt.
 
 ## Categories
 

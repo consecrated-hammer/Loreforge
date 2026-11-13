@@ -12,8 +12,8 @@ local PRESETS = {
     { name = 'Marathon', hint = '50 questions, 25 seconds each.', rounds = 1, perRound = 50, seconds = 25 },
 }
 local LOBBY_ROWS = 5
--- Setup's sub-tabs, in order. While a Party lobby is open its tab takes the
--- Categories tab's place; only the other three are remembered.
+-- Keep category choices reachable while the Party lobby is open.
+-- Only the ordinary setup tabs are remembered.
 local SUBTABS = { { 'game', 'Game' }, { 'categories', 'Categories' }, { 'lobby', 'Party lobby' }, { 'pacing', 'Pacing & chat' } }
 local SAVED_TABS = { game = true, categories = true, pacing = true }
 local MARGIN, GAP, TAB_H = 18, 24, 40
@@ -75,12 +75,14 @@ local function stepper(panel, labelText, hint, y, key, format, width)
     local function render()
         local v = ns.db[key]
         value:SetText(format and format(v) or tostring(v))
-        local enabled = key ~= "readySeconds" or ns.db.readyCheck
+        local enabled = (key ~= "readySeconds" or ns.db.readyCheck)
+            and ((key ~= "questionGap" and key ~= "idleLimit") or ns.db.autoMode)
         minus:SetEnabled(enabled and v > limits[1]); plus:SetEnabled(enabled and v < upper())
         T.Text(value, enabled and "text" or "muted")
     end
     local function change(direction)
-        if key == "readySeconds" and not ns.db.readyCheck then return end
+        if (key == "readySeconds" and not ns.db.readyCheck)
+            or ((key == "questionGap" or key == "idleLimit") and not ns.db.autoMode) then return end
         local step = limits[3]
         local v = math.floor((ns.db[key] + direction * step) / step + 0.5) * step
         v = math.max(limits[1], math.min(upper(), v))
@@ -143,7 +145,7 @@ function ns.BuildSetup(host)
             ns.setupError = nil
             setup.Refresh()
         end)
-        UI.AttachHint(b, preset.name, preset.hint)
+        UI.AttachHint(b, preset.name, preset.hint .. ' Changes question count and answer time only. Categories, difficulty and pacing stay as chosen.')
         setup.presets[i] = b
     end
     local presetLabel = UI.FontString(setup, 'GameFontHighlightSmall', 'muted')
@@ -282,7 +284,7 @@ function ns.BuildSetup(host)
         setup.categoryRows[key] = row
     end
 
-    -- ── Party lobby: takes the Categories tab's place while it's open ──
+    -- ── Party lobby ──
     local lobby = page('lobby')
     local lobbyCol = column(lobby, 1, fullWidth)
     local ly = section(lobbyCol, 'Party lobby', 0, fullWidth)
@@ -312,7 +314,7 @@ function ns.BuildSetup(host)
     local pacingCol, chatCol = column(pacingPage, 1), column(pacingPage, 2)
     setup.columns.pacing, setup.columns.chat = pacingCol, chatCol
     local a = section(pacingCol, 'Pacing', 0, colWidth)
-    _, a = Check(pacingCol, 'Auto-advance questions', 'The next question starts after a short gap. Off: you start each one.', a,
+    _, a = Check(pacingCol, 'Auto-advance questions', 'On: the next question starts after results and the Question gap. Off: host-paced, with Ask next question after every reveal.', a,
         function() return ns.db.autoMode end, function(value) ns.db.autoMode = value end, colWidth)
     _, a = stepper(pacingCol, 'Question gap', 'Seconds between questions with auto-advance.', a, 'questionGap', seconds, colWidth)
     _, a = stepper(pacingCol, 'Pause when quiet', 'Auto-advance pauses after this many questions with no answers.', a, 'idleLimit',
@@ -399,17 +401,14 @@ function ns.BuildSetup(host)
         end
     end
 
-    -- Which sub-tab shows. An opening lobby comes to the front once; while
-    -- it's open it stands in for Categories, and when it closes the
-    -- remembered tab returns.
+    -- An opening lobby comes to the front once; closing it returns to the remembered tab.
     local function showTab(isOpen)
         if isOpen and not setup.lobbyWasOpen then setup.current = 'lobby' end
         setup.lobbyWasOpen = isOpen
         local current = setup.current or savedTab()
         if current == 'lobby' and not isOpen then current = savedTab() end
-        if current == 'categories' and isOpen then current = 'lobby' end
         setup.current = current
-        strip.Layout({ game = true, categories = not isOpen, lobby = isOpen, pacing = true })
+        strip.Layout({ game = true, categories = true, lobby = isOpen, pacing = true })
         strip.Select(current)
         for key, frame in pairs(setup.pages) do frame:SetShown(key == current) end
     end
@@ -450,11 +449,14 @@ function ns.BuildSetup(host)
         setup.pool:SetText(available .. ' questions available for these categories and difficulty.'
             .. (ns.db.rounds > ticked and ticked > 0 and ' Fewer categories than rounds, so themes repeat.' or ''))
 
+        local presetName = 'Custom'
         for i, preset in ipairs(PRESETS) do
             local on = ns.db.rounds == preset.rounds and ns.db.perRound == preset.perRound and ns.db.seconds == preset.seconds
+            if on then presetName = preset.name end
             T.Border(setup.presets[i], on and 'selected' or 'edge')
             T.Text(setup.presets[i].Text, on and 'selected' or 'text')
         end
+        host.tags:SetText(presetName .. ' · ' .. host.tags:GetText())
         local counts = categoryCounts()
         for key, row in pairs(setup.categoryRows) do row.count:SetText(tostring(counts[key] or 0)) end
 

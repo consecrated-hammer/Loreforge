@@ -145,6 +145,7 @@ function wow.Install(metadata)
     InCombatLockdown = function() return false end
     -- The one global HammerCore copies share: the after-update What's new.
     ConsecratedHammerWhatsNew = nil
+    ConsecratedHammerWelcome = nil
     -- And the learned flight times every flights addon shares.
     ConsecratedHammerFlights = nil
     Settings, SettingsPanel, InterfaceOptions_AddCategory = nil, nil, nil

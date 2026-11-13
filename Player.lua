@@ -285,7 +285,7 @@ local function create()
     restore:SetText("Loreforge quiz")
     -- A gentle pulse while a question waits for this player's answer.
     restore:SetScript("OnUpdate", function(self, elapsed)
-        if not self.pulsing then return end
+        if not self.pulsing or not ns.Flair.On("lively") then self:SetAlpha(1); return end
         self.phase = ((self.phase or 0) + (elapsed or 0) * 3) % (math.pi * 2)
         self:SetAlpha(0.65 + 0.35 * math.cos(self.phase))
     end)
@@ -947,8 +947,8 @@ function Player.RefreshRestore()
         and (browsing or not (frame and frame:IsShown())) or false
     local urgent = show and model.state == "accepting" and not chosen(model)
     restore:SetText(urgent and "Loreforge: answer now" or "Loreforge quiz")
-    restore.pulsing = urgent or nil
-    if not urgent then restore:SetAlpha(1) end
+    restore.pulsing = (urgent and ns.Flair.On("lively")) or nil
+    if not restore.pulsing then restore:SetAlpha(1) end
     restore:SetShown(show)
 end
 

@@ -5,6 +5,13 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
+    { version = "1.4.0", date = "2026-11-13", items = {
+        { title = "A little more reading room", text = "Quick play now makes room for long questions, answers and reveals. The painting stays square, and Options opens on the side with space.", page = "Quick play", tab = "Card" },
+        { title = "Find your favourite settings", text = "Quick play has Play, Card, Flights and Daily question tabs. Interface separates Presentation from Windows. Search finds hidden options and individual answer bindings.", page = "Quick play", tab = "Play" },
+        { title = "A clearer host table", text = "Categories stays available with the lobby open. The game summary names the selected preset, or Custom after you change its question count or answer time." },
+        { title = "Pick up where you left off", text = "Dismiss a quiz during a flight and a small book lets you resume it or start a new challenge. Effects stop when hidden, and personal bests celebrate once.", page = "Quick play", tab = "Flights" },
+        { title = "Keep it quiet", text = "Lively animations also controls the Party restore-button pulse. Card animations remain a separate switch.", page = "Interface", tab = "Presentation" },
+    } },
     { version = "1.3.0", date = "2026-11-10", items = {
         { title = "Quick play", text = "A little solo quiz card for idle moments. One click, no setup, nothing in chat. Try /lf quick, right-click the minimap button, or the button on the Play tab.",
             page = "Quick play" },

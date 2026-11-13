@@ -28,6 +28,26 @@ end
 local function artOn() return ns.db.qpArt ~= false end
 local function animated() return ns.db.qpAnimations ~= false end
 
+local function stopEffects(f)
+    if not f then return end
+    ns.Flair.StopAll(f)
+    if f.fading then
+        f.art:SetTexture(f.artPath)
+        f.art:SetAlpha(1)
+        f.artNext:SetAlpha(0)
+        f.fading = nil
+    end
+end
+
+local function textHeight(fs, minimum)
+    return math.max(minimum or 0, math.ceil(fs:GetStringHeight() or 0))
+end
+
+local function top(region, x, y)
+    region:ClearAllPoints()
+    region:SetPoint("TOPLEFT", x, -y)
+end
+
 local function tooltip(owner, title, lines)
     if not GameTooltip then return end
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
@@ -69,6 +89,7 @@ Card.ModeTooltip = modeTooltip
 
 local function savePosition(frame)
     ns.db.qpLeft, ns.db.qpTop = frame:GetLeft(), frame:GetTop()
+    if Card.options then Card.PlaceOptions() end
 end
 
 local function place(frame)
@@ -164,12 +185,11 @@ local function create()
         b:SetPoint("TOPLEFT", PAD + column * (COL_W + 8), -96 - row * 52)
         f.answers[index] = b
     end
-    -- Two full-width lines for the answer and its quip; narrower only while
-    -- the Next button shares the row.
+    -- Keep the full answer before its optional quip. Layout measures both;
+    -- the text narrows only while the Next button shares the row.
     f.feedback = label(f.body, "GameFontHighlightSmall", "muted", CONTENT)
     f.feedback:SetPoint("TOPLEFT", PAD, -198)
     if f.feedback.SetWordWrap then f.feedback:SetWordWrap(true) end
-    if f.feedback.SetMaxLines then f.feedback:SetMaxLines(2) end
     f.next = UI.Button(f.body, 80, 22)
     f.next:SetPoint("TOPRIGHT", -PAD, -200)
     f.next:SetText("Next")
@@ -195,9 +215,11 @@ local function create()
     f.overLines = label(f.over, "GameFontHighlightLarge", "text", CONTENT)
     f.overLines:SetPoint("TOP", f.overTitle, "BOTTOM", 0, -14)
     f.overLines:SetJustifyH("CENTER")
+    if f.overLines.SetWordWrap then f.overLines:SetWordWrap(true) end
     f.overNote = label(f.over, "GameFontHighlightSmall", "muted", CONTENT)
     f.overNote:SetPoint("BOTTOM", 0, 64)
     f.overNote:SetJustifyH("CENTER")
+    if f.overNote.SetWordWrap then f.overNote:SetWordWrap(true) end
     f.primary = UI.Button(f.over, 140, 30, "primary")
     f.primary:SetPoint("BOTTOM", -76, 22)
     f.secondary = UI.Button(f.over, 140, 30)
@@ -205,9 +227,10 @@ local function create()
 
     f:SetScript("OnUpdate", function(_, elapsed) Card.Update(elapsed) end)
     f:SetScript("OnHide", function()
+        stopEffects(f)
+        if Card.options then Card.options:Hide() end
         if Card.combatHidden then return end
         if Card.frame then Card.Dismiss() end
-        if Card.options then Card.options:Hide() end
     end)
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames + 1] = "LoreforgeQuickCard" end
     f:Hide()
@@ -217,24 +240,60 @@ local function create()
     return f
 end
 
--- Sizes the card for Artwork on or off.
+-- Measure the actual text before placing the next region. The painting stays
+-- square while longer questions grow only the reading side of the card.
 function Card.Layout()
     local f = Card.frame
     if not f then return end
     local inset, art = f.inset or 1, artOn()
-    f:SetSize(inset * 2 + (art and ART or 0) + RIGHT_W, f.top + ART + inset)
+    if not animated() then stopEffects(f) end
     f:SetScale(Quick.SIZES[ns.db.qpSize] or 1)
     f.body:ClearAllPoints()
     f.body:SetPoint("TOPLEFT", inset + (art and ART or 0), -f.top)
     for _, region in ipairs({ f.art, f.artNext, f.band, f.bandEdge, f.caption }) do region:SetShown(art) end
-    -- Without the painting, the category is a header line above the question.
-    f.heading:ClearAllPoints()
-    f.heading:SetPoint("TOP", 0, -12)
-    f.heading:SetShown(not art)
-    f.clock:ClearAllPoints()
-    f.clock:SetPoint("TOPLEFT", PAD, art and -12 or -30)
+    top(f.heading, PAD, 12)
+    local clockY = art and 12 or (12 + textHeight(f.heading, 14) + 8)
+    top(f.clock, PAD, clockY)
     f.streak:ClearAllPoints()
-    f.streak:SetPoint("TOPRIGHT", -PAD, art and -12 or -30)
+    f.streak:SetPoint("TOPRIGHT", -PAD, -clockY)
+    local s = Quick.state
+    local question = not s or s.phase == "question" or s.phase == "reveal"
+    f.heading:SetShown(question and not art)
+    local height
+    if question then
+        local questionY = clockY + math.max(textHeight(f.clock, 16), textHeight(f.streak, 16)) + 10
+        top(f.question, PAD, questionY)
+        local y = questionY + textHeight(f.question, 42) + 12
+        for row = 0, 1 do
+            local first, second = f.answers[row * 2 + 1], f.answers[row * 2 + 2]
+            first:Fit(); second:Fit()
+            local rowHeight = math.max(46, first:GetHeight(), second:GetHeight())
+            first:SetHeight(rowHeight); second:SetHeight(rowHeight)
+            top(first, PAD, y); top(second, PAD + COL_W + 8, y)
+            y = y + rowHeight + 6
+        end
+        top(f.feedback, PAD, y + 4)
+        f.next:ClearAllPoints()
+        f.next:SetPoint("TOPRIGHT", -PAD, -(y + 4))
+        y = y + 4 + math.max(24, textHeight(f.feedback, 24)) + 10
+        top(f.footer, PAD, y)
+        y = y + textHeight(f.footer, 14) + 8
+        top(f.timer, PAD, y)
+        height = math.max(ART, y + 4 + 10)
+    else
+        top(f.overTitle, PAD, 26)
+        local y = 26 + textHeight(f.overTitle, 28) + 14
+        top(f.overLines, PAD, y)
+        y = y + textHeight(f.overLines, 24) + 16
+        top(f.overNote, PAD, y)
+        y = y + textHeight(f.overNote, 28) + 16
+        top(f.primary, 42, y); top(f.secondary, 198, y)
+        y = y + 30 + 14
+        top(f.footer, PAD, y)
+        height = math.max(ART, y + textHeight(f.footer, 14) + 14)
+    end
+    f.body:SetHeight(height)
+    f:SetSize(inset * 2 + (art and ART or 0) + RIGHT_W, f.top + height + inset)
     if Card.options then Card.PlaceOptions() end
 end
 
@@ -318,7 +377,7 @@ function Card.Render()
             else text = "Time's up. It was " .. q.choices[q.correct] .. "." end
             local bucket = ns.Flair.RevealBucket(s.choice, q.correct, s.streak)
             local quip = bucket and ns.Flair.Quip(bucket, tostring(s.answered), s.streak) or ""
-            f.feedback:SetText(text .. (quip ~= "" and ("  " .. quip) or ""))
+            f.feedback:SetText(text .. (quip ~= "" and ("\n" .. quip) or ""))
             T.Text(f.feedback, s.lastRight and "accent" or "muted")
         else
             f.feedback:SetText(s.landed and "Last question!" or (s.pendingMode and
@@ -351,7 +410,10 @@ function Card.Render()
             f.secondary:SetScript("OnClick", function() Quick.Start("quick") end)
         end
         f.primary:Show(); f.secondary:Show()
-        if summary.newBest and animated() and ns.Flair.BounceIn then ns.Flair.BounceIn(f, f.overTitle) end
+        if f.celebratedSummary ~= summary and summary.newBest and f:IsShown() and animated()
+            and ns.Flair.BounceIn and ns.Flair.BounceIn(f, f.overTitle) then
+            f.celebratedSummary = summary
+        end
     elseif s.phase == "countdown" then
         f.overTitle:SetText(spec.label)
         f.overLines:SetText("")
@@ -360,6 +422,7 @@ function Card.Render()
         f.primary:Show()
         f.secondary:Hide()
     end
+    Card.Layout()
     Card.Update(0)
     if Card.options and Card.options:IsShown() then Card.RefreshOptions() end
 end
@@ -368,6 +431,7 @@ local since = 0
 function Card.Update(elapsed)
     local f = Card.frame
     if not f then return end
+    if not animated() then stopEffects(f) end
     if f.fading then
         f.fading = f.fading + (elapsed or 0)
         local alpha = math.min(1, f.fading / FADE)
@@ -567,6 +631,15 @@ local function modeRow(parent, mode, y)
     return row
 end
 
+-- Both the card and settings page use the same existing timer-switch rules.
+function Card.SetRelaxed(value)
+    ns.db.qpRelaxed = value == true
+    local s = Quick.state
+    if s and s.phase == "question" and Quick.Timed(s.mode) == false then s.questionDeadline = nil end
+    Card.Render()
+    Card.RefreshOptions()
+end
+
 -- The timer: [ Against the clock | Relaxed ], the current one lit.
 local function timerSwitch(parent, y)
     local holder = CreateFrame("Frame", nil, parent)
@@ -578,10 +651,7 @@ local function timerSwitch(parent, y)
         b:SetPoint("LEFT", x, 0)
         b:SetText(text)
         b:SetScript("OnClick", function()
-            ns.db.qpRelaxed = relaxed
-            local s = Quick.state
-            if s and s.phase == "question" and Quick.Timed(s.mode) == false then s.questionDeadline = nil end
-            Card.Render(); Card.RefreshOptions()
+            Card.SetRelaxed(relaxed)
         end)
         b:HookScript("OnLeave", function() holder.Refresh() end)
         b.relaxed = relaxed
@@ -630,7 +700,15 @@ end
 function Card.PlaceOptions()
     local o, f = Card.options, Card.frame
     o:ClearAllPoints()
-    o:SetPoint("TOPLEFT", f, "TOPRIGHT", -1, 0)
+    local right = f.GetRight and f:GetRight()
+    local screenWidth = UIParent.GetWidth and UIParent:GetWidth() or 0
+    local screenScale = UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
+    local frameScale = f.GetEffectiveScale and f:GetEffectiveScale() or 1
+    o:SetScale(1)
+    local optionsScale = o.GetEffectiveScale and o:GetEffectiveScale() or frameScale
+    local fitsRight = not right or screenWidth <= 0 or right * frameScale + OPTIONS_W * optionsScale <= screenWidth * screenScale
+    if fitsRight then o:SetPoint("TOPLEFT", f, "TOPRIGHT", -1, 0)
+    else o:SetPoint("TOPRIGHT", f, "TOPLEFT", 1, 0) end
     o:SetScale(1)
 end
 
@@ -703,7 +781,7 @@ end
 function Card.ToggleOptions()
     local o = buildOptions()
     o:SetShown(not o:IsShown())
-    if o:IsShown() then Card.RefreshOptions() end
+    if o:IsShown() then Card.PlaceOptions(); Card.RefreshOptions() end
 end
 
 function Card.OpenCategories()

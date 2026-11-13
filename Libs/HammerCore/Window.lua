@@ -262,7 +262,8 @@ function Settings:OpenLink(link)
 end
 
 -- The addon's own CurseForge page (## X-CurseForge in its TOC) leads, so
--- players can rate it or check for updates; then the shared links.
+-- players can rate it or check for updates; then its GitHub source
+-- (## X-Website); then the shared links.
 function Settings:Links()
     local links = HC.spec.links
     if links == false then return {} end
@@ -272,6 +273,12 @@ function Settings:Links()
     if type(page) == "string" and page:find("^https://") then
         list[1] = { label = "CurseForge", url = page, icon = "CurseForge.tga",
             hint = HC.name .. "'s page: updates, comments and other addons." }
+    end
+    -- Then its source on GitHub (## X-Website in its TOC, when it's GitHub).
+    local source = HC.GetMetadata("X-Website")
+    if type(source) == "string" and source:find("^https://github%.com/") then
+        list[#list + 1] = { label = "GitHub", url = source, icon = "GitHub.tga",
+            hint = HC.name .. "'s source code and changes." }
     end
     for _, link in ipairs(self.LINKS) do list[#list + 1] = link end
     return list
@@ -750,6 +757,25 @@ pulser:SetScript("OnUpdate", function(self, elapsed)
 end)
 Settings.pulser = pulser
 
+-- Inspect only within the body content: inactive pages and tabs are hidden
+-- too, but that must not remove their settings from search. A gated section
+-- can name the row that enables it with hcParentRow.
+local function focusRow(row, content, seen)
+    seen = seen or {}
+    if not row or seen[row] then return nil end
+    seen[row] = true
+    local node, target = row, row
+    while node and node ~= content do
+        if node.IsShown and not node:IsShown() then
+            local parentRow = node.hcParentRow
+            if type(parentRow) ~= "table" and type(parentRow) ~= "userdata" then return nil end
+            return focusRow(parentRow, content, seen)
+        end
+        node = node.GetParent and node:GetParent()
+    end
+    return target
+end
+
 function Settings:Focus(name, setting, tab)
     if not self:Show(name, tab) then return nil end
     local page = self.pages[self.selected]
@@ -757,12 +783,13 @@ function Settings:Focus(name, setting, tab)
     local row, body
     for tabName, candidate in pairs(page.bodies or {}) do
         local found = candidate.hcRows and candidate.hcRows[setting]
-        if found then
+        if found and (not tab or tabName == tab) then
             row, body = found, candidate
             if tabName ~= page.selectedTab then self:Select(self.selected, tabName) end
             break
         end
     end
+    row = row and focusRow(row, body.content)
     if not row then return nil end
     -- Scroll so the row sits a little below the top of the view.
     local scroll, content = body.scroll, body.content
@@ -834,7 +861,7 @@ function Settings:Search(query, limit)
         for tabIndex, tab in ipairs(page and page.tabs or {}) do
             local body = page.bodies and page.bodies[tab]
             for label, row in pairs(body and body.hcRows or {}) do
-                local visible = not (row.IsShown and row:IsShown() == false)
+                local visible = focusRow(row, body.content) ~= nil
                 if visible and type(label) == "string" then
                     local hay = (title .. " " .. (multi and tab or "") .. " " .. label .. " "
                         .. plain(row.hcHint)):lower()
@@ -846,7 +873,7 @@ function Settings:Search(query, limit)
                         local lower = label:lower()
                         local rank = lower:sub(1, #whole) == whole and 1 or (lower:find(whole, 1, true) and 2 or 3)
                         found[#found + 1] = { page = spec.name, title = title, tab = tab, label = label,
-                            text = title .. " \226\128\186 " .. label,
+                            text = title .. " \226\128\186 " .. (multi and (tab .. " \226\128\186 ") or "") .. label,
                             rank = rank, order = order, tabIndex = tabIndex }
                     end
                 end
@@ -1007,8 +1034,8 @@ function Settings:LayoutHeaderTools()
     end
 end
 
--- Every main page of an addon with profiles shows the active profile;
--- reference pages and the Profiles page itself don't.
+-- Main pages show the active profile unless profileScope is false. It may
+-- also be a function of the selected tab for pages mixing shared and profiled settings.
 function Settings:RefreshProfileTag()
     local tag = self.profileTag
     if not tag then return end
@@ -1019,7 +1046,9 @@ function Settings:RefreshProfileTag()
     end
     local profiles = HC.Profiles
     local active
-    if profiles and profiles.PageStatus and spec.group == "main" and not spec.profilesPage then
+    local scope = spec.profileScope
+    if type(scope) == "function" then scope = scope(page.selectedTab) end
+    if profiles and profiles.PageStatus and spec.group == "main" and not spec.profilesPage and scope ~= false then
         active = profiles:PageStatus()
     end
     if not active then tag:Hide(); return end

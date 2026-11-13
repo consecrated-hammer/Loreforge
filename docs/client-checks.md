@@ -1,3 +1,22 @@
+# UX development acceptance, 13 November 2026
+
+Check Retail and Forever separately after delivery and `/reload`. Record `/lf version`, client/build and any errors. These checks are outstanding until Kevin runs them.
+
+- Open `/lf`; switch Play, History and Hall of Fame and return to a running game. Check empty and populated lists, long character/realm names, ties and round details.
+- Start Quick play immediately. Try Relaxed and manual Next, long questions/answers, each card size, artwork off, and the Options panel near both screen edges.
+- Play Streak through a first miss and Lightning through its deadline. Check retained correct answer, final score and a new-best celebration that runs once.
+- Try a Flight challenge with and without LibTaxiData, including an NPC-dialogue taxi. Check unknown ETA, answer pause, landing grace, Touchdown, close/Keep going and dismiss/resume/new-quiz launcher. Enter combat and check hide/restore.
+- Complete the Daily, reopen its result and inspect number, answer, streak and next availability. Reopen `/lf setup` and check both saved choices without consuming another attempt.
+- Configure each host preset, then adjust count/time to see Custom. Check categories, difficulty, insufficient pools and Categories while the Retail Party lobby is open.
+- Play host-paced and automatic games, including host participation. Check pending/confirmed posting, answer selection/acknowledgment, countdown, pause/resume, explicit manual fallback and completion.
+- On Retail, test Party invitation/join/ready, click versus chat answer changes, hidden quiz restore, leave/rejoin and saved results with another client; repeat once with an older supported client. Forever enhanced Party support is not added.
+- Inspect all settings tabs, bindings/conflict confirmation, Visibility and reference pages. Search for Seconds per question while Relaxed, Wait before next with auto-next off, Shortest flight with Ask me, Offer at login with Daily off, and individual Bind/Change/Remove actions.
+- Check each tab reset preserves other tabs and records. Reload and confirm preferences, Daily attempt, bests and history persist.
+- Toggle sounds, storybook, lively animations, banter, streak flair and card animations independently. Effects must stop on close/off; text and clicks remain usable.
+- Check settings scales 0.7/1.0/1.3, game-window scales 0.7/1.0/1.5, and Small/Medium/Large card sizes. Inspect native wrapping, timer/feedback positions, scrolling and off-screen edges on a crowded screen.
+
+The earlier detailed gameplay and transport checks remain below.
+
 # Loreforge client checks
 
 Run separately on Retail and Forever. Automated tests mock the game APIs; they

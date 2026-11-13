@@ -1,0 +1,185 @@
+package.path = './tests/hammercore/?.lua;' .. package.path
+local wow = require('wow')
+assert(loadfile('tests/flair-harness.lua'))()(wow)
+local function eq(a, b, why) assert(a == b, why .. ': ' .. tostring(a) .. ' ~= ' .. tostring(b)) end
+
+local function load(toc)
+    wow.Install({ Loreforge = { Version = '1.3.0' } })
+    wow.groups = {}
+    LoreforgeDB = nil
+    GetTime = function() return 100 end
+    GetServerTime = function() return 1762740000 end
+    date = os.date
+    InCombatLockdown = function() return false end
+    GetBuildInfo = function() return '', '', '', toc:find('Camelot') and 16001 or 120105 end
+    WOW_PROJECT_ID, WOW_PROJECT_MAINLINE = 1, 1
+    GetNormalizedRealmName = function() return 'TestRealm' end
+    UnitFullName = function(unit) if unit == 'player' then return 'TestPlayer', 'TestRealm' end end
+    GetUnitName = function(unit) return (UnitFullName(unit)) end
+    UnitGUID = function(unit) return unit .. '-GUID' end
+    IsInGroup, IsInRaid, UnitOnTaxi = function() return false end, function() return false end, function() return false end
+    GetNumSubgroupMembers = function() return 0 end
+    GetNumGroupMembers = function() return 1 end
+    RegisterStateDriver, UnregisterStateDriver = function() end, function() end
+    assert(loadfile('tests/transport-libs.lua'))()()
+    local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
+    for file in assert(io.open(toc)):read('*a'):gmatch('([^\r\n]+)') do
+        if file:match('^[%w]+%.lua$') then assert(loadfile(file))('Loreforge', ns) end
+    end
+    local loader
+    for _, f in ipairs(wow.frames) do if f.scripts.OnEvent then loader = f end end
+    loader.scripts.OnEvent(loader, 'ADDON_LOADED', 'Loreforge')
+    ns.QuickCard.Show('quick')
+    return ns
+end
+
+-- Model wrapped text locally; this checks ordering and allocated room, not
+-- native WoW font metrics or rendering.
+local function measured(fs)
+    rawset(fs, 'GetStringHeight', function(self)
+        local lines = 0
+        for line in ((self:GetText() or '') .. '\n'):gmatch('(.-)\n') do
+            lines = lines + math.max(1, math.ceil(#line * 7 / math.max(1, self:GetWidth())))
+        end
+        return lines * 16
+    end)
+end
+local function y(region)
+    local p = region.points[1]
+    return -p[#p]
+end
+local function below(lower, upper, height, why)
+    assert(y(lower) >= y(upper) + (height or upper:GetStringHeight()), why)
+end
+
+for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
+    local ns = load(toc)
+    local card, f, s = ns.QuickCard, ns.QuickCard.frame, ns.Quick.state
+    for _, fs in ipairs({ f.question, f.feedback, f.footer, f.heading, f.clock, f.streak,
+        f.overTitle, f.overLines, f.overNote }) do measured(fs) end
+    for _, b in ipairs(f.answers) do measured(b.Text) end
+    local q = s.question
+    q.text = string.rep('A long but readable Warcraft question. ', 8)
+    q.categoryLabel = string.rep('Long category ', 6)
+    for i = 1, 4 do q.choices[i] = string.rep('Answer ' .. i .. ' with more detail. ', 4) end
+    local deadline = s.questionDeadline
+    for _, size in ipairs({ 'SMALL', 'MEDIUM', 'LARGE' }) do
+        for _, art in ipairs({ true, false }) do
+            ns.db.qpSize, ns.db.qpArt = size, art
+            card.Render()
+            eq(s.questionDeadline, deadline, 'layout leaves the deadline unchanged')
+            if not art then below(f.clock, f.heading, nil, 'category clears clock without artwork') end
+            below(f.question, f.clock, nil, 'question clears clock')
+            below(f.answers[1], f.question, nil, 'answers clear the whole question')
+            eq(y(f.answers[1]), y(f.answers[2]), 'first answer row is aligned')
+            eq(f.answers[1]:GetHeight(), f.answers[2]:GetHeight(), 'first row shares height')
+            below(f.answers[3], f.answers[1], f.answers[1]:GetHeight(), 'rows do not overlap')
+            below(f.feedback, f.answers[3], f.answers[3]:GetHeight(), 'feedback clears answers')
+            below(f.footer, f.feedback, nil, 'footer clears feedback')
+            below(f.timer, f.footer, nil, 'timer clears footer')
+            assert(f.body:GetHeight() >= y(f.timer) + f.timer:GetHeight(), 'all question content fits body')
+            eq(f.art:GetWidth(), 250, 'painting remains square at every card size')
+            eq(f.art:GetHeight(), 250, 'painting remains square')
+        end
+    end
+    ns.db.qpAutoNext = false
+    ns.Quick.Answer(q.correct % 4 + 1)
+    card.Render()
+    assert(f.feedback:GetText():find(q.choices[q.correct], 1, true), 'full answer retained in feedback')
+    below(f.footer, f.feedback, nil, 'manual Next reveal reserves every feedback line')
+    assert(f.feedback:GetWidth() < 348 and f.next:IsShown(), 'manual Next retains its own space')
+
+    -- Summary content and its actions reserve space before the best-score footer.
+    s.phase = 'over'
+    s.summary = { kind = 'streak', title = 'A new personal best', newBest = true,
+        lines = { '12 correct answers', '12 in a row' }, note = 'It was ' .. q.choices[q.correct] .. '.' }
+    ns.db.qpAnimations, ns.db.livelyAnimations = true, true
+    card.Render()
+    below(f.overLines, f.overTitle, nil, 'summary title clears score')
+    below(f.overNote, f.overLines, nil, 'score clears full answer note')
+    below(f.primary, f.overNote, nil, 'summary actions clear note')
+    below(f.footer, f.primary, f.primary:GetHeight(), 'footer clears summary actions')
+    assert(f.body:GetHeight() >= y(f.footer) + f.footer:GetStringHeight(), 'summary fits body')
+    local bounce = assert(f.overTitle.lfBounce, 'personal best animates')
+    local plays = bounce.plays
+    card.Render(); card.Render()
+    eq(bounce.plays, plays, 'redrawing a personal best never restarts its celebration')
+    eq(bounce.playing, true, 'bounce started')
+    ns.db.qpAnimations = false
+    card.Layout()
+    eq(bounce.playing, false, 'disabling card animations stops active celebration')
+
+    -- A hidden render must not consume a best that the player hasn't seen.
+    card.OnCombat('PLAYER_REGEN_DISABLED')
+    s.summary = { kind = 'streak', title = 'Another best', newBest = true, lines = { '13 correct' }, note = '' }
+    ns.db.qpAnimations = true
+    local hiddenSummary = s.summary
+    local previousPlays = bounce.plays
+    card.Render()
+    assert(f.celebratedSummary ~= hiddenSummary, 'hidden summary is not consumed')
+    eq(bounce.plays, previousPlays, 'hidden render starts no celebration')
+    card.OnCombat('PLAYER_REGEN_ENABLED')
+    eq(f.celebratedSummary, hiddenSummary, 'showing the summary celebrates it')
+    eq(bounce.plays, previousPlays + 1, 'new visible best celebrates exactly once')
+
+    -- An active painting fade settles immediately when disabled or hidden,
+    -- including a combat hide which must preserve the live quiz.
+    s.phase = 'question'
+    s.summary = nil
+    ns.db.qpAnimations = true
+    q.category = 'goblins'
+    card.Render()
+    assert(f.fading ~= nil, 'changing category starts painting fade')
+    ns.db.qpAnimations = false
+    card.Update(0)
+    eq(f.fading, nil, 'disabling animations settles art fade')
+    eq(f.art.texture, f.artPath, 'settled art is current category')
+    ns.db.qpAnimations = true
+    q.category = 'lore'
+    card.Render()
+    assert(f.fading ~= nil, 'second fade starts')
+    ns.Flair.BounceIn(f, f.overTitle)
+    card.OnCombat('PLAYER_REGEN_DISABLED')
+    eq(f.fading, nil, 'combat hide settles fade')
+    eq(bounce.playing, false, 'combat hide stops celebration')
+    eq(ns.Quick.state, s, 'combat hide preserves quiz')
+    card.OnCombat('PLAYER_REGEN_ENABLED')
+    eq(f:IsShown(), true, 'combat restore remains available')
+
+    card.SetRelaxed(true)
+    eq(ns.db.qpRelaxed, true, 'shared Timer setter changes saved preference')
+    eq(s.questionDeadline, nil, 'shared Timer setter preserves existing relaxed switch behavior')
+    card.SetRelaxed(false)
+    eq(ns.db.qpRelaxed, false, 'shared setter restores clock preference')
+
+    card.ToggleOptions()
+    local o = card.options
+    rawset(UIParent, 'GetWidth', function() return 1920 end)
+    rawset(f, 'GetRight', function() return 1800 end)
+    rawset(f, 'GetEffectiveScale', function() return 1 end)
+    card.PlaceOptions()
+    eq(o.points[1][1], 'TOPRIGHT', 'Options opens left at right screen edge')
+    rawset(f, 'GetRight', function() return 700 end)
+    card.PlaceOptions()
+    eq(o.points[1][1], 'TOPLEFT', 'Options opens right when it fits')
+    rawset(f, 'GetEffectiveScale', function() return 2 end)
+    rawset(o, 'GetEffectiveScale', function() return 2 end)
+    rawset(f, 'GetRight', function() return 800 end)
+    card.PlaceOptions()
+    eq(o.points[1][1], 'TOPRIGHT', 'Options edge calculation respects effective scale')
+    rawset(f, 'GetEffectiveScale', function() return 1 end)
+    rawset(o, 'GetEffectiveScale', function() return 1 end)
+    card.ToggleOptions() -- close
+    rawset(f, 'GetRight', function() return 1800 end)
+    card.ToggleOptions() -- reopen after moving
+    eq(o.points[1][1], 'TOPRIGHT', 'reopening Options recomputes the side')
+    rawset(f, 'GetRight', function() return 700 end)
+    f.hcMoving = true
+    f.header.scripts.OnDragStop(f.header)
+    eq(o.points[1][1], 'TOPLEFT', 'dragging recomputes Options placement')
+    ns.Flair.BounceIn(f, f.overTitle)
+    card.Hide()
+    eq(bounce.playing, false, 'closing card stops effects')
+    eq(o:IsShown(), false, 'closing card hides Options')
+end
+io.write('test_quick_card_layout: ok\n')

@@ -88,8 +88,14 @@ local function describe(entry)
     end
     local top = out.rows[1]
     out.winner = top and top.total > 0 and top.name or nil
+    local winners = 0
+    if top and top.total > 0 then
+        for _, row in ipairs(out.rows) do if row.total == top.total then winners = winners + 1 end end
+    end
+    local outcome = winners > 1 and ('Shared win: ' .. winners .. ' players')
+        or (out.winner and ('Winner: ' .. ns.DisplayName(out.winner)) or 'No correct answers')
     out.title = when(entry.date) .. "   " .. out.where
-    out.summary = (out.place and ("You: " .. ordinal(out.place)) or (out.winner and ("Winner: " .. ns.DisplayName(out.winner)) or "No correct answers"))
+    out.summary = (out.place and ("You: " .. ordinal(out.place)) or outcome)
         .. "  ·  " .. out.length
     return out
 end

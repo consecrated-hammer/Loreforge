@@ -10,10 +10,10 @@ local T, UI = HC.Theme, HC.UI
 --       } },
 --   }
 -- An item is a line of text, or a table:
---   { text, title?, page?, kind? = "new" | "improved" | "fix",
+--   { text, title?, page?, tab?, kind? = "new" | "improved" | "fix",
 --     client? = "retail" | "forever" }
 -- `title` gives a bold first line with `text` under it; `page` makes the
--- item a link to that settings page; `kind` files it under New features
+-- item a link to that settings page, opened on `tab` when given; `kind` files it under New features
 -- (the default), Improvements or Bug fixes; `client` adds a coloured
 -- Retail or WoW Forever tag for changes that only apply there.  A release may
 -- also carry `date = "2026-11-08"` (shown on the What's new page) and
@@ -240,7 +240,7 @@ function WhatsNew:Section(releases, onShown)
         logo = HC.spec.icon,
         releases = releases,
         pageTitle = WhatsNew.PageTitle,
-        openPage = function(page) HC.Settings:Show(page) end,
+        openPage = function(page, tab) HC.Settings:Show(page, tab) end,
         isEnabled = function() return HC.State().whatsNew ~= false end,
         setEnabled = function(value) HC.State().whatsNew = value and true or false end,
         onShown = onShown,
@@ -372,7 +372,8 @@ function WhatsNew.Item(item)
     if type(item) ~= "table" then return { text = tostring(item or ""), kind = "new" } end
     local kind = item.kind
     if kind ~= "improved" and kind ~= "fix" then kind = "new" end
-    return { text = tostring(item.text or ""), title = item.title, page = item.page, kind = kind,
+    return { text = tostring(item.text or ""), title = item.title, page = item.page,
+        tab = type(item.tab) == "string" and item.tab or nil, kind = kind,
         client = CLIENTS[item.client] and item.client or nil }
 end
 
@@ -401,7 +402,7 @@ local function tag(item)
 end
 
 -- Draws a release's items into `parent` from (x, y), `width` wide, grouped
--- by kind.  opts = { pageTitle(page) -> title?, openPage(page) }.
+-- by kind.  opts = { pageTitle(page) -> title?, openPage(page, tab) }.
 -- Returns the y below the last item.
 function WhatsNew.DrawItems(parent, x, y, width, release, opts)
     local groups = {}
@@ -463,13 +464,13 @@ function WhatsNew.DrawItems(parent, x, y, width, release, opts)
                     height = height + 8
                     row:SetSize(width, height)
                     if pageTitle then
-                        local page = item.page
-                        local link = UI.Link(row, "Open " .. pageTitle, function() opts.openPage(page) end)
+                        local page, tab = item.page, item.tab
+                        local link = UI.Link(row, "Open " .. pageTitle, function() opts.openPage(page, tab) end)
                         link:SetPoint("TOPRIGHT", -10, -8)
                         row.link = link
                         row:SetScript("OnEnter", function() hover:Show(); link:GetScript("OnEnter")() end)
                         row:SetScript("OnLeave", function() hover:Hide(); link:GetScript("OnLeave")() end)
-                        row:SetScript("OnClick", function() opts.openPage(page) end)
+                        row:SetScript("OnClick", function() opts.openPage(page, tab) end)
                     end
                     y = y - height - 2
                 end
@@ -566,9 +567,9 @@ local function fill(frame, sections)
             y = y - 44
             y = WhatsNew.DrawItems(content, 0, y, width, release, {
                 pageTitle = section.pageTitle,
-                openPage = function(page)
+                openPage = function(page, tab)
                     frame:Hide()
-                    section.openPage(page)
+                    section.openPage(page, tab)
                 end,
             })
         end

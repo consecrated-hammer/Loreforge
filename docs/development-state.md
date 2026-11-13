@@ -1,3 +1,9 @@
+# Current development candidate: settings and gameplay UX
+
+The 13 November 2026 candidate is on `feat/settings-ux`, source version 1.4.0, with pinned HammerCore 0.5.2 (`3c1eeeb`). It is not merged or published. See [the full audit and control mapping](ux-overhaul-2026-11-13.md) for the implemented scope, preserved rules and saved-key compatibility. The wow-addons workstream's current Loreforge UX handoff records the final commit, development stamps, staging receipts, rollback and live acceptance.
+
+The primary checkout's existing flight launcher edits were preserved and included from an isolated worktree. The historical development notes follow.
+
 # Development state
 
 Loreforge `0.1.0-beta` is the first public release, published as a CurseForge

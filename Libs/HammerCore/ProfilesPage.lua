@@ -300,7 +300,8 @@ function Profiles:NewPage(spec)
         local autoHead = section(panel)
         y = -8
         _, y = UI.Header(autoHead, "Auto-switch", y)
-        _, y = UI.Dropdown(autoHead, "Mode",
+        local modeRow
+        modeRow, y = UI.Dropdown(autoHead, "Mode",
             "Switch profiles by the rules below when your group or instance changes.", y,
             Auto.MODES, labels(Auto.MODES, MODE_LABELS),
             function() return auto().mode end,
@@ -431,6 +432,7 @@ function Profiles:NewPage(spec)
         add(when, -y + 4)
 
         local ask = section(panel)
+        ask.hcParentRow = modeRow
         y = -4
         _, y = UI.Header(ask, "Ask first", y)
         _, y = UI.Dropdown(ask, "After declining",

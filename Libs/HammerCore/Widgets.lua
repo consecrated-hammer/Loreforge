@@ -1112,6 +1112,7 @@ function UI.ActionButton(panel, y, text, onClick, hint, style, width)
     button:SetText(text)
     if hint then UI.AttachHint(button, text, hint) end
     button:SetScript("OnClick", onClick)
+    UI.RegisterRow(panel, button, text)
     return button, y - 48
 end
 
