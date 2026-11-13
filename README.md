@@ -76,7 +76,7 @@ Bindings.
 - Quick play uses the categories and difficulty from game setup. It works
   through every matching question before repeating one.
 - The card keeps ordinary questions and answer buttons in place, with room for the reveal. Correct answers sparkle, wrong picks shake, and ticks/crosses make the result clear. Card **Animations** controls these independently of the game windows.
-- **Banter frequency** under Quick play > Card defaults to every third reveal, with Off and every-answer choices. Lightning stays quiet.
+- **Banter frequency** under Quick play > Card defaults to every third ordinary reveal, with Off and every-answer choices. Streak milestones still get a callout unless banter is off; Lightning stays quiet.
 - Everything is on the **Quick play** settings page.
 
 ## Daily question and welcome

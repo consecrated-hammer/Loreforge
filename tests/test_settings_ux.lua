@@ -116,17 +116,44 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     -- Binding search follows the live pool and clears removed active rows.
     S:Show('Key Bindings')
     local bindingRows = rows('Key Bindings', 'Key Bindings')
-    assert(bindingRows['Bind Answer 1'] and bindingRows['Bind Quick play'], 'all binding tiles searchable')
-    eq(bindingRows['Bind Answer 1'].lfAnswerNumber:GetText(), '1', 'answer tiles show their number')
-    local originalEnter = bindingRows['Bind Answer 1'].scripts.OnEnter
+    assert(bindingRows['Bind: Answer 1'] and bindingRows['Bind: Quick play'], 'all binding tiles searchable')
+    eq(bindingRows['Bind: Answer 1'].lfAnswerNumber:GetText(), '1', 'answer tiles show their number')
+    local function searchCount(term)
+        local count, seen = 0, {}
+        for _, match in ipairs(S:Search(term, 100)) do
+            if match.page == 'Key Bindings' then
+                local row = bindingRows[match.label]
+                assert(row and not seen[row], 'binding search registers each widget once')
+                seen[row] = true
+                count = count + 1
+            end
+        end
+        return count
+    end
+    eq(searchCount('Answer 1'), 1, 'one unbound answer search result')
+    -- A tile reused for another action restores its icon and clears stale search.
+    local answerTile = bindingRows['Bind: Answer 1']
+    local item, id, name = answerTile.item, answerTile.item.id, answerTile.item.name
+    item.id, item.name = 'LOREFORGE_TEST_SLOT', 'Temporary action'
+    S:Show('Key Bindings')
+    assert(not answerTile.lfAnswerNumber:IsShown() and answerTile.icon:IsShown(), 'reused non-answer tile restores icon')
+    assert(not bindingRows['Bind: Answer 1'], 'renamed item leaves no stale registration')
+    eq(searchCount('Temporary action'), 1, 'reused tile has one current search entry')
+    item.id, item.name = id, name
+    S:Show('Key Bindings')
+    assert(answerTile.lfAnswerNumber:IsShown() and not answerTile.icon:IsShown(), 'answer decoration returns without overlap')
+    eq(searchCount('Temporary action'), 0, 'removed action is absent from search')
+    local originalEnter = bindingRows['Bind: Answer 1'].scripts.OnEnter
     S:Show('Key Bindings'); S:Show('Key Bindings')
-    eq(bindingRows['Bind Answer 1'].scripts.OnEnter, originalEnter, 'refresh does not accumulate tooltip hooks')
+    eq(bindingRows['Bind: Answer 1'].scripts.OnEnter, originalEnter, 'refresh does not accumulate tooltip hooks')
     bindings.LOREFORGE_ANSWER1 = 'F9'
     S:Show('Key Bindings')
-    assert(bindingRows['Change Answer 1'] and bindingRows['Remove Answer 1'], 'active binding actions searchable')
-    wow.Click(bindingRows['Remove Answer 1'])
-    assert(not bindingRows['Change Answer 1'] and not bindingRows['Remove Answer 1'], 'removed binding registrations cleared')
-    assert(S:Focus('Key Bindings', 'Bind Answer 1'), 'pool tile remains reachable after unbinding')
+    assert(bindingRows['Change binding: Answer 1'] and bindingRows['Remove binding: Answer 1'], 'active binding actions searchable')
+    eq(searchCount('Answer 1'), 3, 'one result per bind/change/remove action')
+    wow.Click(bindingRows['Remove binding: Answer 1'])
+    assert(not bindingRows['Change binding: Answer 1'] and not bindingRows['Remove binding: Answer 1'], 'removed binding registrations cleared')
+    eq(searchCount('Answer 1'), 1, 'unbinding removes active search actions')
+    assert(S:Focus('Key Bindings', 'Bind: Answer 1'), 'pool tile remains reachable after unbinding')
     -- A conflicting key stays unchanged until explicit Replace, including
     -- combat beginning while the confirmation prompt is open.
     bindings.SYNTHETIC_ACTION = 'F10'
@@ -134,7 +161,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
         for action, bound in pairs(bindings) do if bound == key then return action end end
         return ''
     end
-    wow.Click(bindingRows['Bind Answer 1'])
+    wow.Click(bindingRows['Bind: Answer 1'])
     local capture = ns.HammerCore.Bindings.Capture
     local problem, replace = capture.spec.onKey('F10')
     assert(problem and replace, 'conflict offers explicit replacement')

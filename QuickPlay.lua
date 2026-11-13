@@ -339,13 +339,13 @@ local function finish(s, kind)
         summary.lines = { s.correct .. " in a row" }
         -- The miss that ended it stays readable after the reveal.
         if s.missedAnswer then summary.note = s.missedAnswer end
-        summary.previousBest = Quick.Bests().streak and Quick.Bests().streak.value or 0
+        summary.previousBest = Quick.Bests().streak and Quick.Bests().streak.value
         summary.newBest = setBest("streak", s.correct)
     elseif kind == "lightning" then
         summary.title = "Time!"
         summary.lines = { s.correct .. " right in " .. s.length .. "s" }
         local previous = Quick.LightningBest(s.length)
-        summary.previousBest = previous and previous.value or 0
+        summary.previousBest = previous and previous.value
         summary.newBest = setLightningBest(s.length, s.correct)
     elseif kind == "daily" then
         summary = ns.Daily.Summary() or { kind = "daily", title = "Daily question", lines = {} }

@@ -503,6 +503,42 @@ do
     eq(choices.daily:IsShown(), false, "no Daily choice with the daily off")
 
 end
+-- Physical solo layout must not change the selected channel's hosting action.
+do
+    local ns = load()
+    IsInGuild = function() return true end
+    GetNumGuildMembers = function() return 1 end
+    GetGuildRosterInfo = function() return 'GuildGuest-Realm', nil, nil, nil, nil, nil, nil, nil, true end
+    ns.db.channel = 'GUILD'
+    local action
+    ns.StartGame = function(practice) action = practice and 'practice' or 'normal' end
+    SlashCmdList.LOREFORGE("")
+    local setup = ns.hostFrame.setup
+    eq(setup.soloScreen, true, 'ungrouped guild host keeps solo play choices')
+    eq(setup.solo, false, 'guild channel still has a broadcast roster')
+    eq(setup.start.text, 'Start game', 'guild hosting action keeps its label')
+    eq(setup.start.enabled, true, 'guild hosting remains available')
+    setup.start.scripts.OnClick(setup.start)
+    eq(action, 'normal', 'hosting form does not force guild games into practice')
+    setup.playChoices.practice.scripts.OnClick(setup.playChoices.practice)
+    eq(action, 'practice', 'explicit practice choice remains private')
+    grouped = true
+    ns.db.channel = 'PARTY'
+    ns.Party.Available = function() return false end
+    ns.RefreshHost()
+    eq(setup.soloScreen, false, 'joining a group restores the grouped layout')
+    eq(setup.start.text, 'Start game', 'joining restores the hosting label')
+    setup.start.scripts.OnClick(setup.start)
+    eq(action, 'normal', 'grouped action uses normal hosting route')
+    grouped = false
+    ns.RefreshHost()
+    eq(setup.start.text, 'Practice a full game', 'ungrouped Party channel is local practice')
+    ns.db.channel = 'GUILD'
+    ns.RefreshHost()
+    eq(setup.start.text, 'Start game', 'returning to Guild leaves no stale practice label')
+    setup.start.scripts.OnClick(setup.start)
+    eq(action, 'normal', 'returning to Guild leaves no stale practice callback')
+end
 do
     local ns = load({ grouped = true })
     SlashCmdList.LOREFORGE("")

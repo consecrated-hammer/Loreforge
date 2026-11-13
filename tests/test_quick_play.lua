@@ -223,11 +223,14 @@ do
     eq(card.overTitle.text, "New best streak!", "summary title")
     eq(sound, "win", "a new best uses the win sound")
     has(card.overLines.text, "2 in a row", "summary score")
-    has(card.overNote.text, "Previous best 0", "a new best names its previous record")
+    assert(not card.overNote.text:find("Previous best", 1, true), "first best has no invented previous record")
     eq(ns.Quick.BestLine("streak").text, "Best streak: 2", "best streak line")
     assert(ns.Quick.BestLine("streak").detail[1], "best streak has a date")
     card.primary.scripts.OnClick(card.primary)
     eq(ns.Quick.state.mode, "streak", "Play again")
+    for _ = 1, 3 do answer(ns, true); tick(ns, 2.1) end
+    answer(ns, false); tick(ns, 2.6)
+    has(card.overNote.text, "Previous best 2", "an existing record is named when beaten")
 end
 
 -- Lightning: the clock ends it; wrong answers don't.
@@ -404,6 +407,14 @@ do
     eq(records.bests[1].value.text, "1", "Hall of Fame streak best")
     eq(records.bests[3].value.text, "-", "no flight best yet")
     records.bests[1].scripts.OnEnter(records.bests[1])
+    ns.Quick.Bests().lightning = { ['60'] = { value = 7, length = 60, at = 1762740000 } }
+    ns.db.qpLightning = 90
+    records.Refresh()
+    eq(records.bests[2].value.text, "-", "no current-length Lightning best")
+    has(records.bests[2].detail.text, "90s", "Lightning tile names the selected length")
+    ns.db.qpLightning = 60
+    records.Refresh()
+    eq(records.bests[2].value.text, "7", "returning to a recorded length restores its best")
 end
 
 -- A dialogue flight (no flight-map click) still offers and auto-starts.

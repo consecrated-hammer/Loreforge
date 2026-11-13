@@ -288,29 +288,12 @@ HC.Settings:NewPage({ name = 'Key Bindings', columns = 1, description = 'Answer 
             saveBindings()
         end,
     })
-    -- Index the shared editor's live tiles and active rows locally. Pooled rows
-    -- change after binding/unbinding, so replace our registrations on refresh.
-    local indexed = {}
-    local function indexBindings()
-        local owner = panel.hcHeaderOwner or panel
-        for label, row in pairs(indexed) do
-            if owner.hcRows and owner.hcRows[label] == row then owner.hcRows[label] = nil end
-        end
-        indexed = {}
-        local function add(widget, label, hint)
-            UI.RegisterRow(panel, widget, label)
-            if not widget.lfBindingHint then
-                UI.AttachHint(widget, label, hint)
-                widget.lfBindingHint = true
-            else
-                widget.hcHintTitle, widget.hcHint = label, hint
-            end
-            indexed[label] = widget
-        end
+    -- HammerCore owns binding search and hints. Decorate its pooled tiles
+    -- after layout without registering the same controls a second time.
+    local function decorateBindings()
         local function visit(parent)
             for _, widget in ipairs({ parent:GetChildren() }) do
                 if widget.item and widget.item.name and widget:IsShown() then
-                    local name = widget.item.name
                     local number = widget.item.id and widget.item.id:match('^LOREFORGE_ANSWER([1-4])$')
                     if number and widget.icon and not widget.remove then
                         if not widget.lfAnswerNumber then
@@ -324,16 +307,13 @@ HC.Settings:NewPage({ name = 'Key Bindings', columns = 1, description = 'Answer 
                         widget.lfAnswerNumber:Hide()
                         if widget.icon then widget.icon:Show() end
                     end
-                    add(widget, (widget.remove and 'Change ' or 'Bind ') .. name,
-                        'Keyboard or mouse shortcut. ' .. (widget.item.detail or name))
-                    if widget.remove then add(widget.remove, 'Remove ' .. name, 'Unbind this shortcut.') end
                 else visit(widget) end
             end
         end
         visit(panel)
     end
-    UI.OnRefresh(panel, indexBindings)
-    indexBindings()
+    UI.OnRefresh(panel, decorateBindings)
+    decorateBindings()
     return y
 end)
 

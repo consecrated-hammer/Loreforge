@@ -473,6 +473,8 @@ function ns.BuildSetup(host)
         local isOpen = lobbyOpen()
         local party = ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available() or false
 
+        -- Layout follows physical grouping; setup.solo follows the selected
+        -- channel's roster. An ungrouped player may still host for their guild.
         local grouped = IsInGroup and (IsInGroup(LE_PARTY_CATEGORY_HOME or 1) or IsInGroup(LE_PARTY_CATEGORY_INSTANCE or 2))
         local soloScreen = not isOpen and not grouped and not (IsInRaid and IsInRaid())
         setup.soloScreen = soloScreen
@@ -602,15 +604,8 @@ function ns.BuildSetup(host)
         setup.closeLobby:SetShown(isOpen)
         if soloScreen then
             setup.quickMain:Hide(); setup.quick:Hide(); setup.daily:Hide(); setup.practice:Hide()
-            setup.start:Show(); setup.start:SetText('Practice a full game')
-            setup.start:SetEnabled(not restricted and not poolIssue)
-            setup.start:SetScript('OnClick', function() ns.StartGame(true) end)
-        else
-            setup.start:SetScript('OnClick', function()
-                if setup.solo then ns.StartGame()
-                elseif ns.Party and ns.db.channel == 'PARTY' and ns.Party.Available() and not lobbyOpen() then ns.Party.OpenLobby()
-                else ns.StartGame() end
-            end)
+            setup.start:Show()
+            if setup.solo then setup.start:SetText('Practice a full game') end
         end
     end
     local function changed() ns.setupError = nil; refreshAll() end

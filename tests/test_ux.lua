@@ -627,6 +627,16 @@ assert(f.history.entries[1].sub:GetText():find('Shared win: 2 players', 1, true)
 wow.Click(f.history.entries[1])
 assert(f.history.detail.winner:GetText():find('Shared win: Guest, Other', 1, true), 'detail names tied winners')
 ns.db.games.retail[1].rows[2] = nil
+local legacy = ns.db.games.retail[1]
+local savedRounds, savedPerRound = legacy.rounds, legacy.perRound
+legacy.rounds, legacy.perRound = 1, 1
+ns.OpenHost('history')
+assert(f.history.entries[1].sub:GetText():find('1 question', 1, true), 'one question is singular')
+assert(not f.history.entries[1].sub:GetText():find('1 questions', 1, true), 'singular does not retain plural suffix')
+legacy.rounds, legacy.perRound = nil, nil
+ns.OpenHost('history')
+assert(f.history.entries[1].sub:GetText():find('Length not recorded', 1, true), 'legacy length has a readable fallback')
+legacy.rounds, legacy.perRound = savedRounds, savedPerRound
 
 -- ── Player window ──
 local P = ns.Player

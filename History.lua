@@ -62,7 +62,9 @@ function ns.HistoryEntries()
 end
 
 local function gameLength(rounds, perRound)
-    if tonumber(rounds) == 1 then return tostring(perRound) .. ' questions' end
+    rounds, perRound = tonumber(rounds), tonumber(perRound)
+    if not rounds or not perRound or rounds < 1 or perRound < 1 then return 'Length not recorded' end
+    if rounds == 1 then return tostring(perRound) .. (perRound == 1 and ' question' or ' questions') end
     return tostring(rounds) .. ' rounds of ' .. tostring(perRound)
 end
 
@@ -82,7 +84,7 @@ local function describe(entry)
         local r = entry.result
         for _, row in ipairs(r.rows or {}) do rows[#rows + 1] = { key = row.key, name = row.name, total = row.total or 0, bestStreak = row.bestStreak, rank = row.rank } end
         out.where = "Party · " .. tostring(r.host)
-        out.length = r.config and gameLength(r.config.rounds, r.config.perRound) or ""
+        out.length = gameLength(r.config and r.config.rounds, r.config and r.config.perRound)
         out.players = #rows
     end
     ranked(rows)
@@ -312,12 +314,14 @@ function ns.BuildRecords(host)
         for _, cell in ipairs(view.bests) do
             local best = ns.Quick and ns.Quick.BestLine(cell.mode)
             local bests = ns.Quick and ns.Quick.Bests()
-            local record = ns.Quick and (cell.mode == "lightning" and ns.Quick.LightningBest() or bests and bests[cell.mode])
+            local record
+            if ns.Quick and cell.mode == "lightning" then record = ns.Quick.LightningBest()
+            elseif bests then record = bests[cell.mode] end
             local value = cell.mode == "daily" and ns.Daily and ns.Daily.Streak() or record and record.value
             cell.text:SetText(names[cell.mode])
             cell.value:SetText(value ~= nil and tostring(value) or "-")
             local detail = best and (best.short or best.detail and best.detail[1]) or "None yet"
-            if cell.mode == "lightning" and record then detail = record.length .. "s · " .. (detail or "") end
+            if cell.mode == "lightning" then detail = tostring(ns.db.qpLightning or 60) .. "s · " .. (detail or "") end
             if cell.mode == "daily" and ns.Daily then detail = "Best " .. ns.Daily.Best() end
             cell.detail:SetText(detail or "")
         end

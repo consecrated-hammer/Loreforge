@@ -28,6 +28,11 @@ end
 local function artOn() return ns.db.qpArt ~= false end
 local function animated() return ns.db.qpAnimations ~= false end
 
+local function feedbackParts(right, choice, answer)
+    return right and "Correct!" or choice and "Not quite." or "Time's up.",
+        (right and "" or "It was ") .. answer .. "."
+end
+
 local function stopEffects(f)
     if not f then return end
     ns.Flair.StopAll(f)
@@ -199,6 +204,9 @@ local function create()
     f.feedbackProbe = label(f.body, "GameFontHighlight", "text", CONTENT - 90)
     if f.feedbackProbe.SetWordWrap then f.feedbackProbe:SetWordWrap(true) end
     f.feedbackProbe:Hide()
+    f.timeoutProbe = label(f.body, "GameFontHighlight", "text", CONTENT - 90)
+    if f.timeoutProbe.SetWordWrap then f.timeoutProbe:SetWordWrap(true) end
+    f.timeoutProbe:Hide()
     f.quip = label(f.body, "GameFontHighlightSmall", "muted", CONTENT)
     if f.quip.SetWordWrap then f.quip:SetWordWrap(true) end
     f.next = UI.Button(f.body, 80, 22)
@@ -290,7 +298,7 @@ function Card.Layout()
         top(f.feedback, PAD, y + 4)
         f.next:ClearAllPoints()
         f.next:SetPoint("TOPRIGHT", -PAD, -(y + 4))
-        y = y + 4 + math.max(32, textHeight(f.feedback, 32), textHeight(f.feedbackProbe, 32)) + 4
+        y = y + 4 + math.max(32, textHeight(f.feedback, 32), textHeight(f.feedbackProbe, 32), textHeight(f.timeoutProbe, 32)) + 4
         top(f.quip, PAD, y)
         y = y + textHeight(f.quip, 32) + 10
         top(f.footer, PAD, y)
@@ -380,11 +388,15 @@ function Card.Render()
     local roomForNext = manualNext or ((s.mode == "quick" or s.mode == "streak") and not ns.db.qpAutoNext)
     f.feedback:SetWidth(roomForNext and CONTENT - 90 or CONTENT)
     f.feedbackProbe:SetWidth(f.feedback:GetWidth())
+    f.timeoutProbe:SetWidth(f.feedback:GetWidth())
     f.footer:SetShown(s.phase ~= "countdown")
     f.over:SetShown(s.phase == "over" or s.phase == "countdown")
     if question and q then
         f.question:SetText(q.text)
-        f.feedbackProbe:SetText("Time's up. It was " .. q.choices[q.correct] .. ".")
+        local probeVerdict, probeAnswer = feedbackParts(false, true, q.choices[q.correct])
+        f.feedbackProbe:SetText(probeVerdict .. " " .. probeAnswer)
+        probeVerdict, probeAnswer = feedbackParts(false, nil, q.choices[q.correct])
+        f.timeoutProbe:SetText(probeVerdict .. " " .. probeAnswer)
         for index, b in ipairs(f.answers) do
             b:SetText(q.choices[index])
             b:SetEnabled(s.phase == "question")
@@ -399,18 +411,14 @@ function Card.Render()
             b.num:SetText(verdict and (verdict == "ready" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:18|t" or "|TInterface\\RaidFrame\\ReadyCheck-NotReady:18|t") or tostring(index))
         end
         if s.phase == "reveal" then
-            local text
-            if s.lastRight then text = "Correct! " .. q.choices[q.correct] .. "."
-            elseif s.choice then text = "Not quite. It was " .. q.choices[q.correct] .. "."
-            else text = "Time's up. It was " .. q.choices[q.correct] .. "." end
+            local verdict, answer = feedbackParts(s.lastRight, s.choice, q.choices[q.correct])
             local bucket = ns.Flair.RevealBucket(s.choice, q.correct, s.streak)
             local every = tonumber(ns.db.qpBanterEvery) or 3
-            local banter = s.mode ~= "lightning" and every > 0 and s.answered % every == 0
+            local banter = s.mode ~= "lightning" and every > 0 and (bucket == "streak" or s.answered % every == 0)
             local quip = banter and bucket and ns.Flair.Quip(bucket, tostring(s) .. ":" .. s.answered, s.streak) or ""
-            local verdict, answer = text:match("^(.-[!.])%s+(.*)$")
             local r, g, b = T.Unpack(s.lastRight and "accent" or "danger")
             local colour = string.format("|cff%02x%02x%02x", math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
-            f.feedback:SetText(colour .. (verdict or text) .. "|r" .. (answer and (" " .. answer) or ""))
+            f.feedback:SetText(colour .. verdict .. "|r " .. answer)
             T.Text(f.feedback, "text")
             f.quip:SetText(quip)
             if f:IsShown() and animated() and f.animatedReveal ~= tostring(s) .. ":" .. s.answered then

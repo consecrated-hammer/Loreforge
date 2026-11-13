@@ -57,7 +57,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     local ns = load(toc)
     local card, f, s = ns.QuickCard, ns.QuickCard.frame, ns.Quick.state
     for _, fs in ipairs({ f.question, f.feedback, f.footer, f.heading, f.clock, f.streak,
-        f.overTitle, f.overLines, f.overNote, f.feedbackProbe, f.quip }) do measured(fs) end
+        f.overTitle, f.overLines, f.overNote, f.feedbackProbe, f.timeoutProbe, f.quip }) do measured(fs) end
     for _, b in ipairs(f.answers) do measured(b.Text) end
     local q = s.question
     q.text = string.rep('A long but readable Warcraft question. ', 8)
@@ -189,7 +189,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     local ns = load(toc)
     local card, f = ns.QuickCard, ns.QuickCard.frame
     local s = ns.Quick.state
-    for _, fs in ipairs({ f.question, f.feedback, f.feedbackProbe, f.quip, f.clock, f.streak, f.footer }) do measured(fs) end
+    for _, fs in ipairs({ f.question, f.feedback, f.feedbackProbe, f.timeoutProbe, f.quip, f.clock, f.streak, f.footer }) do measured(fs) end
     for _, b in ipairs(f.answers) do measured(b.Text) end
     local q, deadline = s.question, s.questionDeadline
     q.correct = 1
@@ -221,6 +221,16 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     card.Render(); eq(f.quip:GetText(), '', 'zero disables card quips')
     ns.db.qpBanterEvery = 1
     card.Render(); assert(f.quip:GetText() ~= '', 'frequency can show every quip')
+    ns.db.qpBanterEvery = 3
+    for streak = 4, 10 do
+        ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
+        if streak == 5 or streak == 10 then
+            assert(f.quip:GetText():find(tostring(streak) .. ' in a row!', 1, true), 'milestone bypasses ordinary cadence')
+            ns.db.qpBanterEvery = 0
+            card.Render(); eq(f.quip:GetText(), '', 'Off suppresses milestones too')
+            ns.db.qpBanterEvery = 3
+        elseif streak == 4 then eq(f.quip:GetText(), '', 'ordinary answers still follow cadence') end
+    end
     ns.Quick.Next()
     local wrong = ns.Quick.state.question.correct % 4 + 1
     wow.Click(f.answers[wrong])
@@ -236,6 +246,9 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     card.Show('lightning')
     ns.Quick.Answer(ns.Quick.state.question.correct)
     eq(f.quip:GetText(), '', 'Lightning never shows a quip')
+    ns.Quick.state.streak, ns.Quick.state.answered = 5, 5
+    card.Render()
+    eq(f.quip:GetText(), '', 'Lightning suppresses milestone quips too')
     card.Show('quick')
     ns.Quick.state.questionDeadline = 104
     card.Update(0)

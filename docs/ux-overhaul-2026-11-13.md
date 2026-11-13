@@ -52,7 +52,7 @@ Essential controls stay directly visible for their task. Standard preferences li
 | Hosted setup presets | Same header and summary | Short/Standard/Marathon and Custom, question count and estimate. Essential starting point. |
 | Hosted Game/Categories/Pacing | Same task tabs, plus lobby | Existing setup controls retained. Categories no longer disappears; pacing-only steppers disable in host-paced mode. |
 
-Settings labels are unique within each tab. Standard controls register with HammerCore; custom binding tiles and active-row actions register locally and clear stale entries. Hidden timer/next/shortest-flight/daily controls point at their enabling row. Search focuses the actual control, or the visible enabling row. The category shortcut opens the existing shared setup state rather than duplicating category/difficulty preferences.
+Settings labels are unique within each tab. Standard controls register with HammerCore; HammerCore registers binding tiles and active-row actions and clears stale entries. Loreforge only decorates answer tiles with numbers. Hidden timer/next/shortest-flight/daily controls point at their enabling row. Search focuses the actual control, or the visible enabling row. Ordinary card quips follow the selected cadence; streak milestones bypass it unless Off is selected, and Lightning stays quiet. The Hall of Fame Lightning tile follows the selected Lightning length, showing no record for an unplayed length. The category shortcut opens the existing shared setup state rather than duplicating category/difficulty preferences.
 
 ## Compatibility and deferred work
 
