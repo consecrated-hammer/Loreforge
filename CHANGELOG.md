@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-13
+
+- Open Quick play above the Play window when launched, reopened or restored after combat. Timer redraws do not steal focus.
 - Give the Quick play card readable verdicts, tick/cross cues, familiar answer effects and stable space for ordinary questions and reveals. Card animations work independently of Interface animations.
 - Add Banter frequency with Off, Every answer and Random (the default, about one reveal in three). Keep Lightning quiet and save streak callouts for milestones.
 - Keep answer numbers stable, add a large separate X to wrong picks, give correct answers a stronger lift/pop and make streak badges more prominent. Card Options has a More settings shortcut that keeps the quiz running.
@@ -18,7 +21,7 @@
 - Preserve a dismissed flight quiz behind a small book with Resume quiz and New quiz. Landing clears a dismissed quiz, and combat hides and restores the launcher.
 - Stop card effects when hidden or animations are off; celebrate a new best once. Make the Party restore pulse respect Lively animations, and recognise shared wins in History.
 - Use the same timer preference behaviour in card Options and general settings. Recheck combat before applying a confirmed binding replacement.
-- Vendor clean HammerCore 0.5.2 at 3c1eeeb for current settings search, tab links and binding controls. No changes to scoring, Party protocol, question data or saved-record formats.
+- Vendor clean HammerCore 0.5.2 at 476febd for current settings search, tab links and binding controls. No changes to scoring, Party protocol, question data or saved-record formats.
 
 ## [1.3.0] - 2026-11-10
 

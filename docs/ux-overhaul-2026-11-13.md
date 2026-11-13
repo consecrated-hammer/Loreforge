@@ -2,7 +2,7 @@
 
 Loreforge keeps its tavern quiz character: square category paintings, readable answer text, storybook headings, streak flames, local banter and restrained celebrations. Controls keep direct wording. This pass improves reading space and discoverability rather than adding game mechanics or another visual system.
 
-The implementation is on `feat/settings-ux`, based on `ef20465`. The source candidate is 1.4.0; it is not a stable release. The four pre-existing dirty files in the primary checkout were the 12 November flight launcher work (`QuickCard.lua`, `QuickPlay.lua`, `README.md`, `tests/test_quick_play.lua`). They were copied intact into an isolated worktree before extending the card. The primary checkout and its edits remain untouched. HammerCore was clean at `3c1eeeb2b1ef58ff964c5866ff4abe552733522a`, version 0.5.2, and synced with its official tool. No shared-library source changes were needed.
+The implementation was prepared on `feat/settings-ux`, based on `ef20465`, and is included in release 1.4.0. The initial audit baseline follows; the final release pins HammerCore `476febd`. The four pre-existing dirty files in the primary checkout were the 12 November flight launcher work (`QuickCard.lua`, `QuickPlay.lua`, `README.md`, `tests/test_quick_play.lua`). They were copied intact into an isolated worktree before extending the card. The primary checkout and its edits remain untouched. HammerCore was clean at `3c1eeeb2b1ef58ff964c5866ff4abe552733522a`, version 0.5.2, and synced with its official tool. No shared-library source changes were needed.
 
 ## Complete surface audit
 

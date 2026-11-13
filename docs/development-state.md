@@ -1,6 +1,10 @@
-# Current development candidate: settings and gameplay UX
+# Settings and gameplay UX in 1.4.0
 
-The 13 November 2026 candidate is on `feat/settings-ux`, source version 1.4.0, with pinned HammerCore 0.5.2 (`3c1eeeb`). It is not merged or published. See [the full audit and control mapping](ux-overhaul-2026-11-13.md) for the implemented scope, preserved rules and saved-key compatibility. The wow-addons workstream's current Loreforge UX handoff records the final commit, development stamps, staging receipts, rollback and live acceptance.
+The 13 November 2026 release includes the reviewed settings and gameplay UX
+round, with pinned HammerCore 0.5.2 (`476febd`). See [the full audit and control
+mapping](ux-overhaul-2026-11-13.md) for the implemented scope, preserved rules
+and saved-key compatibility. The wow-addons workstream's current Loreforge UX
+handoff records publication, staging, rollback and the remaining native checks.
 
 The primary checkout's existing flight launcher edits were preserved and included from an isolated worktree. The historical development notes follow.
 
