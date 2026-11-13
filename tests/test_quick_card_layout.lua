@@ -263,4 +263,49 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     for _, streak in ipairs({ 3, 5, 10, 15, 20 }) do eq(ns.Flair.RevealBucket(1, 1, streak), 'streak', 'milestone quip') end
     for _, streak in ipairs({ 4, 6, 9, 11 }) do eq(ns.Flair.RevealBucket(1, 1, streak), 'correct', 'ordinary quip between milestones') end
 end
+-- Opening from Play must bring the card above the still-visible host,
+-- including an existing card that was covered again by a host click.
+for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
+    local ns = load(toc)
+    local card, f = ns.QuickCard, ns.QuickCard.frame
+    card.Hide()
+    ns.OpenHost('play')
+    local host, front, raises = ns.hostFrame, nil, 0
+    host:SetFrameLevel(45)
+    rawset(host, 'Raise', function(self) front = self end)
+    rawset(f, 'Raise', function(self)
+        assert(self:IsShown(), 'card raises after it becomes visible')
+        assert(self.clock:GetText() ~= '', 'card is rendered before it comes forward')
+        assert(self:GetFrameLevel() > host:GetFrameLevel(), 'card clears the host frame level')
+        assert(host:IsShown(), 'opening the card preserves the host window')
+        raises, front = raises + 1, self
+    end)
+    host:Raise()
+    wow.Click(host.setup.playChoices.quick)
+    eq(front, f, 'solo Play opens card in front')
+    eq(raises, 1, 'first open explicitly raises the card')
+    eq(f:GetFrameStrata(), 'DIALOG', 'card stays in ordinary dialog strata')
+    host:SetFrameLevel(90); host:Raise()
+    wow.Click(host.setup.playChoices.quick)
+    eq(front, f, 'opening an already-shown card raises it again')
+    eq(raises, 2, 'existing card is raised on every explicit open')
+    local deadline = ns.Quick.state.questionDeadline
+    card.Render(); card.Layout()
+    eq(raises, 2, 'routine rendering does not steal focus')
+    eq(ns.Quick.state.questionDeadline, deadline, 'ordering leaves timer ownership unchanged')
+    card.OnCombat('PLAYER_REGEN_DISABLED')
+    host:Raise()
+    card.OnCombat('PLAYER_REGEN_ENABLED')
+    eq(front, f, 'combat restore uses the same foreground ordering')
+    eq(ns.Quick.state.questionDeadline, deadline, 'zero-duration combat restore preserves deadline')
+    card.Hide()
+    IsInGroup = function(category) return category == 1 end
+    GetNumSubgroupMembers = function() return 1 end
+    ns.Party.Available = function() return false end
+    ns.OpenHost('play')
+    assert(host.setup.quick:IsShown(), 'grouped Play keeps its Quick play entry')
+    host:Raise()
+    wow.Click(host.setup.quick)
+    eq(front, f, 'grouped Play opens the same card in front')
+end
 io.write('test_quick_card_layout: ok\n')

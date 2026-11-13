@@ -531,6 +531,13 @@ function Card.Accepting()
     return Card.IsShown() and Quick.state ~= nil and Quick.state.phase == "question"
 end
 
+local function bringForward(f)
+    -- The host and card share DIALOG strata. Match the joined-player window's
+    -- relative level so opening from Play clears the host and its controls.
+    if ns.hostFrame then f:SetFrameLevel(ns.hostFrame:GetFrameLevel() + 10) end
+    f:Raise()
+end
+
 function Card.Show(mode, options)
     if InCombatLockdown and InCombatLockdown() then HC.Print("Quick play opens after combat."); return end
     local f = create()
@@ -541,6 +548,7 @@ function Card.Show(mode, options)
     Quick.Start(mode or ns.db.qpMode, options)
     f:Show()
     Card.Render()
+    bringForward(f)
 end
 
 -- Esc and the close button share the same dismissal path.
@@ -570,6 +578,7 @@ function Card.ResumeQuiz()
     Card.Layout()
     Card.frame:Show()
     Card.Render()
+    bringForward(Card.frame)
 end
 
 function Card.ShowLauncher()
@@ -621,6 +630,7 @@ function Card.OnCombat(event)
             Quick.Resume()
             Card.frame:Show()
             Card.Render()
+            bringForward(Card.frame)
         end
     end
     if event == "PLAYER_REGEN_ENABLED" and Card.launcher and Quick.Flying() and not Card.IsShown() then
