@@ -455,13 +455,14 @@ local function drawAnswers(f, model)
         end
         -- Storybook's 1 to 4 badges; the text keeps clear of them both sides.
         local badged = ns.Flair.AnswerBadge(b, i, role == "muted" and "muted" or border)
-        b.Text:SetWidth(badged and INNER - 76 or INNER - 24)
+        b.Text:SetWidth(badged and INNER - 116 or INNER - 80)
         b:SetText(choiceText(model, i))
         T.Border(b, border)
         T.Text(b.Text, role)
         b:SetEnabled(open)
+        ns.Flair.AnswerResult(b, correct and (i == correct and "correct" or i == choice and "wrong") or nil)
         local height = b.Text.GetStringHeight and b.Text:GetStringHeight() or 14
-        b:SetHeight(math.max(30, math.ceil(height) + 16))
+        b:SetHeight(math.max(44, math.ceil(height) + 16))
     end
     if correct then
         if choice == correct then
@@ -721,13 +722,14 @@ function Player.Draw()
     f.you:SetText(you)
     if f.you.SetFontObject then f.you:SetFontObject(finished and "GameFontHighlight" or "GameFontHighlightSmall") end
     T.Text(f.you, finished and "selected" or "muted")
-    add(f.you, you ~= "", finished and 16 or 12)
     -- Streak flair: a flame beside the score line from 3 in a row.
     local me = you ~= "" and not finished and myRow(model)
-    f.streak:SetStreak(me and me.streak or 0)
+    f.streak:SetStreak(me and me.streak or 0, not f.lfOpening)
+    f.lfOpening = nil
+    add(f.you, you ~= "", finished and 16 or 12, f.streak:IsShown() and math.max(40, f.you:GetStringHeight() or 0) or nil)
     if f.streak:IsShown() then
         f.streak:ClearAllPoints()
-        f.streak:SetPoint("LEFT", f.you, "LEFT", math.ceil(f.you.GetStringWidth and f.you:GetStringWidth() or 200) + 8, 0)
+        f.streak:SetPoint("TOPLEFT", f.you, "TOPLEFT", math.ceil(f.you.GetStringWidth and f.you:GetStringWidth() or 200) + 8, 0)
     end
     add(f.status, status ~= "" and (state == "between" or state == "revealing"), 12)
 
@@ -956,6 +958,7 @@ end
 
 local function open()
     local f = create()
+    f.lfOpening = not f:IsShown()
     if ns.hostFrame then f:SetFrameLevel(ns.hostFrame:GetFrameLevel() + 10) end
     Player.hiddenFor = nil
     local invitation = Player.model and Player.model.state == "invitation" or false
@@ -1053,6 +1056,7 @@ function Player.Animate(model)
         local key = tostring(model.id) .. ":" .. tostring(model.index) .. ":" .. tostring(model.attempt)
         if Player.animatedReveal ~= key then
             Player.animatedReveal = key
+            ns.Flair.Pop(f, f.answers[correct], true)
             local choice = chosen(model)
             if choice == correct then ns.Flair.Sparkle(f, f.answers[correct])
             elseif choice and f.answers[choice] then ns.Flair.Shake(f, f.answers[choice]) end

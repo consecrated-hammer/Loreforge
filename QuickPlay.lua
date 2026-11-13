@@ -24,14 +24,14 @@ local LOREMASTER_SHARE = 3   -- one prompt in this many uses a Loremaster line
 
 Quick.DEFAULTS = {
     qpMode = "quick", qpRelaxed = false, qpSeconds = 15, qpLightning = 60, qpAutoNext = true, qpNextDelay = 2,
-    qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpBanterEvery = 3, qpOnFlights = "OFFER", qpShortest = 20,
+    qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpBanterEvery = -1, qpOnFlights = "OFFER", qpShortest = 20,
     qpCloseOnLanding = true, qpLoremaster = true,
     qpFlightReveal = 3,   -- seconds an answer shows in Flight challenge
     qpLandingGrace = 10,  -- seconds to finish the open question after landing (0 ends straight away)
     soloMain = "QUICK",   -- the Play tab's main button when solo: QUICK or PRACTICE
 }
 Quick.LIMITS = { qpSeconds = { 5, 30 }, qpLightning = { 30, 180 }, qpNextDelay = { 1, 5 }, qpShortest = { 0, 60 },
-    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 }, qpBanterEvery = { 0, 5 } }
+    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 } }
 Quick.SIZES = { SMALL = 0.85, MEDIUM = 1, LARGE = 1.2 }
 Quick.ON_FLIGHTS = { "OFFER", "START", "NONE" }
 Quick.ON_FLIGHTS_LABELS = { OFFER = "Ask me", START = "Auto-start", NONE = "Off" }
@@ -92,6 +92,8 @@ end
 
 function Quick.Initialise()
     local db = ns.db
+    local banter = tonumber(db.qpBanterEvery)
+    db.qpBanterEvery = (banter == 0 or banter == 1) and banter or -1
     for key, spec in pairs(Quick.LIMITS) do
         local value = tonumber(db[key])
         if not value or value ~= value then db[key] = Quick.DEFAULTS[key]

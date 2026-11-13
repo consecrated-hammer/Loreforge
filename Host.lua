@@ -412,14 +412,15 @@ local function answerRow(parent, index, width)
     b.num:SetPoint("TOPLEFT", 10, -10); b.num:SetText(tostring(index))
     b.Text:ClearAllPoints()
     b.Text:SetPoint("TOPLEFT", 38, -11)
-    b.Text:SetWidth(width - 38 - 110)
+    b.Text:SetWidth(width - 38 - 150)
     b.Text:SetJustifyH("LEFT")
     if b.Text.SetWordWrap then b.Text:SetWordWrap(true) end
     b.badge = label(b, "GameFontHighlightSmall", "muted", 100)
-    b.badge:SetPoint("RIGHT", -10, 0); b.badge:SetJustifyH("RIGHT")
+    b.badge:SetPoint("RIGHT", -50, 0); b.badge:SetJustifyH("RIGHT")
     -- result: "correct", "wrong", "chosen" or nil
     b.Mark = function(self, result, badge)
         self.badge:SetText(badge or "")
+        ns.Flair.AnswerResult(self, result)
         if result == "correct" then
             T.Fill(self.tint, "accent"); self.tint:SetAlpha(0.28); self.tint:Show(); T.Border(self, "accent")
         elseif result == "wrong" then
@@ -430,7 +431,7 @@ local function answerRow(parent, index, width)
     end
     b.Fit = function(self)
         local height = self.Text.GetStringHeight and self.Text:GetStringHeight() or 14
-        self:SetHeight(math.max(38, math.ceil(height) + 22))
+        self:SetHeight(math.max(44, math.ceil(height) + 22))
     end
     return b
 end
@@ -1082,6 +1083,13 @@ local function drawQuestion(f, g, top, ready, host, hostPlayer, selected)
             row:Fit()
             row:ClearAllPoints(); row:SetPoint("TOPLEFT", 18, y)
             y = y - row:GetHeight() - 6
+        end
+    end
+    if showChoices and revealed then
+        local key = tostring(g.run) .. ":" .. tostring(g.index) .. ":" .. tostring(g.attempt)
+        if f.animatedAnswer ~= key then
+            f.animatedAnswer = key
+            ns.Flair.Pop(f, f.answerButtons[item.correct], true)
         end
     end
 end

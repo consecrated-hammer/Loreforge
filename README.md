@@ -75,8 +75,9 @@ Bindings.
   and date) lead the Hall of Fame. A new Streak or Lightning best gets its own headline, previous record and win sound.
 - Quick play uses the categories and difficulty from game setup. It works
   through every matching question before repeating one.
-- The card keeps ordinary questions and answer buttons in place, with room for the reveal. Correct answers sparkle, wrong picks shake, and ticks/crosses make the result clear. Card **Animations** controls these independently of the game windows.
-- **Banter frequency** under Quick play > Card defaults to every third ordinary reveal, with Off and every-answer choices. Streak milestones still get a callout unless banter is off; Lightning stays quiet.
+- The card keeps ordinary questions and answer buttons in place, with room for the reveal. Answer numbers stay in place. Correct answers lift and expand briefly, wrong picks have a large X as well as the shake, and a separate tick marks the right answer. Streak badges grow and pop at milestones. Card **Animations** controls these independently of the game windows.
+- **Banter frequency** under Quick play > Card offers **Off**, **Every answer** and **Random**. Random is the default, adding a quip to about one ordinary reveal in three, with the same decision kept for that reveal. Streak milestones still get a callout unless banter is off; Lightning stays quiet.
+- **More settings** in card Options opens Quick play > Card without pausing or restarting the quiz.
 - Everything is on the **Quick play** settings page.
 
 ## Daily question and welcome

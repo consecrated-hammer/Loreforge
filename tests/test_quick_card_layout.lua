@@ -206,39 +206,56 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     wow.Click(f.answers[1])
     eq(f:GetHeight(), baselineHeight, 'reveal uses its reserved reading space')
     eq(s.questionDeadline, deadline, 'effects and reveal layout do not restart timer')
-    assert(f.answers[1].lfPop and f.answers[1].lfPop.playing, 'card click pops independently of Interface animations')
+    assert(f.answers[1].lfWinPop and f.answers[1].lfWinPop.playing, 'correct card answer has a stronger pop independently of Interface animations')
     assert(f.lfSparkle and f.lfSparkle.groups[1].playing, 'correct card answer sparkles')
-    assert(f.answers[1].num:GetText():find('ReadyCheck-Ready', 1, true), 'correct answer has a tick')
-    eq(f.quip:GetText(), '', 'default skips first quip')
+    eq(f.answers[1].num:GetText(), '1', 'correct reveal keeps the answer number')
+    assert(f.answers[1].lfResult.tick:IsShown(), 'correct answer has a separate tick')
     local plays = f.lfSparkle.groups[1].plays
+    local decision = s.banterRandom
     card.Render()
+    eq(s.banterRandom, decision, 'random choice stays stable on redraw')
     eq(f.lfSparkle.groups[1].plays, plays, 'same reveal never repeats effect')
-    ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
-    eq(f.quip:GetText(), '', 'default skips second quip')
-    ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
-    assert(f.quip:GetText() ~= '', 'default includes every third quip')
     ns.db.qpBanterEvery = 0
     card.Render(); eq(f.quip:GetText(), '', 'zero disables card quips')
     ns.db.qpBanterEvery = 1
-    card.Render(); assert(f.quip:GetText() ~= '', 'frequency can show every quip')
-    ns.db.qpBanterEvery = 3
-    for streak = 4, 10 do
-        ns.Quick.Next(); ns.Quick.Answer(ns.Quick.state.question.correct)
+    card.Render(); assert(f.quip:GetText() ~= '', 'every answer shows a quip')
+    ns.db.qpBanterEvery = -1
+    local oldRandom = math.random
+    for streak = 2, 10 do
+        ns.Quick.Next()
+        local draws = 0
+        math.random = function(upper)
+            if upper == 3 then draws = draws + 1; return streak % 2 == 0 and 1 or 2 end
+            return oldRandom(upper)
+        end
+        ns.Quick.Answer(ns.Quick.state.question.correct)
+        local quip, cached = f.quip:GetText(), s.banterRandom
+        card.Render(); card.Layout(); card.Render()
+        eq(f.quip:GetText(), quip, 'random quip never flickers on redraw')
+        eq(s.banterRandom, cached, 'reveal keeps its random decision')
         if streak == 5 or streak == 10 then
-            assert(f.quip:GetText():find(tostring(streak) .. ' in a row!', 1, true), 'milestone bypasses ordinary cadence')
+            assert(quip:find(tostring(streak) .. ' in a row!', 1, true), 'milestones stay pronounced with Random')
+            assert(f.streakBadge.lfWinPop and f.streakBadge.lfWinPop.playing, 'milestone badge pops')
             ns.db.qpBanterEvery = 0
             card.Render(); eq(f.quip:GetText(), '', 'Off suppresses milestones too')
-            ns.db.qpBanterEvery = 3
-        elseif streak == 4 then eq(f.quip:GetText(), '', 'ordinary answers still follow cadence') end
+            ns.db.qpBanterEvery = -1
+        elseif streak ~= 3 then
+            eq(quip ~= '', streak % 2 == 0, 'new reveals can choose different random outcomes')
+            eq(draws, 1, 'random decision is made once per ordinary reveal')
+        end
+        math.random = oldRandom
     end
     ns.Quick.Next()
     local wrong = ns.Quick.state.question.correct % 4 + 1
     wow.Click(f.answers[wrong])
     assert(f.answers[wrong].lfShake and f.answers[wrong].lfShake.playing, 'wrong card answer shakes')
-    assert(f.answers[wrong].num:GetText():find('ReadyCheck-NotReady', 1, true), 'wrong answer has a cross')
+    eq(f.answers[wrong].num:GetText(), tostring(wrong), 'wrong reveal keeps its answer number')
+    assert(f.answers[wrong].lfResult.cross:IsShown(), 'wrong answer has a separate large X')
     ns.db.qpAnimations = false
     card.Layout()
+    assert(f.answers[wrong].lfResult.cross:IsShown(), 'static X remains with animations off')
     for _, group in ipairs(f.lfGroups or {}) do eq(group.playing, false, 'card switch stops all effects') end
+    for _, answer in ipairs(f.answers) do eq(answer.lfWinLevel, nil, 'stopping celebration restores frame levels') end
     ns.db.livelyAnimations = true
     ns.Quick.Next(); wow.Click(f.answers[ns.Quick.state.question.correct])
     for _, group in ipairs(f.lfGroups or {}) do eq(group.playing, false, 'Interface switch never overrides card off') end
@@ -250,6 +267,18 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
     card.Render()
     eq(f.quip:GetText(), '', 'Lightning suppresses milestone quips too')
     card.Show('quick')
+    card.ToggleOptions()
+    local options, running = card.options, ns.Quick.state
+    local runningDeadline, pausedAt = running.questionDeadline, running.pausedAt
+    wow.Click(options.moreSettings)
+    eq(ns.HammerCore.Settings.selected, 'Quick play', 'More settings opens the relevant page')
+    eq(ns.HammerCore.Settings.pages['Quick play'].selectedTab, 'Card', 'More settings opens card preferences')
+    eq(options:IsShown(), false, 'More settings closes the popout')
+    eq(ns.Quick.state, running, 'More settings preserves the quiz')
+    eq(running.questionDeadline, runningDeadline, 'More settings does not retarget the timer')
+    eq(running.pausedAt, pausedAt, 'More settings does not pause the quiz')
+    eq(card.IsShown(), true, 'More settings keeps the running card visible')
+    ns.HammerCore.Settings:Hide()
     ns.Quick.state.questionDeadline = 104
     card.Update(0)
     assert(f.timer.fill.lfPulsing, 'last five seconds pulse')

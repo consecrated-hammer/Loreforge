@@ -3,9 +3,9 @@
 Check Retail and Forever separately after delivery and `/reload`. Record `/lf version`, client/build and any errors. These checks are outstanding until Kevin runs them.
 
 - While solo, check the three play choices, current records and the scrollable Host a game form. Change Main button when solo and confirm the preferred choice leads; join a group and check the original hosting layout returns.
-- On the card, compare one-, two- and three-line questions, wrapped answers and reveals. Ordinary answer buttons should stay still; long text must still fit. Check tick/cross cues, separate verdict/quip, timer placement and the centred painting.
+- On the card, compare one-, two- and three-line questions, wrapped answers and reveals. Numbers must remain 1/2/3/4 after clicking, with a separate large X for the wrong pick. Correct answers should lift/pop and streak badges should stand out. More settings must open Card preferences while the quiz keeps running. Ordinary answer buttons should stay still; long text must still fit. Check tick/cross cues, separate verdict/quip, timer placement and the centred painting.
 - With Interface Animations off and card Animations on, check pop, sparkle, shake, timer pulse and streak tiers. Reverse the switches and check the card stays still. Hide it during each effect.
-- Set Banter frequency to Off, every answer and every third answer; Lightning must stay quiet. Check streak callouts at 3, 5, 10 and 15 even when they fall between ordinary quips. Off must suppress those too.
+- Set Banter frequency to Off, Every answer and Random; Lightning must stay quiet. Check streak callouts at 3, 5, 10 and 15 even when Random skips ordinary quips. Reopening Options or settings must not reroll the current reveal. Off must suppress those too.
 - Beat a Streak and Lightning best: check headline, previous best, sparkle and win sound. Open Hall of Fame and inspect all four best tiles, dates/routes and the leaderboard; clearing belongs only in Games and records. Change Lightning length to an unplayed duration and confirm the tile shows no best for that length.
 - Open a saved game with a winner, tie and your own entry: check crown, winner names, your place, best streak and readable length. Confirm takeoff Not now retains the launcher and preferences.
 

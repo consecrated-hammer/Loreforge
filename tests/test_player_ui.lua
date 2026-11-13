@@ -165,6 +165,7 @@ for i = 1, 4 do
     wow.Click(f.answers[i])
     eq(#calls, count, 'the same click is ignored')
     eq(f.feedback:GetText(), 'Sending...', 'the click responds immediately')
+    for number, row in ipairs(f.answers) do eq(row.lfBadge.text:GetText(), tostring(number), 'pending keeps answer numbers') end
     for j, b in ipairs(f.answers) do eq(b.enabled, true, 'choices stay open to change ' .. j) end
     wow.Click(f.answers[i % 4 + 1])
     eq(last()[2], i % 4 + 1, 'another click changes the answer')
@@ -204,6 +205,12 @@ assert(f.you:GetText():find('3 points', 1, true), 'personal score shows')
 assert(not f.rows[1]:IsShown(), 'standings wait until between questions')
 P.Render(as(question({ state = 'revealing', index = 7, selected = 1, locked = 1, correct = 2 })))
 eq(f.feedback:GetText(), 'Not quite.', 'a wrong pick is told so')
+assert(f.answers[1].lfResult.cross:IsShown(), 'wrong choice shows a separate large X')
+local oldAnimations = ns.db.livelyAnimations
+ns.db.livelyAnimations = false; P.Draw()
+assert(f.answers[1].lfResult.cross:IsShown(), 'large X does not depend on animations')
+ns.db.livelyAnimations = oldAnimations
+eq(f.answers[1].lfBadge.text:GetText(), '1', 'wrong choice keeps its number')
 P.Render(as(question({ state = 'revealing', index = 7, correct = 2 })))
 eq(f.feedback:GetText(), 'Out of time!', 'no answer is out of time')
 P.Render(as(question({ state = 'between', index = 7, selected = 2, locked = 2, correct = 2, nextAt = now + 5 })))

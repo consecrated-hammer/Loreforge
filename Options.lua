@@ -180,8 +180,8 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         function() return db.qpArt ~= false end, function(value) db.qpArt = value; quickChanged() end)
     _, y = UI.Check(panel, 'Animations', 'Pops, sparkles, shakes and fades on the card.', y,
         function() return db.qpAnimations ~= false end, function(value) db.qpAnimations = value; quickChanged() end)
-    _, y = UI.Dropdown(panel, 'Banter frequency', 'How often a reveal has a local quip. Lightning stays quiet. Tavern banter on Interface must also be on.', y,
-        { 0, 1, 2, 3, 4, 5 }, { 'Off', 'Every answer', 'Every second answer', 'Every third answer', 'Every fourth answer', 'Every fifth answer' },
+    _, y = UI.Dropdown(panel, 'Banter frequency', 'Random adds a quip to about one reveal in three. Streak milestones still get a line. Off silences both; Lightning stays quiet. Tavern banter on Interface must also be on.', y,
+        { 0, 1, -1 }, { 'Off', 'Every answer', 'Random' },
         function() return db.qpBanterEvery end, function(value) db.qpBanterEvery = value; quickChanged() end)
     _, y = UI.Dropdown(panel, 'Card size', 'The Quick play card and the takeoff prompt.', y,
         { 'SMALL', 'MEDIUM', 'LARGE' }, { 'Small', 'Medium', 'Large' },

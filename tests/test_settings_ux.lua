@@ -192,6 +192,25 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     ns.db.qpSize, ns.db.qpOnFlights, ns.db.qpSeconds = 'LARGE', 'NONE', 29
     S:Show('Quick play', 'Card')
     assert(rows('Quick play', 'Card')['Banter frequency'], 'banter frequency is searchable')
+    local frequencyRow = rows('Quick play', 'Card')['Banter frequency']
+    local frequencyButton
+    for _, frame in ipairs(wow.frames) do
+        if frame:GetParent() == frequencyRow and frame.scripts.OnClick then frequencyButton = frame; break end
+    end
+    local beforeMenu = #wow.frames
+    wow.Click(assert(frequencyButton))
+    local labels, randomOption = {}, nil
+    for index = beforeMenu + 1, #wow.frames do
+        local frame = wow.frames[index]
+        if frame.label and frame.scripts.OnClick then
+            labels[#labels + 1] = frame.label:GetText()
+            if frame.label:GetText() == 'Random' then randomOption = frame end
+        end
+    end
+    eq(table.concat(labels, '|'), 'Off|Every answer|Random', 'banter offers exactly the requested choices')
+    wow.Click(assert(randomOption))
+    eq(ns.db.qpBanterEvery, -1, 'Random preserves a numeric saved preference')
+
     ns.db.qpBanterEvery = 1
     local reset = rows('Quick play', 'Card')['Reset card']
     assert(reset, 'tab reset is searchable')
@@ -202,7 +221,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     wow.Click(reset)
     wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpSize, ns.Quick.DEFAULTS.qpSize, 'Card reset restores card size')
-    eq(ns.db.qpBanterEvery, 3, 'Card reset restores less frequent banter')
+    eq(ns.db.qpBanterEvery, -1, 'Card reset restores Random banter')
     eq(ns.db.qpOnFlights, 'NONE', 'Card reset preserves flight preference')
     eq(ns.db.qpSeconds, 29, 'Card reset preserves play timing')
     eq(ns.db.records, records, 'Card reset preserves records')

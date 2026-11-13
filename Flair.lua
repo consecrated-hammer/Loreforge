@@ -67,6 +67,12 @@ function Flair.ApplyChrome(win)
 end
 
 -- A 1 to 4 badge on an answer button, matching the Answer 1 to 4 keys.
+local function answerLayers(b)
+    for _, key in ipairs({ "lfBadge", "lfResult" }) do
+        if b[key] then b[key]:SetFrameLevel(b:GetFrameLevel() + 1) end
+    end
+end
+
 function Flair.AnswerBadge(b, index, role)
     local story = Flair.On("storybook")
     if not b.lfBadge and story then
@@ -86,7 +92,33 @@ function Flair.AnswerBadge(b, index, role)
             T.Text(b.lfBadge.text, role == "muted" and "muted" or "accent")
         end
     end
+    answerLayers(b)
     return story
+end
+
+-- A result gets its own space; the answer number never doubles as status.
+function Flair.AnswerResult(b, result)
+    if not b.lfResult then
+        local mark = CreateFrame("Frame", nil, b)
+        mark:SetSize(32, 32)
+        mark:SetPoint("RIGHT", -8, 0)
+        mark.tick = mark:CreateTexture(nil, "OVERLAY")
+        mark.tick:SetAllPoints()
+        mark.tick:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+        mark.cross = HC.UI.FontString(mark, "GameFontNormalHuge", "danger")
+        T.Font(mark.cross, 30, "OUTLINE")
+        mark.cross:SetPoint("CENTER")
+        mark.cross:SetText("X")
+        b.lfResult = mark
+    end
+    local mark = b.lfResult
+    mark:ClearAllPoints()
+    if b.lfResultInGutter then mark:SetPoint("BOTTOMLEFT", 6, 4)
+    else mark:SetPoint("RIGHT", -8, 0) end
+    mark.tick:SetShown(result == "correct")
+    mark.cross:SetShown(result == "wrong")
+    mark:SetShown(result == "correct" or result == "wrong")
+    answerLayers(b)
 end
 
 -- ── Animations ─────────────────────────────────────────────────────────────
@@ -138,8 +170,34 @@ local function play(owner, group)
 end
 
 -- A quick scale pulse when an answer is picked.
-function Flair.Pop(owner, b)
+function Flair.Pop(owner, b, celebrate)
     if not (owner and b) or not animations(owner) then return false end
+    if celebrate then
+        if not b.lfWinPop then
+            local g = track(owner, b:CreateAnimationGroup())
+            scale(step(g, "Scale", 1, 0.10, "OUT"), 1, 1.14)
+            step(g, "Translation", 1, 0.10, "OUT"):SetOffset(0, 3)
+            scale(step(g, "Scale", 2, 0.16, "IN_OUT"), 1.14, 1.02)
+            step(g, "Translation", 2, 0.16, "IN_OUT"):SetOffset(0, -3)
+            scale(step(g, "Scale", 3, 0.10, "IN"), 1.02, 1)
+            local function settle()
+                if b.lfWinLevel then
+                    b:SetFrameLevel(b:GetParent():GetFrameLevel() + b.lfWinLevel)
+                    b.lfWinLevel = nil
+                    answerLayers(b)
+                end
+            end
+            g:SetScript("OnFinished", settle); g:SetScript("OnStop", settle)
+            b.lfWinPop = g
+        end
+        if b.lfPop then b.lfPop:Stop() end
+        b.lfWinPop:Stop()
+        b.lfWinLevel = b:GetFrameLevel() - b:GetParent():GetFrameLevel()
+        b:SetFrameLevel(b:GetFrameLevel() + 3)
+        answerLayers(b)
+        b.lfWinPop:Play()
+        return true
+    end
     if not b.lfPop then
         local g = track(owner, b:CreateAnimationGroup())
         scale(step(g, "Scale", 1, 0.07, "OUT"), 1, 1.06)
@@ -242,10 +300,14 @@ end
 
 -- Tiers at 3, 5 and 10 correct in a row: icon, size and colour role.
 Flair.TIERS = {
-    { at = 3, icon = "Interface\\Icons\\Spell_Fire_Fire", size = 16, role = "flavour", label = "On fire" },
-    { at = 5, icon = "Interface\\Icons\\Spell_Fire_Immolation", size = 20, role = "accent", label = "Blazing" },
-    { at = 10, icon = "Interface\\Icons\\Spell_Fire_SoulBurn", size = 24, role = "danger", label = "Unstoppable" },
+    { at = 3, icon = "Interface\\Icons\\Spell_Fire_Fire", size = 24, role = "flavour", label = "On fire" },
+    { at = 5, icon = "Interface\\Icons\\Spell_Fire_Immolation", size = 30, role = "accent", label = "Blazing" },
+    { at = 10, icon = "Interface\\Icons\\Spell_Fire_SoulBurn", size = 36, role = "danger", label = "Unstoppable" },
 }
+
+function Flair.StreakMilestone(streak)
+    return streak == 3 or streak == 5 or (streak >= 10 and streak % 5 == 0)
+end
 
 function Flair.StreakTier(streak)
     streak = tonumber(streak) or 0
@@ -258,28 +320,34 @@ end
 -- A flame and count beside the score line. SetStreak shows it at 3 or more,
 -- grows it at each tier and hides it after a miss.
 function Flair.StreakBadge(owner, parent)
-    local badge = CreateFrame("Frame", nil, parent)
-    badge:SetSize(60, 24)
+    local badge = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    badge:SetSize(110, 40)
+    T.Surface(badge, "raised", "accent")
     badge.icon = badge:CreateTexture(nil, "ARTWORK")
-    badge.icon:SetPoint("LEFT", 0, 0)
+    badge.icon:SetPoint("LEFT", 4, 0)
     if badge.icon.SetTexCoord then badge.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
     badge.count = HC.UI.FontString(badge, "GameFontNormal", "flavour")
     badge.count:SetPoint("LEFT", badge.icon, "RIGHT", 4, 0)
     badge.tier = 0
     badge:Hide()
-    function badge:SetStreak(streak)
+    function badge:SetStreak(streak, celebrate)
         local tier, spec = Flair.StreakTier(streak)
         if not Flair.On("streak") then tier = 0 end
-        local grew = tier > (self.tier or 0)
+        local increased = self.streak ~= nil and self.streak > 0 and (tonumber(streak) or 0) > self.streak
         self.tier, self.streak = tier, tonumber(streak) or 0
         self:SetShown(tier > 0)
-        if tier == 0 then return 0 end
+        if tier == 0 then
+            if self.lfWinPop then self.lfWinPop:Stop() end
+            return 0
+        end
         self.icon:SetTexture(spec.icon)
         self.icon:SetSize(spec.size, spec.size)
         self.count:SetText(tostring(self.streak))
         T.Text(self.count, spec.role)
         T.Font(self.count, 10 + spec.size / 2, "OUTLINE")
-        if grew then Flair.Pop(owner, self) end
+        if celebrate ~= false and increased and owner:IsShown() and Flair.StreakMilestone(self.streak) then
+            Flair.Pop(owner, self, true)
+        end
         return tier
     end
     return badge
@@ -382,7 +450,7 @@ function Flair.RevealBucket(choice, correct, streak)
     if not correct then return nil end
     if choice == correct then
         streak = tonumber(streak) or 0
-        return (streak == 3 or streak == 5 or (streak >= 10 and streak % 5 == 0)) and "streak" or "correct"
+        return Flair.StreakMilestone(streak) and "streak" or "correct"
     end
     if choice then return "wrong" end
     return "timeout"

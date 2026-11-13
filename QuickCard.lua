@@ -28,6 +28,17 @@ end
 local function artOn() return ns.db.qpArt ~= false end
 local function animated() return ns.db.qpAnimations ~= false end
 
+local function banterOn(s, bucket)
+    local setting = ns.db.qpBanterEvery
+    if s.mode == "lightning" or setting == 0 then return false end
+    if bucket == "streak" or setting == 1 then return true end
+    if s.banterReveal ~= s.answered then
+        s.banterReveal = s.answered
+        s.banterRandom = math.random(3) == 1
+    end
+    return s.banterRandom
+end
+
 local function feedbackParts(right, choice, answer)
     return right and "Correct!" or choice and "Not quite." or "Time's up.",
         (right and "" or "It was ") .. answer .. "."
@@ -111,6 +122,7 @@ local function answerButton(parent, index)
     b:SetHeight(46)
     b.Text:SetWidth(COL_W - 46)
     b.badge:Hide()
+    b.lfResultInGutter = true
     b:SetScript("OnClick", function()
         if Card.Accepting() and animated() then ns.Flair.Pop(Card.frame, b) end
         Quick.Answer(index)
@@ -282,7 +294,7 @@ function Card.Layout()
     f.heading:SetShown(question and not art)
     local height
     if question then
-        local timerY = clockY + math.max(textHeight(f.clock, 24), textHeight(f.streak, 24)) + 6
+        local timerY = clockY + math.max(textHeight(f.clock, 40), textHeight(f.streak, 40)) + 6
         top(f.timer, PAD, timerY)
         local questionY = timerY + 4 + 10
         top(f.question, PAD, questionY)
@@ -290,7 +302,7 @@ function Card.Layout()
         for row = 0, 1 do
             local first, second = f.answers[row * 2 + 1], f.answers[row * 2 + 2]
             first:Fit(); second:Fit()
-            local rowHeight = math.max(54, first:GetHeight(), second:GetHeight())
+            local rowHeight = math.max(68, first:GetHeight(), second:GetHeight())
             first:SetHeight(rowHeight); second:SetHeight(rowHeight)
             top(first, PAD, y); top(second, PAD + COL_W + 8, y)
             y = y + rowHeight + 6
@@ -407,15 +419,12 @@ function Card.Render()
             else
                 b:Mark(nil)
             end
-            local verdict = s.phase == "reveal" and (index == q.correct and "ready" or index == s.choice and "wrong")
-            b.num:SetText(verdict and (verdict == "ready" and "|TInterface\\RaidFrame\\ReadyCheck-Ready:18|t" or "|TInterface\\RaidFrame\\ReadyCheck-NotReady:18|t") or tostring(index))
+            b.num:SetText(tostring(index))
         end
         if s.phase == "reveal" then
             local verdict, answer = feedbackParts(s.lastRight, s.choice, q.choices[q.correct])
             local bucket = ns.Flair.RevealBucket(s.choice, q.correct, s.streak)
-            local every = tonumber(ns.db.qpBanterEvery) or 3
-            local banter = s.mode ~= "lightning" and every > 0 and (bucket == "streak" or s.answered % every == 0)
-            local quip = banter and bucket and ns.Flair.Quip(bucket, tostring(s) .. ":" .. s.answered, s.streak) or ""
+            local quip = bucket and banterOn(s, bucket) and ns.Flair.Quip(bucket, tostring(s) .. ":" .. s.answered, s.streak) or ""
             local r, g, b = T.Unpack(s.lastRight and "accent" or "danger")
             local colour = string.format("|cff%02x%02x%02x", math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
             f.feedback:SetText(colour .. verdict .. "|r " .. answer)
@@ -423,6 +432,7 @@ function Card.Render()
             f.quip:SetText(quip)
             if f:IsShown() and animated() and f.animatedReveal ~= tostring(s) .. ":" .. s.answered then
                 f.animatedReveal = tostring(s) .. ":" .. s.answered
+                ns.Flair.Pop(f, f.answers[q.correct], true)
                 if s.lastRight then ns.Flair.Sparkle(f, f.answers[q.correct])
                 elseif s.choice then ns.Flair.Shake(f, f.answers[s.choice]) end
             end
@@ -834,6 +844,12 @@ local function buildOptions()
         function(value) ns.db.qpCloseOnLanding = value end); y = y - 30
     o.link = UI.Link(o, "Categories & difficulty ›", function() Card.OpenCategories() end)
     o.link:SetPoint("TOPLEFT", 14, y)
+    y = y - 26
+    o.moreSettings = UI.Link(o, "More settings", function()
+        o:Hide()
+        HC.Settings:Show("Quick play", "Card")
+    end)
+    o.moreSettings:SetPoint("TOPLEFT", 14, y)
     y = y - 26
     o:SetHeight(-y + 6)
     o:Hide()

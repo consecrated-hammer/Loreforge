@@ -82,6 +82,14 @@ local function land(ns, after)
     flightEvent(ns, "PLAYER_CONTROL_GAINED")
 end
 
+-- Numeric banter preferences keep Off/Every answer and migrate old cadences.
+for _, client in ipairs({ 'retail', 'classic' }) do
+    for _, saved in ipairs({ -1, 0, 1, 2, 3, 5 }) do
+        local ns = load({ era = client, saved = { qpBanterEvery = saved } })
+        eq(ns.db.qpBanterEvery, (saved == 0 or saved == 1) and saved or -1, 'banter preference migration')
+    end
+end
+
 -- Defaults and the dependency.
 do
     local ns = load()

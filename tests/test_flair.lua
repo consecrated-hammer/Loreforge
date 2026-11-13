@@ -112,7 +112,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         eq(f.question.font[1], 'Fonts\\FRIZQT__.TTF', label .. 'and the question face')
         assert(not f.lfParchment:IsShown(), label .. 'and the parchment')
         for _, b in ipairs(f.answers) do assert(not b.lfBadge:IsShown(), label .. 'and the badges') end
-        eq(f.answers[1].Text:GetWidth(), 460 - 32 - 24, label .. 'answer text takes the full row again')
+        eq(f.answers[1].Text:GetWidth(), 460 - 32 - 80, label .. 'answer text reserves a separate result mark')
         ns.db.storybook = true
         ns.ApplyFlair(); P.Draw()
         assert(f.lfIcon:IsShown() and f.answers[1].lfBadge:IsShown(), label .. 'and back on, live')
@@ -158,6 +158,7 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         rows[2].streak = 0
         P.Render(question({ state = 'revealing', index = 2, selected = 1, locked = 1, correct = 3 }))
         assert(f.answers[1].lfShake and f.answers[1].lfShake.playing, label .. 'a wrong answer shakes')
+        assert(f.answers[1].lfResult.cross:IsShown(), label .. 'wrong answer has a static large X')
         assert(member('wrong', f.quip:GetText()), label .. 'wrong banter')
         P.Render(question({ state = 'revealing', index = 3, correct = 3 }))
         assert(member('timeout', f.quip:GetText()), label .. 'out of time banter')
@@ -174,9 +175,17 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
             return f.streak
         end
         assert(not streakAt(2):IsShown(), label .. 'no flame at 2')
+        local naturalScoreGap = f.you.points[1][5] - f.status.points[1][5]
+        eq(naturalScoreGap, f.you:GetStringHeight() + 12, label .. 'hidden badge keeps a natural score row')
+
         local badge = streakAt(3)
         assert(badge:IsShown(), label .. 'a flame at 3')
         eq(badge.tier, 1, label .. 'first tier'); eq(badge.count:GetText(), '3', label .. 'with the count')
+        eq(f.you.points[1][5] - f.status.points[1][5], 52, label .. 'visible badge has reserved vertical room')
+        ns.db.streakFlair = false; P.Draw()
+        eq(f.you.points[1][5] - f.status.points[1][5], naturalScoreGap, label .. 'disabled streak flair leaves no blank score gap')
+        ns.db.streakFlair = true; P.Draw()
+
         local small = badge.icon:GetWidth()
         eq(streakAt(4).tier, 1, label .. 'still first tier at 4')
         badge = streakAt(5)
@@ -190,6 +199,41 @@ for _, toc in ipairs({ 'Loreforge.toc', 'Loreforge_Camelot.toc' }) do
         assert(not streakAt(0):IsShown(), label .. 'a miss puts the flame out')
         eq(f.streak.tier, 0, label .. 'and resets the tier')
         assert(f.you:GetText():find('You:', 1, true), label .. 'the score line stays')
+        -- First snapshots and restores are presentation, not new milestones.
+        local fresh = F.StreakBadge(f, f.body)
+        fresh:SetStreak(5)
+        eq(fresh.lfWinPop, nil, label .. 'initial milestone snapshot stays still')
+        fresh:SetStreak(4); fresh:SetStreak(5)
+        local milestone = assert(fresh.lfWinPop)
+        local milestonePlays = milestone.plays
+        fresh:SetStreak(5)
+        eq(milestone.plays, milestonePlays, label .. 'redrawing a milestone never replays it')
+        fresh:SetStreak(0); fresh:SetStreak(5)
+        eq(milestone.plays, milestonePlays, label .. 'restoring after a cleared badge never replays it')
+        streakAt(4)
+        local playerPlays = f.streak.lfWinPop.plays
+        P.Hide(); rows[2].streak = 5; P.Show()
+        eq(f.streak.lfWinPop.plays, playerPlays, label .. 'reopening at a milestone never replays it')
+        streakAt(4); streakAt(5)
+        eq(f.streak.lfWinPop.plays, playerPlays + 1, label .. 'a newly observed milestone still celebrates')
+        streakAt(0)
+
+        -- Result and number frames follow both the raised and restored button.
+        local parent = CreateFrame('Frame', nil, f)
+        parent:SetFrameLevel(10)
+        local answer = ns.AnswerRow(parent, 1, 240)
+        answer:SetFrameLevel(11)
+        F.AnswerBadge(answer, 1)
+        F.Pop(f, answer, true)
+        F.AnswerResult(answer, 'correct')
+        eq(answer.lfBadge:GetFrameLevel(), answer:GetFrameLevel() + 1, label .. 'number stays above raised answer')
+        eq(answer.lfResult:GetFrameLevel(), answer:GetFrameLevel() + 1, label .. 'late-created tick stays above raised answer')
+        parent:SetFrameLevel(30)
+        answer.lfWinPop:Stop()
+        eq(answer:GetFrameLevel(), 31, label .. 'settling follows the parent level')
+        eq(answer.lfBadge:GetFrameLevel(), 32, label .. 'number returns with button')
+        eq(answer.lfResult:GetFrameLevel(), 32, label .. 'result returns with button')
+
 
         -- Game complete: the crown bounces in with a winner's cheer.
         rows[2].total, rows[1].total = 5, 2
