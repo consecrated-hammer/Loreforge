@@ -163,9 +163,14 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     local records, matches, dailyStore = ns.db.records, ns.db.matches, ns.db.daily
     ns.db.qpSize, ns.db.qpOnFlights, ns.db.qpSeconds = 'LARGE', 'NONE', 29
     S:Show('Quick play', 'Card')
-    local reset = rows('Quick play', 'Card')['Reset Card']
+    local reset = rows('Quick play', 'Card')['Reset card']
     assert(reset, 'tab reset is searchable')
     wow.Click(reset)
+    eq(ns.db.qpSize, 'LARGE', 'Card reset waits for confirmation')
+    wow.Click(ns.HammerCore.Dialog.frame.cancel)
+    eq(ns.db.qpSize, 'LARGE', 'cancel keeps card preferences')
+    wow.Click(reset)
+    wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpSize, ns.Quick.DEFAULTS.qpSize, 'Card reset restores card size')
     eq(ns.db.qpOnFlights, 'NONE', 'Card reset preserves flight preference')
     eq(ns.db.qpSeconds, 29, 'Card reset preserves play timing')
@@ -174,7 +179,9 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.daily, dailyStore, 'Card reset preserves daily attempts')
     ns.db.qpMode = 'lightning'
     S:Show('Quick play', 'Play')
-    wow.Click(rows('Quick play', 'Play')['Reset Play'])
+    wow.Click(rows('Quick play', 'Play')['Reset play'])
+    eq(ns.db.qpMode, 'lightning', 'Play reset waits for confirmation')
+    wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpMode, 'quick', 'Play reset includes the saved solo mode')
 
 end

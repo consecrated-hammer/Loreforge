@@ -76,7 +76,7 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Make the quiz your own.
             function(value) ns.db[key] = value; redraw() end)
     end
     y = UI.Flush(panel, y)
-    return resetInterface(panel, y, { 'sound', 'questionArt', 'roundIntro', 'storybook', 'livelyAnimations', 'tavernBanter', 'streakFlair' }, 'Reset Presentation')
+    return resetInterface(panel, y, { 'sound', 'questionArt', 'roundIntro', 'storybook', 'livelyAnimations', 'tavernBanter', 'streakFlair' }, 'Reset presentation')
     end },
     { name = 'Windows', build = function(panel, y)
     _, y = UI.Header(panel, 'Window size', y, ICONS.size)
@@ -92,7 +92,7 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Make the quiz your own.
         function(value) return math.floor(value + 0.5) .. '%' end)
     _, y = UI.Check(panel, 'Minimise when playing along', 'Hide the main window when a game you play in starts. It comes back for the results.', y,
         function() return ns.db.hostAutoMinimise ~= false end, function(value) ns.db.hostAutoMinimise = value end)
-    return resetInterface(panel, y, { 'hostScale', 'playerScale', 'windowOpacity', 'hostAutoMinimise' }, 'Reset Windows')
+    return resetInterface(panel, y, { 'hostScale', 'playerScale', 'windowOpacity', 'hostAutoMinimise' }, 'Reset windows')
     end },
 } })
 
@@ -137,7 +137,7 @@ local function quickTab(name, build, keys)
             end
             quickChanged()
             if ns.RefreshHost then ns.RefreshHost() end
-        end, 'Reset ' .. name)
+        end, 'Reset ' .. name:sub(1, 1):lower() .. name:sub(2))
         return y
     end }
 end
@@ -340,6 +340,6 @@ HC.Settings:NewPage({ name = 'Party games', columns = 1, description = 'Invitati
     _, y = UI.Text(panel, 'Joining gives you clickable questions and sends your answers to the host. Other addons in the group can read Party addon messages.', y)
     _, y = UI.ActionButton(panel, y, 'Open History', function() HC.Settings:Hide(); ns.OpenHost('history') end,
         'Past games, hosted and joined.', 'primary', 180)
-    _, y = UI.PageReset(panel, y, function() ns.db.partyInvites = true end, 'Reset Party games')
+    _, y = UI.PageReset(panel, y, function() ns.db.partyInvites = true end, 'Reset party games')
     return y
 end)

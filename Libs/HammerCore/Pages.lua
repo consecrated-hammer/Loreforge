@@ -46,20 +46,24 @@ Pages.visibility.build = function(panel, y)
             "Open a short list of new features the first time you log in after an update.", y,
             function() return HC.State().whatsNew ~= false end,
             function(value) HC.State().whatsNew = value end)
-        _, y = UI.Check(panel, "Mark unread What's new",
+        _, y = UI.Check(panel, "Show unread marker",
             "Show a yellow ! beside What's new until you've opened it since the last update.", y,
             function() return HC.State().whatsNewDot ~= false end,
             function(value)
                 HC.State().whatsNewDot = value
                 HC.Settings:RefreshBadges()
             end)
-        _, y = UI.Check(panel, "Turn-in sound",
+        _, y = UI.Check(panel, "What's new sound",
             "Play the quest turn-in sound when opening What's new clears the !.", y,
             function() return HC.State().whatsNewSound ~= false end,
             function(value) HC.State().whatsNewSound = value end)
     end
     if HC.Welcome and HC.Welcome.Enabled() then y = HC.Welcome:AddSettings(panel, y) end
     _, y = UI.Header(panel, "Settings window", y)
+    if HC.Settings.scaleSlider then
+        UI.RegisterRow(panel, HC.Settings.scaleSlider, "Window scale")
+        UI.AttachHint(HC.Settings.scaleSlider, "Window scale", "Resize the settings window from 70% to 130% using the header slider.")
+    end
     _, y = UI.Check(panel, "Settings search", "Show a search box at the top of this window.", y,
         function() return HC.State().settingsSearch ~= false end,
         function(value)
@@ -185,6 +189,7 @@ troubleshooting.build = function(panel, y)
     local copy = UI.Button(panel, 140, 22)
     copy:SetPoint("TOPLEFT", UI.PAD, y)
     copy:SetText("Copy report")
+    UI.RegisterRow(panel, copy, "Copy report")
     UI.AttachHint(copy, "Copy report", "Open a report you can paste into a bug report.")
     copy:SetScript("OnClick", function() HC.Commands:Dispatch("debug") end)
     y = y - 38

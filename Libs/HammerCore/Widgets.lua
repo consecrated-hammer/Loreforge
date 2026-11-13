@@ -1116,10 +1116,20 @@ function UI.ActionButton(panel, y, text, onClick, hint, style, width)
     return button, y - 48
 end
 
-function UI.PageReset(panel, y, reset, label)
-    return UI.ActionButton(panel, y, label or "Reset page", function()
-        reset()
-        refreshAll(panel)
+function UI.PageReset(panel, y, reset, label, scope)
+    label = label or "Reset page"
+    scope = scope or label:gsub("^[Rr]eset%s+", "")
+    return UI.ActionButton(panel, y, label, function()
+        local profile = HC.Profiles and HC.Profiles:Loaded()
+        HC.Dialog:Confirm({ title = label, text = "Reset " .. scope .. " to defaults?",
+            accept = "Reset", onAccept = function()
+                if HC.Profiles and HC.Profiles:Loaded() ~= profile then
+                    HC.Print("The profile changed. Choose Reset again for the current profile.")
+                    return
+                end
+                reset()
+                refreshAll(panel)
+            end })
     end, "Restore the settings on this page.", "danger")
 end
 
