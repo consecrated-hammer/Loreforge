@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Type values directly beside settings sliders; half-width controls leave more room for their labels.
+- “Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.
 
 - The in-flight book has escaped its shelf. Drag it wherever you like; it remembers its spot. Reset flight book position on Quick play > Flights brings it home.
 
