@@ -87,6 +87,12 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     end
     assert(checked >= 50, 'settings inventory unexpectedly small')
     local play, flights, daily = rows('Quick play', 'Play'), rows('Quick play', 'Flights'), rows('Quick play', 'Daily question')
+    local bookPoint = { 'CENTER', 'CENTER', 33, -44 }
+    ns.db.qpFlightBookPoint = bookPoint
+    assert(flights['Reset flight book position'], 'flight book reset is registered for search')
+    wow.Click(flights['Reset flight book position'])
+    eq(ns.db.qpFlightBookPoint, nil, 'flight book reset clears saved point')
+
     ns.db.qpRelaxed, ns.db.qpAutoNext, ns.db.qpOnFlights, ns.db.dailyOn = true, false, 'OFFER', false
     S:Show('Quick play', 'Play')
     assert(not play['Seconds per question']:IsShown() and not play['Wait before next']:IsShown())
@@ -212,6 +218,7 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.qpBanterEvery, -1, 'Random preserves a numeric saved preference')
 
     ns.db.qpBanterEvery = 1
+    ns.db.qpFlightBookPoint = bookPoint
     local reset = rows('Quick play', 'Card')['Reset card']
     assert(reset, 'tab reset is searchable')
     wow.Click(reset)
@@ -223,6 +230,11 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.qpSize, ns.Quick.DEFAULTS.qpSize, 'Card reset restores card size')
     eq(ns.db.qpBanterEvery, -1, 'Card reset restores Random banter')
     eq(ns.db.qpOnFlights, 'NONE', 'Card reset preserves flight preference')
+    eq(ns.db.qpFlightBookPoint, bookPoint, 'Card reset preserves book position')
+    S:Show('Quick play', 'Flights')
+    wow.Click(flights['Reset flights'])
+    wow.Click(ns.HammerCore.Dialog.frame.accept)
+    eq(ns.db.qpFlightBookPoint, nil, 'Flights reset also resets book position')
     eq(ns.db.qpSeconds, 29, 'Card reset preserves play timing')
     eq(ns.db.records, records, 'Card reset preserves records')
     eq(ns.db.matches, matches, 'Card reset preserves history')

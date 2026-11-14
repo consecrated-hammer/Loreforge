@@ -136,6 +136,7 @@ local function quickTab(name, build, keys)
                 ns.db[key] = value
             end
             quickChanged()
+            if name == 'Flights' then ns.QuickCard.ResetLauncherPosition() end
             if ns.RefreshHost then ns.RefreshHost() end
         end, 'Reset ' .. name:sub(1, 1):lower() .. name:sub(2))
         return y
@@ -205,6 +206,8 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         function() return db.qpFlightReveal end, function(value) db.qpFlightReveal = value end, seconds)
     _, y = UI.Slider(panel, 'Landing grace', 'Seconds to finish the open question after you land. 0 ends it on landing.', y, 0, 30, 1,
         function() return db.qpLandingGrace end, function(value) db.qpLandingGrace = value end, seconds)
+    _, y = UI.ActionButton(panel, y, 'Reset flight book position', ns.QuickCard.ResetLauncherPosition,
+        'Move the in-flight book icon back to its default position. Drag the book to place it elsewhere.')
     if ns.era == 'retail' then
         _, y = UI.Check(panel, 'Loremaster lines', 'Extra takeoff lines for characters with the Loremaster title.', y,
             function() return db.qpLoremaster ~= false end, function(value) db.qpLoremaster = value end)

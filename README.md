@@ -68,7 +68,9 @@ Bindings.
   score, and **Close on landing** closes the card. **Keep going** stays open.
   Dismiss the card while flying to leave a small book icon. Click it to resume
   the same quiz or start a new Flight challenge. Quiz timers pause while hidden;
-  the flight continues. Landing removes the icon and clears the dismissed quiz.
+  the flight continues. Drag the book to move it; its position is remembered separately
+  from the quiz card. Quick play > Flights > Reset flight book position puts it back.
+  Landing removes the icon and clears the dismissed quiz.
 - **Flight answer pause** sets how long each answer shows during a Flight
   challenge (3 seconds by default). Lightning keeps its quick flash.
 - Personal bests (best streak, best Lightning, best flight with its route

@@ -576,6 +576,40 @@ function Card.Hide()
     else Card.Dismiss() end
 end
 
+local function validLauncherPoint(point)
+    return HC.ValidPoint(point) and math.abs(tonumber(point[3])) < math.huge
+        and math.abs(tonumber(point[4])) < math.huge
+end
+
+local function placeLauncher(book)
+    book:ClearAllPoints()
+    local point = ns.db.qpFlightBookPoint
+    if validLauncherPoint(point) then
+        book:SetPoint(point[1], UIParent, point[2], tonumber(point[3]), tonumber(point[4]))
+    else
+        book:SetPoint("TOP", UIParent, "TOP", 0, -160)
+    end
+end
+
+local function stopLauncherDrag(book)
+    if not book.lfDragging then return end
+    book:StopMovingOrSizing()
+    book.lfDragging = nil
+    book.lfDragged = true
+    local point, relativeTo, relativePoint, x, y = book:GetPoint(1)
+    if relativeTo ~= UIParent then
+        point, relativePoint, x, y = "TOPLEFT", "BOTTOMLEFT", book:GetLeft(), book:GetTop()
+    end
+    local saved = { point, relativePoint, x, y }
+    if validLauncherPoint(saved) then ns.db.qpFlightBookPoint = saved end
+end
+
+function Card.ResetLauncherPosition()
+    if Card.launcher then stopLauncherDrag(Card.launcher) end
+    ns.db.qpFlightBookPoint = nil
+    if Card.launcher then placeLauncher(Card.launcher) end
+end
+
 function Card.HideLauncher()
     if Card.launcher then Card.launcher:Hide() end
 end
@@ -597,16 +631,28 @@ function Card.ShowLauncher()
     if not Card.launcher then
         local b = CreateFrame("Button", nil, UIParent, "BackdropTemplate")
         b:SetSize(36, 36)
-        b:SetPoint("TOP", UIParent, "TOP", 0, -160)
+        placeLauncher(b)
         b:SetFrameStrata("DIALOG")
+        b:SetMovable(true)
+        b:RegisterForDrag("LeftButton")
+        b:SetScript("OnMouseDown", function(self) self.lfDragged = nil end)
+        b:SetScript("OnDragStart", function(self)
+            if InCombatLockdown and InCombatLockdown() then return end
+            self.lfDragging = true
+            self:StartMoving()
+        end)
+        b:SetScript("OnDragStop", stopLauncherDrag)
+        b:SetScript("OnHide", stopLauncherDrag)
+        b:SetScript("OnShow", function(self) self.lfDragged = nil end)
         b:SetClampedToScreen(true)
         local icon = b:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
         icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
         hover(b, function(self)
-            tooltip(self, "Loreforge", { "Resume your quiz or start a new one." })
+            tooltip(self, "Loreforge", { "Resume your quiz or start a new one.", "Drag to move." })
         end)
         b:SetScript("OnClick", function(self)
+            if self.lfDragged or self.lfDragging then self.lfDragged = nil; return end
             HC.Menu:Open({
                 { text = "Resume quiz", disabled = not Quick.state,
                     func = function() Card.ResumeQuiz() end },
@@ -615,7 +661,10 @@ function Card.ShowLauncher()
         end)
         Card.launcher = b
     end
-    if not (InCombatLockdown and InCombatLockdown()) then Card.launcher:Show() end
+    if not (InCombatLockdown and InCombatLockdown()) then
+        if not Card.launcher:IsShown() and not Card.launcher.lfDragging then placeLauncher(Card.launcher) end
+        Card.launcher:Show()
+    end
 end
 
 function Card.Toggle()

@@ -504,6 +504,45 @@ for _, client in ipairs({ "retail", "classic" }) do
     ns.QuickCard.Hide()
     eq(ns.Quick.state, saved, "dismiss keeps progress")
     eq(ns.QuickCard.launcher:IsShown(), true, "flight launcher appears")
+    local book, menuOpens = ns.QuickCard.launcher, 0
+    local originalMenu = ns.HammerCore.Menu.Open
+    ns.HammerCore.Menu.Open = function(_, items)
+        menuOpens = menuOpens + 1
+        eq(items[1].text, "Resume quiz", "click keeps Resume")
+        eq(items[2].text, "New quiz", "click keeps New quiz")
+    end
+    local stops = 0
+    book.StartMoving = function(self) self.moving = true end
+    book.StopMovingOrSizing = function(self) self.moving = false; stops = stops + 1 end
+    book.scripts.OnMouseDown(book)
+    book.scripts.OnDragStart(book)
+    eq(book.moving, true, "book starts moving")
+    book:ClearAllPoints(); book:SetPoint("CENTER", UIParent, "CENTER", 120, -45)
+    ns.QuickCard.ShowLauncher()
+    eq(select(1, book:GetPoint()), "CENTER", "repeated Show does not reset an active drag")
+    book.scripts.OnDragStop(book)
+    eq(book.moving, false, "release stops movement")
+    eq(ns.db.qpFlightBookPoint[3], 120, "book position saved separately")
+    eq(ns.db.qpLeft, nil, "moving book does not move quiz card")
+    eq(ns.Quick.state, saved, "moving book preserves quiz")
+    book.scripts.OnClick(book)
+    eq(menuOpens, 0, "drag release does not open menu")
+    book.scripts.OnMouseDown(book); book.scripts.OnClick(book)
+    eq(menuOpens, 1, "next ordinary click opens menu")
+    book:Hide(); ns.QuickCard.ShowLauncher()
+    eq(select(1, book:GetPoint()), "CENTER", "reopening restores the saved book point")
+    book.scripts.OnDragStart(book)
+    local other = CreateFrame("Frame", nil, UIParent)
+    book:ClearAllPoints(); book:SetPoint("LEFT", other, "RIGHT", 5, 6)
+    book.GetLeft, book.GetTop = function() return 200 end, function() return 300 end
+    book.scripts.OnDragStop(book)
+    eq(ns.db.qpFlightBookPoint[1], "TOPLEFT", "foreign anchor normalises to screen")
+    eq(ns.db.qpFlightBookPoint[3], 200, "screen coordinates saved instead of foreign offset")
+    book:Hide(); ns.QuickCard.ShowLauncher()
+    book.scripts.OnClick(book)
+    eq(menuOpens, 2, "reopening clears stale drag suppression")
+    ns.HammerCore.Menu.Open = originalMenu
+
     clock = clock + 30
     ns.QuickCard.ResumeQuiz()
     eq(ns.Quick.state, saved, "resume keeps question and score")
@@ -517,15 +556,36 @@ for _, client in ipairs({ "retail", "classic" }) do
     assert(ns.Quick.state ~= saved, "new quiz replaces saved progress")
     eq(ns.Quick.state.correct, 0, "new quiz resets score")
     ns.QuickCard.Hide()
+    book.scripts.OnMouseDown(book); book.scripts.OnDragStart(book)
     combat = true
     ns.QuickCard.OnCombat("PLAYER_REGEN_DISABLED")
+    eq(book.moving, false, "combat stops an active book drag")
     eq(ns.QuickCard.launcher:IsShown(), false, "launcher hides in combat")
     combat = false
     ns.QuickCard.OnCombat("PLAYER_REGEN_ENABLED")
     eq(ns.QuickCard.launcher:IsShown(), true, "launcher returns after combat")
+    book.scripts.OnMouseDown(book); book.scripts.OnDragStart(book)
     land(ns, 1)
+    eq(book.moving, false, "landing stops an active book drag")
     eq(ns.QuickCard.launcher:IsShown(), false, "landing removes launcher")
     eq(ns.Quick.state, nil, "landing clears dismissed quiz")
+end
+
+-- Saved book coordinates restore on a fresh load; invalid data uses the default.
+for _, client in ipairs({ "retail", "classic" }) do
+    for _, point in ipairs({ { "CENTER", "CENTER", 140, -70 }, { "invalid", "CENTER", 0, 0 }, { "TOP", "TOP", math.huge, 0 } }) do
+        local valid = point[1] == "CENTER"
+        local ns = load({ era = client, saved = { qpFlightBookPoint = point } })
+        takeOff(ns)
+        ns.QuickCard.ShowLauncher()
+        local anchor, relative, relativePoint, x, y = ns.QuickCard.launcher:GetPoint()
+        eq(anchor, valid and "CENTER" or "TOP", "fresh book restores valid point only")
+        eq(relative, UIParent, "book anchors to screen")
+        eq(x, valid and 140 or 0, "book restores horizontal coordinate")
+        ns.QuickCard.ResetLauncherPosition()
+        eq(ns.db.qpFlightBookPoint, nil, "book reset clears saved point")
+        eq(select(1, ns.QuickCard.launcher:GetPoint()), "TOP", "book reset restores default")
+    end
 end
 
 -- Combat hiding is not user dismissal: landing retains the existing grace

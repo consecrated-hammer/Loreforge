@@ -5,6 +5,9 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
+    { version = "1.4.2", date = "2026-11-14", items = {
+        { title = "This book refuses to stay shelved", text = "Drag the in-flight book to move it. It remembers its own spot; Reset flight book position on Quick play > Flights brings it home.", kind = "improved", page = "Quick play", tab = "Flights" },
+    } },
     { version = "1.4.1", date = "2026-11-13", items = {
         { text = "The Daily question prompt no longer overlaps your streak when its message wraps.", kind = "fixed", page = "Quick play", tab = "Daily question" },
     } },
