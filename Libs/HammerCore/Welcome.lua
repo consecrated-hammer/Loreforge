@@ -30,6 +30,7 @@ local T, UI = HC.Theme, HC.UI
 --   banner, bannerSize   texture across the top, shown WIDTH wide at the
 --                        texture's own shape (4:1 when bannerSize is missing)
 --   title                heading when there's no banner ("Welcome to <name>")
+--   icon                 optional addon logo beside that heading
 --   tagline              one line of gold game text under the banner
 --   intro                text for a new install and for Show
 --   update               text for an update that only shows new rows
@@ -461,6 +462,7 @@ function Welcome:Fill(frame, rows, mode)
     local y = -1
 
     if spec.banner then
+        frame.icon = nil
         local size = type(spec.bannerSize) == "table" and spec.bannerSize or { 4, 1 }
         local w, h = tonumber(size[1]) or 4, tonumber(size[2]) or 1
         local height = math.floor((WIDTH - 2) * h / math.max(1, w) + 0.5)
@@ -472,10 +474,29 @@ function Welcome:Fill(frame, rows, mode)
         y = y - height - 8
     else
         local title = UI.FontString(content, "GameFontNormalLarge", "accent")
-        title:SetPoint("TOPLEFT", PAD, -16)
+        if spec.icon then
+            local icon = content:CreateTexture(nil, "ARTWORK")
+            icon:SetTexture(spec.icon)
+            icon:SetSize(48, 48)
+            icon:SetPoint("TOPLEFT", PAD, -14)
+            frame.icon = icon
+            T.Font(title, 20)
+            title:SetPoint("TOPLEFT", PAD + 62, -28)
+            title:SetPoint("TOPRIGHT", -PAD - 24, -28)
+            title:SetHeight(20)
+            title:SetJustifyH("LEFT")
+            local rule = T.Fill(content:CreateTexture(nil, "BORDER"), "accent")
+            rule:SetSize(inner, 1)
+            rule:SetPoint("TOPLEFT", PAD, -76)
+            y = -92
+        else
+            frame.icon = nil
+            title:SetPoint("TOPLEFT", PAD, -16)
+            y = -44
+        end
         title:SetText(spec.title or ("Welcome to " .. tostring(HC.name)))
+        frame.title = title
         frame.banner = nil
-        y = -44
     end
 
     if spec.tagline then

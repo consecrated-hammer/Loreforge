@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Type values directly beside settings sliders; half-width controls leave more room for their labels.
+
 - The in-flight book has escaped its shelf. Drag it wherever you like; it remembers its spot. Reset flight book position on Quick play > Flights brings it home.
 
 ## [1.4.1] - 2026-11-13

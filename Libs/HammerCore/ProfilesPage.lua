@@ -113,7 +113,7 @@ end
 local function section(parent, columns)
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetSize(UI.CONTENT_WIDTH + UI.PAD * 2, 1)
-    frame.hcColumns = columns
+    frame.hcColumns = columns or HC.spec.profileColumns or 1
     frame.hcRefresh = parent.hcRefresh
     frame.hcRefreshAll = parent.hcRefreshAll
     frame.hcHeaderOwner = parent.hcHeaderOwner or parent
@@ -244,6 +244,7 @@ function Profiles:NewPage(spec)
             function(value) Profiles:Switch(value, "manual") end,
             nil, 150, 220)
         local buttons
+        y = UI.Columns(manage, 1, y)
         buttons, y = buttonRow(manage, "Manage", "Create, rename, delete or reset profiles.", y, {
             { text = "New...", variant = "primary", hint = "Create a profile and switch to it.",
                 run = function() Profiles:PromptNew(false) end },
@@ -255,6 +256,7 @@ function Profiles:NewPage(spec)
                 run = function() Profiles:ConfirmReset() end },
         })
         UI.OnRefresh(manage, function() UI.SetEnabled(buttons[3], Profiles:Count() > 1) end)
+        y = UI.Columns(manage, HC.spec.profileColumns or 1, y)
         _, y = UI.Dropdown(manage, "Copy from",
             "Replace the active profile with a copy of another one.", y,
             function()
@@ -284,13 +286,14 @@ function Profiles:NewPage(spec)
             "Each character remembers its own active profile. The profiles themselves are shared.", y,
             function() return data().perCharacter end,
             function(value) Profiles:SetPerCharacter(value) end)
+        y = UI.Flush(manage, y)
         add(manage, -y + 4)
 
         -- Addon extras --------------------------------------------------------
         if spec.extra then
             local extra = section(panel)
             local bottom = spec.extra(extra, -8)
-            add(extra, -(bottom or -8) + 4)
+            add(extra, -UI.Flush(extra, bottom or -8) + 4)
         end
 
         end
@@ -307,18 +310,19 @@ function Profiles:NewPage(spec)
             function() return auto().mode end,
             function(value) Auto:SetMode(value) end,
             nil, 150, 220)
-        local status = UI.Text(autoHead, "", y - 2)
+        y = UI.Flush(autoHead, y)
+        local status
+        status, y = UI.Text(autoHead, "", y - 2)
         UI.OnRefresh(autoHead, function()
             local text = Auto.Status()
             status:SetText(text)
             T.Text(status, auto().mode == "OFF" and "muted" or "text")
         end)
-        y = y - 24
         _, y = UI.Text(autoHead, "First matching rule wins. Shift-click + or - to step by 5.", y)
         add(autoHead, -y + 4)
 
         for index = 1, Auto.MAX_RULES do
-            local holder = section(panel)
+            local holder = section(panel, 1)
             local card = share(UI.Card(holder, -2, 136, UI.CONTENT_WIDTH), holder)
             local function rule() return Auto:Rules()[index] or Auto.NewRule() end
             local function set(key) return function(value) Auto:SetRule(index, key, value) end end
@@ -387,7 +391,7 @@ function Profiles:NewPage(spec)
             add(holder, 144, function() return index <= #Auto:Rules() end)
         end
 
-        local ruleActions = section(panel)
+        local ruleActions = section(panel, 1)
         y = -4
         local empty = UI.Text(ruleActions, "No rules yet. Add one to start.", y)
         local ruleButtons = {}
@@ -445,6 +449,7 @@ function Profiles:NewPage(spec)
             { "NOW", "AFTER" }, { "Ask now", "Ask after combat" },
             function() return auto().combatAsk end, function(value) Auto:Set("combatAsk", value) end,
             nil, 150, 220)
+        y = UI.Flush(ask, y)
         add(ask, -y + 4, function() return auto().mode == "ASK" end)
 
         local other = section(panel)

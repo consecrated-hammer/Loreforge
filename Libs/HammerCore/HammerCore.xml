@@ -4,6 +4,7 @@
     <Script file="Theme.lua"/>
     <Script file="Widgets.lua"/>
     <Script file="Window.lua"/>
+    <Script file="PreviewDock.lua"/>
     <Script file="Pages.lua"/>
     <Script file="Commands.lua"/>
     <Script file="Copy.lua"/>

@@ -81,10 +81,10 @@ HC.Settings:NewPage({ name = 'Interface', description = 'Make the quiz your own.
     { name = 'Windows', build = function(panel, y)
     _, y = UI.Header(panel, 'Window size', y, ICONS.size)
     _, y = UI.Slider(panel, 'Main window', 'Scales the host window.', y, 0.7, 1.5, 0.05,
-        function() return ns.db.hostScale or 1 end, function(value) ns.db.hostScale = value; ns.ApplyHostScale() end, scale)
+        function() return ns.db.hostScale or 1 end, function(value) ns.db.hostScale = value; ns.ApplyHostScale() end, scale, nil, 100)
     _, y = UI.Slider(panel, 'Player window', 'Scales the window you answer in when you join a Party game.', y, 0.7, 1.5, 0.05,
         function() return ns.db.playerScale or 1 end,
-        function(value) ns.db.playerScale = value; if ns.Player then ns.Player.ApplyScale() end end, scale)
+        function(value) ns.db.playerScale = value; if ns.Player then ns.Player.ApplyScale() end end, scale, nil, 100)
     -- Percent steps: the slider's fill assumes a range wider than 1.
     _, y = UI.Slider(panel, 'Window opacity', 'How solid the game windows are.', y, 50, 100, 5,
         function() return math.floor(ns.GetWindowOpacity() * 100 + 0.5) end,

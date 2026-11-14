@@ -60,6 +60,12 @@ Pages.visibility.build = function(panel, y)
     end
     if HC.Welcome and HC.Welcome.Enabled() then y = HC.Welcome:AddSettings(panel, y) end
     _, y = UI.Header(panel, "Settings window", y)
+    if HC.spec.previewDock then
+        _, y = UI.Check(panel, "Snap preview to settings",
+            "Drag the preview near a settings edge to attach it. Drag away to detach. Attached previews follow this window.", y,
+            function() return HC.State().previewSnap ~= false end,
+            function(value) HC.State().previewSnap = value; HC.Settings:RefreshPreviewDocks() end)
+    end
     if HC.Settings.scaleSlider then
         UI.RegisterRow(panel, HC.Settings.scaleSlider, "Window scale")
         UI.AttachHint(HC.Settings.scaleSlider, "Window scale", "Resize the settings window from 70% to 130% using the header slider.")

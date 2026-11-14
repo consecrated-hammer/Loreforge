@@ -8,7 +8,7 @@ local addonName, ns = ...
 local HC = {}
 ns.HammerCore = HC
 
-HC.VERSION = "0.5.2"
+HC.VERSION = "0.5.3"
 HC.addonName = addonName
 
 -- The one chat colour every addon uses for its name prefix.
@@ -32,6 +32,7 @@ local DEFAULTS = {
     minimapRightClick = "menu",
     -- The search box in the settings header.
     settingsSearch = true,
+    previewSnap = true,
 }
 
 function HC.GetMetadata(key)

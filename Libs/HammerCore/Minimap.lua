@@ -109,11 +109,19 @@ function MinimapButton:Create()
         return diameter / 2 + b:GetWidth() / 2 - 10
     end
     local function place(angle)
+        -- Collectors such as Ellesmere reparent the button into a tray. They
+        -- own its anchors until it returns to the minimap; an update or resize
+        -- must not pull a collected button out of its grid cell.
+        if b:GetParent() ~= Minimap then return end
         local r = math.rad(angle or 225)
         b:ClearAllPoints()
         b:SetPoint("CENTER", Minimap, "CENTER", math.cos(r) * radius(), math.sin(r) * radius())
     end
     local function follow()
+        if b:GetParent() ~= Minimap then
+            b:SetScript("OnUpdate", nil)
+            return
+        end
         local scale = Minimap:GetEffectiveScale()
         local cx, cy = GetCursorPosition()
         local mx, my = Minimap:GetCenter()
@@ -128,7 +136,9 @@ function MinimapButton:Create()
     -- A drag release may have no OnClick. Clear its suppression on the next
     -- actual press so that the next ordinary click is never swallowed.
     b:SetScript("OnMouseDown", function(self) self.hcDragged = nil end)
-    b:SetScript("OnDragStart", function(self) self:SetScript("OnUpdate", follow) end)
+    b:SetScript("OnDragStart", function(self)
+        if self:GetParent() == Minimap then self:SetScript("OnUpdate", follow) end
+    end)
     b:SetScript("OnDragStop", function(self)
         self:SetScript("OnUpdate", nil)
         self.hcDragged = true
