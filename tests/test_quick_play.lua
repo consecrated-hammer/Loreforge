@@ -95,6 +95,7 @@ do
     local ns = load()
     eq(ns.db.qpRelaxed, false, "timer on by default")
     eq(ns.db.qpOnFlights, "OFFER", "offer on flights by default")
+    eq(ns.db.qpCampfire, true, "campfire quiz on by default")
     eq(ns.db.qpCloseOnLanding, true, "close on landing by default")
     eq(ns.HammerCore.Flights.enabled, true, "Loreforge turns HammerCore flights on")
     for _, toc in ipairs({ "Loreforge.toc", "Loreforge_Camelot.toc" }) do
@@ -622,7 +623,7 @@ end
 
 -- Campfire ownership and safe event transitions use the real card/game.
 do
-    local ns = load({ era = "classic" })
+    local ns = load({ era = "classic", saved = { qpCampfire = false } })
     local camp, card, quick = ns.Campfire, ns.QuickCard, ns.Quick
     local aura, hidden, fail = nil, false, false
     C_Secrets = { ShouldAurasBeSecret = function() return hidden end }
@@ -633,7 +634,7 @@ do
     end }
     ns.HammerCore.State().whatsNew = false
     ns.HammerCore.Welcome.Busy = function() return false end
-    eq(ns.db.qpCampfire, false, "campfire quiz is opt-in")
+    eq(ns.db.qpCampfire, false, "saved campfire Off preference is preserved")
     eq(camp.events, nil, "disabled campfire feature has no event listener")
     ns.db.qpCampfire = true; camp.Apply()
     eq(card.IsShown(), false, "standing does not open quiz")
@@ -691,6 +692,16 @@ do
     ns.HammerCore.Settings:Show("Quick play", "Play")
     assert(wow.FindText("Quiz at the campfire"), "Forever exposes campfire setting")
     C_Secrets, C_UnitAuras = nil, nil
+end
+do
+    local ns = load({ era = "classic" })
+    ns.HammerCore.State().whatsNew = false
+    ns.HammerCore.Welcome.Busy = function() return false end
+    C_UnitAuras = { GetPlayerAuraBySpellID = function() return {} end }
+    ns.Campfire.Refresh()
+    eq(ns.QuickCard.IsShown(), true, "default setting opens quiz at a campfire without opt-in")
+    ns.Campfire.CloseOwned()
+    C_UnitAuras = nil
 end
 do
     local ns = load({ era = "retail", saved = { qpCampfire = true } })

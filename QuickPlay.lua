@@ -25,7 +25,7 @@ local LOREMASTER_SHARE = 3   -- one prompt in this many uses a Loremaster line
 Quick.DEFAULTS = {
     qpMode = "quick", qpRelaxed = false, qpSeconds = 15, qpLightning = 60, qpAutoNext = true, qpNextDelay = 2,
     qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpBanterEvery = -1, qpOnFlights = "OFFER", qpShortest = 20,
-    qpCloseOnLanding = true, qpLoremaster = true, qpCampfire = false,
+    qpCloseOnLanding = true, qpLoremaster = true, qpCampfire = true,
     qpFlightReveal = 3,   -- seconds an answer shows in Flight challenge
     qpLandingGrace = 10,  -- seconds to finish the open question after landing (0 ends straight away)
     soloMain = "QUICK",   -- the Play tab's main button when solo: QUICK or PRACTICE
@@ -92,7 +92,7 @@ end
 
 function Quick.Initialise()
     local db = ns.db
-    db.qpCampfire = db.qpCampfire == true
+    db.qpCampfire = db.qpCampfire ~= false
     local banter = tonumber(db.qpBanterEvery)
     db.qpBanterEvery = (banter == 0 or banter == 1) and banter or -1
     for key, spec in pairs(Quick.LIMITS) do

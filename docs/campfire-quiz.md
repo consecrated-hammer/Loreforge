@@ -4,7 +4,8 @@ Campfire.lua observes Forever's seated campfire aura (1229739) through the
 player aura API. It uses existing Loreforge Quick play, settings and question
 data; no third-party question bank, UI implementation or quiz code is copied.
 
-`qpCampfire` is an opt-in boolean under Quick play > Play, off by default and
+`qpCampfire` is a boolean under Quick play > Play, on by default for new/missing
+settings while preserving saved false values, and
 hidden on unsupported clients. The module registers player aura/world/combat
 events only while enabled. No polling or protected gameplay actions occur.
 

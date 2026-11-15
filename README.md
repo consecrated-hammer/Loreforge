@@ -212,9 +212,10 @@ Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport lib
 
 ### Campfire quizzes on WoW Forever
 
-Enable **Quick play > Play > Quiz at the campfire** to open your selected solo
+**Quick play > Play > Quiz at the campfire** opens your selected solo
 mode when seated at a campfire. It uses Loreforge's existing questions, category
-choices and timer settings. It starts off and is shown only on Forever.
+choices and timer settings. It starts on for new/missing settings and is shown
+only on Forever. Saved Off choices are preserved; disable it on the Play tab.
 
 Standing, entering combat or disabling the option closes only the quiz that
 the campfire opened. A quiz opened manually is left alone. Closing an automatic

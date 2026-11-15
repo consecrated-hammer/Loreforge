@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Gather round the questions: Forever can open a solo quiz when you sit at a campfire. Enable Quiz at the campfire on Quick play > Play. Standing closes only its automatic quiz; it starts off.
+- Gather round the questions: Forever opens a solo quiz when you sit at a campfire. Quiz at the campfire on Quick play > Play starts on for new settings, preserving saved Off choices. Standing closes only its automatic quiz.
 
 ## [1.4.2] - 2026-11-15
 
