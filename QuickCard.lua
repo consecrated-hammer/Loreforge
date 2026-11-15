@@ -260,7 +260,7 @@ local function create()
     f:SetScript("OnHide", function()
         stopEffects(f)
         if Card.options then Card.options:Hide() end
-        if Card.combatHidden then return end
+        if Card.combatHidden or Card.closingSession then return end
         if Card.frame then Card.Dismiss() end
     end)
     if UISpecialFrames then UISpecialFrames[#UISpecialFrames + 1] = "LoreforgeQuickCard" end
@@ -569,6 +569,17 @@ function Card.Dismiss()
     else
         Quick.Close()
     end
+end
+
+-- Automatic entry points can close their exact session without creating a
+-- paused-flight launcher or leaving a combat-resume flag behind.
+function Card.CloseSession(session)
+    if not session or Quick.state ~= session then return false end
+    Card.closingSession = true
+    if Card.frame then Card.frame:Hide() end
+    Card.closingSession, Card.combatHidden = nil, nil
+    Quick.Close()
+    return true
 end
 
 function Card.Hide()

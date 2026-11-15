@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Gather round the questions: Forever can open a solo quiz when you sit at a campfire. Enable Quiz at the campfire on Quick play > Play. Standing closes only its automatic quiz; it starts off.
+
 ## [1.4.2] - 2026-11-15
 
 - “Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.

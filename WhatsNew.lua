@@ -5,6 +5,9 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
+    { version = "1.4.3", date = "2026-11-16", items = {
+        { title = "Gather round the questions", text = "Enable Quiz at the campfire on Quick play > Play. Sitting at a campfire opens your selected solo quiz; standing closes only the quiz opened for the campfire. Off by default.", client = "forever", kind = "improved", page = "Quick play", tab = "Play" },
+    } },
     { version = "1.4.2", date = "2026-11-15", items = {
         { title = "This book refuses to stay shelved", text = "Drag the in-flight book to move it. It remembers its own spot; Reset flight book position on Quick play > Flights brings it home.", page = "Quick play", tab = "Flights", kind = "improved" },
         { text = "“Why is this settings input box not inputtable?” Excellent question. You can now type values beside settings sliders.", kind = "improved" },

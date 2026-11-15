@@ -250,5 +250,6 @@ loader:SetScript("OnEvent", function(self, _, loaded)
         ns.HostEvent(event)
     end
     HC:Start()
+    if ns.Campfire then ns.Campfire.Initialise() end
     self:UnregisterEvent("ADDON_LOADED")
 end)

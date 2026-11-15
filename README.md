@@ -209,3 +209,15 @@ See [development state](docs/development-state.md) for what has and hasn't been 
 ## Licence
 
 Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport libraries retain their own public-domain, zlib or MIT terms; see [third-party notices](Libs/TRANSPORT-NOTICES.md). Loreforge's host engine and interface are original code. Blizzard's built-in book icon is referenced by its game path. There is no external artwork dependency.
+
+### Campfire quizzes on WoW Forever
+
+Enable **Quick play > Play > Quiz at the campfire** to open your selected solo
+mode when seated at a campfire. It uses Loreforge's existing questions, category
+choices and timer settings. It starts off and is shown only on Forever.
+
+Standing, entering combat or disabling the option closes only the quiz that
+the campfire opened. A quiz opened manually is left alone. Closing an automatic
+quiz keeps it closed until you leave and sit again. An active quiz, group game,
+welcome/update notice or daily/flight prompt takes priority. Flight prompts
+continue normally when you take off. Unknown/secret aura state does nothing.

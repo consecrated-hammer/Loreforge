@@ -620,4 +620,84 @@ do
     assert(wow.FindText("Landing grace"), "Landing grace setting")
 end
 
+-- Campfire ownership and safe event transitions use the real card/game.
+do
+    local ns = load({ era = "classic" })
+    local camp, card, quick = ns.Campfire, ns.QuickCard, ns.Quick
+    local aura, hidden, fail = nil, false, false
+    C_Secrets = { ShouldAurasBeSecret = function() return hidden end }
+    C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
+        eq(id, 1229739, "campfire checks the seated aura")
+        if fail then error("aura unavailable") end
+        return aura
+    end }
+    ns.HammerCore.State().whatsNew = false
+    ns.HammerCore.Welcome.Busy = function() return false end
+    eq(ns.db.qpCampfire, false, "campfire quiz is opt-in")
+    eq(camp.events, nil, "disabled campfire feature has no event listener")
+    ns.db.qpCampfire = true; camp.Apply()
+    eq(card.IsShown(), false, "standing does not open quiz")
+    aura = {}; camp.Refresh()
+    eq(card.IsShown(), true, "sitting at campfire opens selected solo quiz")
+    eq(camp.owned, quick.state, "campfire owns the session it opened")
+    card.Hide(); camp.Refresh()
+    eq(card.IsShown(), false, "manual dismissal stays closed during same campfire visit")
+    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    eq(card.IsShown(), true, "new campfire visit can open again")
+    card.Show("lightning"); local manual = quick.state
+    aura = nil; camp.Refresh()
+    eq(quick.state, manual, "standing preserves manually replaced quiz")
+    eq(card.IsShown(), true, "manual replacement remains visible")
+    ns.db.qpCampfire = false; camp.Apply()
+    eq(quick.state, manual, "disabling campfire preserves manual quiz")
+    card.Hide()
+    ns.db.qpCampfire = true; camp.Apply()
+    hidden = true; aura = {}; camp.Refresh()
+    eq(card.IsShown(), false, "unknown secret aura state cannot open quiz")
+    hidden = false; fail = true; camp.Refresh()
+    eq(card.IsShown(), false, "failed aura API cannot open quiz")
+    fail = false; camp.Refresh()
+    eq(card.IsShown(), true, "known seated aura can open after API recovers")
+    combat = true; card.OnCombat("PLAYER_REGEN_DISABLED")
+    camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
+    eq(quick.state, nil, "combat closes automatic campfire session")
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    eq(card.IsShown(), false, "combat exit cannot resurrect closed campfire quiz")
+    aura = nil; camp.Refresh()
+    ns.game.phase = "accepting"; aura = {}; camp.Refresh()
+    eq(card.IsShown(), false, "campfire does not interrupt a group game")
+    ns.game.phase = "setup"
+    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    local owned = quick.state
+    eq(owned ~= nil, true, "next visit opens after group game")
+    hidden = true; aura = nil; camp.Refresh()
+    eq(quick.state, owned, "unknown aura state cannot close an owned quiz")
+    hidden = false; aura = {}
+    takeOff(ns)
+    eq(quick.state, nil, "taking off closes campfire session")
+    eq(card.IsShown(), false, "campfire card is hidden before normal flight offer")
+    eq(card.prompt:IsShown(), true, "normal flight prompt still appears")
+    land(ns, 2); camp.Refresh()
+    eq(card.IsShown(), false, "stale campfire aura cannot reopen quiz after landing")
+    aura = nil; camp.Refresh(); ns.db.qpMode = "daily"; aura = {}; camp.Refresh()
+    eq(quick.state.mode, "quick", "campfire cannot open an answered Daily summary as its quiz")
+    combat = true; camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
+    card.OnCombat("PLAYER_REGEN_DISABLED")
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    eq(card.IsShown(), false, "reverse combat event ordering cannot resurrect campfire quiz")
+    combat = true; aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    combat = false; camp.Refresh()
+    eq(card.IsShown(), true, "a known leave and new visit during combat can open afterwards")
+    ns.HammerCore.Settings:Show("Quick play", "Play")
+    assert(wow.FindText("Quiz at the campfire"), "Forever exposes campfire setting")
+    C_Secrets, C_UnitAuras = nil, nil
+end
+do
+    local ns = load({ era = "retail", saved = { qpCampfire = true } })
+    eq(ns.Campfire.Supported(), false, "Forever campfire aura is not assumed on Retail")
+    eq(ns.Campfire.events, nil, "unsupported client has no campfire listener")
+    ns.HammerCore.Settings:Show("Quick play", "Play")
+    eq(wow.FindText("Quiz at the campfire"), nil, "unsupported campfire setting is not offered")
+end
+
 io.write("test_quick_play: ok\n")

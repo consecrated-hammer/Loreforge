@@ -106,6 +106,7 @@ local QUICK_ICONS = {
 }
 
 local function quickChanged()
+    if ns.Campfire then ns.Campfire.Apply() end
     if ns.QuickCard then
         if ns.QuickCard.Layout then ns.QuickCard.Layout() end
         if ns.QuickCard.IsShown() then ns.QuickCard.Render() end
@@ -168,12 +169,17 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         { 'QUICK', 'PRACTICE' }, { 'Quick play', 'Practice game' },
         function() return db.soloMain end, function(value) db.soloMain = value; if ns.RefreshHost then ns.RefreshHost() end end,
         nil, nil, 140)
+    if ns.Campfire and ns.Campfire.Supported() then
+        _, y = UI.Check(panel, 'Quiz at the campfire',
+            'Open your selected solo quiz when you sit at a campfire. Standing closes only the quiz opened for the campfire. Uses your normal categories and timer settings.', y,
+            function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
+    end
     y = UI.Flush(panel, y)
     _, y = UI.ActionButton(panel, y, 'Categories & difficulty', function() HC.Settings:Hide(); ns.QuickCard.OpenCategories() end,
         'Quick play uses the categories and difficulty from game setup.', nil, 180)
     y = UI.Flush(panel, y)
     return y
-    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain' }),
+    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain', 'qpCampfire' }),
     quickTab('Card', function(panel, y, db, Quick, hideWhen)
     local _, row
     _, y = UI.Header(panel, 'Look', y, QUICK_ICONS.look)

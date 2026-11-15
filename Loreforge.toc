@@ -36,3 +36,4 @@ Probe.lua
 QuickPlay.lua
 Daily.lua
 QuickCard.lua
+Campfire.lua
