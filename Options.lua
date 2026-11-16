@@ -102,6 +102,7 @@ local QUICK_ICONS = {
     play = 'Interface\\Icons\\INV_Misc_PocketWatch_01',
     look = 'Interface\\Icons\\INV_Misc_Spyglass_03',
     flights = 'Interface\\Icons\\Ability_Mount_Gryphon_01',
+    camping = 'Interface\\Icons\\Spell_Fire_Fire',
     daily = 'Interface\\Icons\\INV_Misc_Note_06',
 }
 
@@ -138,14 +139,14 @@ local function quickTab(name, build, keys)
             end
             quickChanged()
             if name == 'Flights' then ns.QuickCard.ResetLauncherPosition() end
-            if name == 'Play' then ns.QuickCard.ResetLauncherPosition('campfire') end
+            if name == 'Camping' then ns.QuickCard.ResetLauncherPosition('campfire') end
             if ns.RefreshHost then ns.RefreshHost() end
         end, 'Reset ' .. name:sub(1, 1):lower() .. name:sub(2))
         return y
     end }
 end
 
-HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card appearance, flights and the daily.', tabs = {
+local quickTabs = {
     quickTab('Play', function(panel, y, db, Quick, hideWhen)
     local _, row
     _, y = UI.Header(panel, 'Play', y, QUICK_ICONS.play)
@@ -170,21 +171,12 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         { 'QUICK', 'PRACTICE' }, { 'Quick play', 'Practice game' },
         function() return db.soloMain end, function(value) db.soloMain = value; if ns.RefreshHost then ns.RefreshHost() end end,
         nil, nil, 140)
-    if ns.Campfire and ns.Campfire.Supported() then
-        _, y = UI.Check(panel, 'Quiz at the campfire',
-            'Offer your selected solo quiz when you sit at a campfire. Not now leaves a book to start later. Standing closes the offer and its quiz. Uses your normal categories and timer settings.', y,
-            function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
-        y = UI.Flush(panel, y)
-        _, y = UI.ActionButton(panel, y, 'Reset campfire book position',
-            function() ns.QuickCard.ResetLauncherPosition('campfire') end,
-            'Return the campfire book to its default spot. Its position is separate from the flight book.', nil, 210)
-    end
     y = UI.Flush(panel, y)
     _, y = UI.ActionButton(panel, y, 'Categories & difficulty', function() HC.Settings:Hide(); ns.QuickCard.OpenCategories() end,
         'Quick play uses the categories and difficulty from game setup.', nil, 180)
     y = UI.Flush(panel, y)
     return y
-    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain', 'qpCampfire', 'qpCampfireBookPoint' }),
+    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain' }),
     quickTab('Card', function(panel, y, db, Quick, hideWhen)
     local _, row
     _, y = UI.Header(panel, 'Look', y, QUICK_ICONS.look)
@@ -237,7 +229,24 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
     hideWhen(row, enabled, function() return db.dailyOn ~= false end)
     return y
     end, { 'dailyOn', 'dailyOffer' }),
-} })
+}
+if ns.Campfire and ns.Campfire.Supported() then
+    table.insert(quickTabs, 4, quickTab('Camping', function(panel, y, db)
+        local _
+        _, y = UI.Header(panel, 'Camping', y, QUICK_ICONS.camping)
+        _, y = UI.Check(panel, 'Quiz at the campfire',
+            'Offer your selected solo quiz when you sit at a campfire. Not now leaves a book to start later. Standing closes the offer and its quiz. Uses your normal categories and timer settings.', y,
+            function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
+        y = UI.Flush(panel, y)
+        _, y = UI.ActionButton(panel, y, 'Reset campfire book position',
+            function() ns.QuickCard.ResetLauncherPosition('campfire') end,
+            'Return the campfire book to its default spot. Its position is separate from the flight book.', nil, 210)
+        y = UI.Flush(panel, y)
+        return y
+    end, { 'qpCampfire', 'qpCampfireBookPoint' }))
+end
+HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card appearance, flights, camping and the daily.', tabs = quickTabs })
+
 
 -- ── Key Bindings ───────────────────────────────────────────────────────────
 

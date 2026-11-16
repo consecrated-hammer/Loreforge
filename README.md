@@ -145,6 +145,7 @@ Open `/lf settings`, then use search or these tabs:
 - **Quick play > Play:** timer, automatic/manual next question, Lightning length, solo main-button preference, and Categories & difficulty.
 - **Quick play > Card:** artwork, animations and Small/Medium/Large size.
 - **Quick play > Flights:** takeoff behaviour, shortest flight, answer pause, landing grace, close on landing and Retail Loremaster lines.
+- **Quick play > Camping (Forever):** campfire quiz offers and campfire book-position reset.
 - **Quick play > Daily question:** enable the daily and offer it at login.
 
 Each tab's reset changes only its own preferences. It keeps scores, daily attempts, history and the other tabs' settings. Card Options and the main settings use the same saved preferences. Search can find a dependent control while it is hidden and highlight the switch that enables it. Answer bindings and their current Change/Remove actions are searchable too.
@@ -212,15 +213,15 @@ Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport lib
 
 ### Campfire quizzes on WoW Forever
 
-**Quick play > Play > Quiz at the campfire** offers your selected solo
+**Quick play > Camping > Quiz at the campfire** offers your selected solo
 mode when seated at a campfire. Accept to start; no question or timer starts
 before your click. Not now leaves the book available while seated. It uses Loreforge's existing questions, category
 choices and timer settings. It starts on for new/missing settings and is shown
-only on Forever. Saved Off choices are preserved; disable it on the Play tab.
+only on Forever. Saved Off choices are preserved; disable it on the Camping tab.
 
 Dismiss the quiz to leave a draggable book with Resume quiz / New quiz while
 seated. Its saved position is separate from the flight book; reset it under
-Quick play > Play. Standing or disabling the option closes the owned quiz and
+Quick play > Camping. Standing or disabling the option closes the owned quiz and
 book. Combat closes a visible automatic quiz; an already dismissed quiz stays
 paused, with its book hidden until combat ends. A quiz opened manually is left
 alone. Dismissal never automatically reopens the card during the same visit. An active quiz, group game,

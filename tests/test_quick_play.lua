@@ -851,7 +851,7 @@ do
     combat = true; aura = nil; refresh(); aura = {}; refresh()
     combat = false; refresh()
     eq(card.IsShown(), true, "a known leave and new visit during combat can open afterwards")
-    ns.HammerCore.Settings:Show("Quick play", "Play")
+    ns.HammerCore.Settings:Show("Quick play", "Camping")
     assert(wow.FindText("Quiz at the campfire"), "Forever exposes campfire setting")
     C_Secrets, C_UnitAuras = nil, nil
 end

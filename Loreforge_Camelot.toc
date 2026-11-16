@@ -30,6 +30,7 @@ Flair.lua
 Setup.lua
 History.lua
 Host.lua
+Campfire.lua
 Options.lua
 Party.lua
 Player.lua
@@ -37,4 +38,3 @@ Probe.lua
 QuickPlay.lua
 Daily.lua
 QuickCard.lua
-Campfire.lua

@@ -70,6 +70,12 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     assert(interface['Animations'] and interface['Artwork'] and interface['Sound cues'])
     assert(rows('Interface', 'Windows')['Player window'])
     for _, tab in ipairs({ 'Play', 'Card', 'Flights', 'Daily question' }) do assert(S.pages['Quick play'].bodies[tab]) end
+    eq(S.pages['Quick play'].bodies.Camping ~= nil, era == 'classic', 'Camping tab is Forever-only')
+    if era == 'classic' then
+        local camp = rows('Quick play', 'Camping')
+        assert(camp['Quiz at the campfire'] and camp['Reset campfire book position'], 'campfire controls live on Camping')
+        eq(rows('Quick play', 'Play')['Quiz at the campfire'], nil, 'Play no longer owns campfire controls')
+    end
     -- Every registered control can be found and focused, across all tabs and pages.
     local checked = 0
     for pageName, page in pairs(S.pages) do
@@ -239,12 +245,26 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.records, records, 'Card reset preserves records')
     eq(ns.db.matches, matches, 'Card reset preserves history')
     eq(ns.db.daily, dailyStore, 'Card reset preserves daily attempts')
+    ns.db.qpCampfire, ns.db.qpCampfireBookPoint = false, bookPoint
     ns.db.qpMode = 'lightning'
     S:Show('Quick play', 'Play')
     wow.Click(rows('Quick play', 'Play')['Reset play'])
     eq(ns.db.qpMode, 'lightning', 'Play reset waits for confirmation')
     wow.Click(ns.HammerCore.Dialog.frame.accept)
     eq(ns.db.qpMode, 'quick', 'Play reset includes the saved solo mode')
+    eq(ns.db.qpCampfire, false, 'Play reset preserves campfire preference')
+    eq(ns.db.qpCampfireBookPoint, bookPoint, 'Play reset preserves campfire book position')
+    if era == 'classic' then
+        ns.db.qpSeconds, ns.db.qpOnFlights, ns.db.qpFlightBookPoint = 29, 'NONE', bookPoint
+        S:Show('Quick play', 'Camping')
+        wow.Click(rows('Quick play', 'Camping')['Reset camping'])
+        wow.Click(ns.HammerCore.Dialog.frame.accept)
+        eq(ns.db.qpCampfire, true, 'Camping reset restores enabled default')
+        eq(ns.db.qpCampfireBookPoint, nil, 'Camping reset restores book position')
+        eq(ns.db.qpSeconds, 29, 'Camping reset preserves Play timer')
+        eq(ns.db.qpOnFlights, 'NONE', 'Camping reset preserves flight preference')
+        eq(ns.db.qpFlightBookPoint, bookPoint, 'Camping reset preserves flight book position')
+    end
     assert(S.pages['Games and records'] and not S.pages['Player records'] and not S.pages['Party games'], 'records and invitations share one page')
     ns.db.partyInvites = false
     S:Show('Games and records')

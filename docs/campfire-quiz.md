@@ -4,7 +4,7 @@ Campfire.lua observes Forever's seated campfire aura (1229739) through the
 player aura API. It uses existing Loreforge Quick play, settings and question
 data; no third-party question bank, UI implementation or quiz code is copied.
 
-`qpCampfire` is a boolean under Quick play > Play, on by default for new/missing
+`qpCampfire` is a boolean under Quick play > Camping, on by default for new/missing
 settings while preserving saved false values, and
 hidden on unsupported clients. The module registers player aura/world/combat
 events only while enabled. No polling or protected gameplay actions occur.
@@ -27,7 +27,7 @@ paused, with its book hidden until combat ends. A manually replaced quiz is
 not owned. Manual dismissal pauses the owned quiz and shows the draggable
 book for Resume quiz / New quiz while seated. Neither choice reopens a stale visit. The book disappears on
 standing, disable or takeoff. Its `qpCampfireBookPoint` is independent of the flight
-book position; Quick play > Play offers Reset campfire book position.
+book position; Quick play > Camping offers Reset campfire book position.
 Manual dismissal latches the visit until the aura is absent and returns. Secret/unavailable/malformed aura data is unknown, never absence.
 Group games, active cards, prompts and queued/visible welcome/news take priority;
 a busy visit is skipped until the player leaves and sits again. Unknown aura
