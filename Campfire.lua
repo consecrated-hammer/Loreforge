@@ -29,6 +29,8 @@ end
 -- Only close the exact session this feature opened. Manual replacement and
 -- other quiz modes retain their existing dismissal/combat behaviour.
 function Campfire.CloseOwned()
+    Campfire.offered = nil
+    if ns.QuickCard.prompt and ns.QuickCard.prompt.lfContext == "campfire" then ns.QuickCard.HidePrompt(true) end
     ns.QuickCard.HideLauncher("campfire")
     local owned = Campfire.owned
     Campfire.owned = nil
@@ -55,19 +57,25 @@ local function busy()
     return false
 end
 
--- Launchers may resume only this visit's paused, owned quiz.
+-- Only this visit's offer or its exact owned quiz can use the campfire UI.
 function Campfire.CanLaunch()
     return ns.db and ns.db.qpCampfire and Campfire.Supported() and Campfire.atCamp
-        and Campfire.owned ~= nil and ns.Quick.state == Campfire.owned
+        and ((Campfire.offered and not ns.Quick.state)
+            or (Campfire.owned ~= nil and ns.Quick.state == Campfire.owned))
         and not ns.Quick.Flying() and not (InCombatLockdown and InCombatLockdown())
         and seated() == true and not ns.QuickCard.IsShown() and not ns.QuickCard.combatHidden
 end
 
-function Campfire.OpenQuiz()
-    if not Campfire.CanLaunch() then return end
-    local mode = ns.db.qpMode
+function Campfire.Mode(mode)
+    mode = mode or ns.db.qpMode
     if mode ~= "quick" and mode ~= "streak" and mode ~= "lightning" then mode = "quick" end
-    ns.QuickCard.Show(mode)
+    return mode
+end
+
+function Campfire.OpenQuiz(mode)
+    if not Campfire.CanLaunch() then return end
+    Campfire.offered = nil
+    ns.QuickCard.Show(Campfire.Mode(mode))
     if ns.QuickCard.IsShown() then Campfire.owned = ns.Quick.state end
 end
 
@@ -94,10 +102,10 @@ function Campfire.Refresh()
     end
     Campfire.atCamp = true -- closing manually stays closed until the next visit
     if busy() or ns.Quick.Flying() then return end
-    local mode = ns.db.qpMode
-    if mode ~= "quick" and mode ~= "streak" and mode ~= "lightning" then mode = "quick" end
-    ns.QuickCard.Show(mode)
-    if ns.QuickCard.IsShown() then Campfire.owned = ns.Quick.state end
+    Campfire.offered = true
+    if not ns.QuickCard.Prompt("campfire") then
+        Campfire.offered, Campfire.atCamp = nil, nil -- retry only when aura data becomes known
+    end
 end
 
 function Campfire.BeforeTakeoff()
@@ -118,7 +126,7 @@ function Campfire.Apply()
                 ns.QuickCard.HideLauncher("campfire")
                 -- Keep an already-dismissed quiz paused across combat, but never
                 -- resurrect a visible automatic quiz through Card.OnCombat.
-                if not (Campfire.owned and ns.Quick.state == Campfire.owned
+                if not (Campfire.offered and not ns.Quick.state) and not (Campfire.owned and ns.Quick.state == Campfire.owned
                     and Campfire.owned.pausedAt and not ns.QuickCard.IsShown()
                     and not ns.QuickCard.combatHidden) then
                     Campfire.CloseOwned()

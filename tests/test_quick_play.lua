@@ -621,10 +621,101 @@ do
     assert(wow.FindText("Landing grace"), "Landing grace setting")
 end
 
+-- Campfire offers share flight styling, but require explicit acceptance.
+do
+    local ns = load({ era = "classic", saved = { qpMode = "streak" } })
+    local camp, card, quick = ns.Campfire, ns.QuickCard, ns.Quick
+    ns.HammerCore.State().whatsNew = false
+    ns.HammerCore.Welcome.Busy = function() return false end
+    local aura = {}
+    C_UnitAuras = { GetPlayerAuraBySpellID = function() return aura end }
+    local probes = 0
+    C_UnitAuras.GetPlayerAuraBySpellID = function()
+        probes = probes + 1
+        if probes == 2 then return nil end
+        return aura
+    end
+    camp.Refresh()
+    eq(camp.offered, nil, "failed second aura probe cannot leave a ghost offer")
+    eq(card.prompt, nil, "unknown aura during offer creation does not show prompt")
+    C_UnitAuras.GetPlayerAuraBySpellID = function() return aura end
+    camp.Refresh()
+    local prompt = card.prompt
+    eq(prompt:IsShown(), true, "sitting offers a campfire quiz")
+    eq(card.IsShown(), false, "campfire offer does not open quiz card")
+    eq(quick.state, nil, "offer does not start question timer")
+    eq(prompt.quick:GetText(), quick.MODE.streak.label, "offer names selected solo mode")
+    eq(prompt.flight:IsShown(), false, "campfire hides flight challenge choice")
+    eq(prompt.dontOffer:IsShown(), false, "campfire hides flight opt-out")
+    eq(prompt.always:IsShown(), false, "campfire hides automatic flight setting")
+    prompt.decline.scripts.OnClick(prompt.decline)
+    eq(prompt:IsShown(), false, "Not now closes campfire offer")
+    eq(card.launcher:IsShown(), true, "declined offer leaves campfire book")
+    eq(quick.state, nil, "declining starts no quiz")
+    camp.Refresh()
+    eq(prompt:IsShown(), false, "decline remains respected on aura refresh")
+    card.launcher.scripts.OnClick(card.launcher)
+    eq(ns.HammerCore.Menu.items[1].spec.disabled, true, "Resume unavailable before starting a quiz")
+    ns.HammerCore.Menu.items[2].spec.func()
+    eq(quick.state.mode, "streak", "book starts selected mode after declined offer")
+    eq(camp.owned, quick.state, "accepted session remains campfire owned")
+    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    combat = true; card.OnCombat("PLAYER_REGEN_DISABLED")
+    camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
+    eq(prompt:IsShown(), false, "offer hides during combat")
+    combat = false; camp.Refresh(); card.OnCombat("PLAYER_REGEN_ENABLED")
+    eq(prompt:IsShown(), true, "unanswered offer returns after combat")
+    eq(card.launcher:IsShown(), false, "restored offer does not leave book behind it")
+    ns.db.qpMode = "lightning"
+    prompt.quick.scripts.OnClick(prompt.quick)
+    eq(card.IsShown(), true, "accepting prompt opens quiz")
+    eq(quick.state.mode, "streak", "prompt starts displayed mode even if settings changed")
+    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    local staleAccept = prompt.quick.scripts.OnClick
+    aura = nil; camp.Refresh()
+    eq(prompt:IsShown(), false, "standing closes pending offer")
+    staleAccept()
+    eq(quick.state, nil, "stale campfire accept cannot start after standing")
+    aura = {}; camp.Refresh()
+    combat = true; camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
+    card.OnCombat("PLAYER_REGEN_DISABLED")
+    aura = nil; camp.Refresh()
+    eq(card.promptAfterCombat, nil, "standing clears hidden prompt combat restoration")
+    eq(camp.offered, nil, "standing during combat clears pending offer")
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    eq(prompt:IsShown(), false, "cancelled offer cannot return after combat")
+    aura = {}; camp.Refresh(); ns.db.qpCampfire = false; camp.Apply()
+    eq(prompt:IsShown(), false, "disabling closes unaccepted offer")
+    eq(camp.offered, nil, "disabling releases pending offer")
+    ns.db.qpCampfire = true; camp.Apply()
+    aura = {}; camp.Refresh()
+    card.Show("lightning"); local manual = quick.state
+    eq(camp.offered, nil, "manual quiz cancels pending campfire offer")
+    eq(prompt:IsShown(), false, "manual quiz closes pending campfire prompt")
+    aura = nil; camp.Refresh()
+    eq(quick.state, manual, "standing preserves manual replacement")
+    card.Hide(); aura = {}; camp.Refresh()
+    takeOff(ns)
+    eq(prompt:IsShown(), true, "takeoff replaces campfire offer with flight offer")
+    eq(prompt.lfContext, "flight", "shared prompt switches to flight")
+    eq(prompt.flight:IsShown(), true, "flight challenge choice restored")
+    eq(prompt.dontOffer:IsShown(), true, "flight opt-out restored")
+    eq(prompt.always:IsShown(), true, "flight automatic choice restored")
+    eq(prompt.quick:GetText(), quick.MODE.quick.label, "flight Quick play label restored")
+    land(ns, 2)
+    C_UnitAuras = nil
+end
+
 -- Campfire ownership and safe event transitions use the real card/game.
 do
     local ns = load({ era = "classic", saved = { qpCampfire = false } })
     local camp, card, quick = ns.Campfire, ns.QuickCard, ns.Quick
+    local function refresh()
+        camp.Refresh()
+        if card.prompt and card.prompt:IsShown() and card.prompt.lfContext == "campfire" then
+            card.prompt.quick.scripts.OnClick(card.prompt.quick)
+        end
+    end
     local aura, hidden, fail = nil, false, false
     C_Secrets = { ShouldAurasBeSecret = function() return hidden end }
     C_UnitAuras = { GetPlayerAuraBySpellID = function(id)
@@ -636,13 +727,13 @@ do
     ns.HammerCore.Welcome.Busy = function() return false end
     eq(ns.db.qpCampfire, false, "saved campfire Off preference is preserved")
     eq(camp.events, nil, "disabled campfire feature has no event listener")
-    ns.db.qpCampfire = true; camp.Apply()
+    ns.db.qpCampfire = true; camp.Apply(); refresh()
     eq(card.IsShown(), false, "standing does not open quiz")
-    aura = {}; camp.Refresh()
+    aura = {}; refresh()
     eq(card.IsShown(), true, "sitting at campfire opens selected solo quiz")
     eq(camp.owned, quick.state, "campfire owns the session it opened")
     ns.HammerCore.Welcome.Busy = function() return true end
-    card.Hide(); camp.Refresh()
+    card.Hide(); refresh()
     ns.HammerCore.Welcome.Busy = function() return false end
     eq(card.IsShown(), false, "manual dismissal stays closed during same campfire visit")
     local paused = quick.state
@@ -660,7 +751,7 @@ do
     camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
     eq(book:IsShown(), false, "campfire book hides in combat")
     eq(quick.state, paused, "dismissed session survives combat paused")
-    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); refresh()
     eq(book:IsShown(), true, "book returns after combat while seated")
     eq(card.IsShown(), false, "combat does not reopen dismissed card")
     book.scripts.OnMouseDown(book); book.scripts.OnClick(book)
@@ -676,33 +767,33 @@ do
     assert(quick.state ~= paused, "new campfire quiz replaces session")
     eq(camp.owned, quick.state, "new campfire quiz remains owned")
     card.Hide()
-    aura = nil; camp.Refresh()
+    aura = nil; refresh()
     eq(book:IsShown(), false, "standing removes campfire book")
     eq(quick.state, nil, "standing closes paused campfire session")
     card.NewLauncherQuiz("campfire"); card.ResumeQuiz("campfire")
     eq(quick.state, nil, "stale book actions cannot reopen after standing")
-    aura = {}; camp.Refresh(); card.Hide()
-    ns.db.qpCampfire = false; camp.Apply()
+    aura = {}; refresh(); card.Hide()
+    ns.db.qpCampfire = false; camp.Apply(); refresh()
     eq(book:IsShown(), false, "disabling removes campfire book")
     eq(quick.state, nil, "disabling closes paused session")
-    ns.db.qpCampfire = true; camp.Apply()
+    ns.db.qpCampfire = true; camp.Apply(); refresh()
     card.ResetLauncherPosition("campfire")
     eq(ns.db.qpCampfireBookPoint, nil, "campfire position can be reset separately")
     card.Hide(); local oldVisit = quick.state
     combat = true; camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
     card.OnCombat("PLAYER_REGEN_DISABLED")
-    aura = nil; camp.Refresh()
+    aura = nil; refresh()
     eq(quick.state, nil, "known absence during combat releases old paused visit")
-    aura = {}; camp.Refresh()
-    combat = false; camp.Refresh(); card.OnCombat("PLAYER_REGEN_ENABLED")
+    aura = {}; refresh()
+    combat = false; refresh(); card.OnCombat("PLAYER_REGEN_ENABLED")
     assert(quick.state and quick.state ~= oldVisit, "new visit cannot inherit previous paused quiz")
     card.Hide(); book.scripts.OnMouseDown(book); book.scripts.OnClick(book)
     local staleNew = ns.HammerCore.Menu.items[2].spec.func
-    aura = nil; camp.Refresh()
+    aura = nil; refresh()
     eq(ns.HammerCore.Menu:IsShown(), false, "standing closes book-anchored menu")
     staleNew(); menuResume()
     eq(quick.state, nil, "stale menu callbacks cannot reopen ended visit")
-    aura = {}; camp.Refresh(); card.Hide()
+    aura = {}; refresh(); card.Hide()
     ns.db.qpFlightBookPoint = { "CENTER", "CENTER", 35, 45 }
     book.scripts.OnMouseDown(book); book.scripts.OnDragStart(book)
     book:ClearAllPoints(); book:SetPoint("CENTER", UIParent, "CENTER", 95, 105)
@@ -713,52 +804,52 @@ do
     eq(book.lfContext, "flight", "shared book switches to flight context")
     eq(select(4, book:GetPoint()), 35, "flight book restores independent flight point")
     eq(ns.db.qpCampfireBookPoint[3], 95, "flight display preserves campfire point")
-    land(ns, 2); camp.Refresh()
-    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    land(ns, 2); refresh()
+    aura = nil; refresh(); aura = {}; refresh()
     eq(card.IsShown(), true, "new campfire visit can open again")
     card.Show("lightning"); local manual = quick.state
-    aura = nil; camp.Refresh()
+    aura = nil; refresh()
     eq(quick.state, manual, "standing preserves manually replaced quiz")
     eq(card.IsShown(), true, "manual replacement remains visible")
-    ns.db.qpCampfire = false; camp.Apply()
+    ns.db.qpCampfire = false; camp.Apply(); refresh()
     eq(quick.state, manual, "disabling campfire preserves manual quiz")
     card.Hide()
-    ns.db.qpCampfire = true; camp.Apply()
-    hidden = true; aura = {}; camp.Refresh()
+    ns.db.qpCampfire = true; camp.Apply(); refresh()
+    hidden = true; aura = {}; refresh()
     eq(card.IsShown(), false, "unknown secret aura state cannot open quiz")
-    hidden = false; fail = true; camp.Refresh()
+    hidden = false; fail = true; refresh()
     eq(card.IsShown(), false, "failed aura API cannot open quiz")
-    fail = false; camp.Refresh()
+    fail = false; refresh()
     eq(card.IsShown(), true, "known seated aura can open after API recovers")
     combat = true; card.OnCombat("PLAYER_REGEN_DISABLED")
     camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
     eq(quick.state, nil, "combat closes automatic campfire session")
-    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); refresh()
     eq(card.IsShown(), false, "combat exit cannot resurrect closed campfire quiz")
-    aura = nil; camp.Refresh()
-    ns.game.phase = "accepting"; aura = {}; camp.Refresh()
+    aura = nil; refresh()
+    ns.game.phase = "accepting"; aura = {}; refresh()
     eq(card.IsShown(), false, "campfire does not interrupt a group game")
     ns.game.phase = "setup"
-    aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
+    aura = nil; refresh(); aura = {}; refresh()
     local owned = quick.state
     eq(owned ~= nil, true, "next visit opens after group game")
-    hidden = true; aura = nil; camp.Refresh()
+    hidden = true; aura = nil; refresh()
     eq(quick.state, owned, "unknown aura state cannot close an owned quiz")
     hidden = false; aura = {}
     takeOff(ns)
     eq(quick.state, nil, "taking off closes campfire session")
     eq(card.IsShown(), false, "campfire card is hidden before normal flight offer")
     eq(card.prompt:IsShown(), true, "normal flight prompt still appears")
-    land(ns, 2); camp.Refresh()
+    land(ns, 2); refresh()
     eq(card.IsShown(), false, "stale campfire aura cannot reopen quiz after landing")
-    aura = nil; camp.Refresh(); ns.db.qpMode = "daily"; aura = {}; camp.Refresh()
+    aura = nil; refresh(); ns.db.qpMode = "daily"; aura = {}; refresh()
     eq(quick.state.mode, "quick", "campfire cannot open an answered Daily summary as its quiz")
     combat = true; camp.events.scripts.OnEvent(camp.events, "PLAYER_REGEN_DISABLED")
     card.OnCombat("PLAYER_REGEN_DISABLED")
-    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); camp.Refresh()
+    combat = false; card.OnCombat("PLAYER_REGEN_ENABLED"); refresh()
     eq(card.IsShown(), false, "reverse combat event ordering cannot resurrect campfire quiz")
-    combat = true; aura = nil; camp.Refresh(); aura = {}; camp.Refresh()
-    combat = false; camp.Refresh()
+    combat = true; aura = nil; refresh(); aura = {}; refresh()
+    combat = false; refresh()
     eq(card.IsShown(), true, "a known leave and new visit during combat can open afterwards")
     ns.HammerCore.Settings:Show("Quick play", "Play")
     assert(wow.FindText("Quiz at the campfire"), "Forever exposes campfire setting")
@@ -770,7 +861,9 @@ do
     ns.HammerCore.Welcome.Busy = function() return false end
     C_UnitAuras = { GetPlayerAuraBySpellID = function() return {} end }
     ns.Campfire.Refresh()
-    eq(ns.QuickCard.IsShown(), true, "default setting opens quiz at a campfire without opt-in")
+    eq(ns.QuickCard.IsShown(), false, "default campfire never starts a quiz automatically")
+    eq(ns.Quick.state, nil, "default offer starts no question or timer")
+    eq(ns.QuickCard.prompt:IsShown(), true, "default setting offers campfire quiz without opt-in")
     ns.Campfire.CloseOwned()
     C_UnitAuras = nil
 end

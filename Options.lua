@@ -172,7 +172,7 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         nil, nil, 140)
     if ns.Campfire and ns.Campfire.Supported() then
         _, y = UI.Check(panel, 'Quiz at the campfire',
-            'Open your selected solo quiz when you sit at a campfire. Standing closes only the quiz opened for the campfire. Uses your normal categories and timer settings.', y,
+            'Offer your selected solo quiz when you sit at a campfire. Not now leaves a book to start later. Standing closes the offer and its quiz. Uses your normal categories and timer settings.', y,
             function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
         y = UI.Flush(panel, y)
         _, y = UI.ActionButton(panel, y, 'Reset campfire book position',

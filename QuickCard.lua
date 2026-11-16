@@ -550,6 +550,7 @@ end
 
 function Card.Show(mode, options)
     if InCombatLockdown and InCombatLockdown() then HC.Print("Quick play opens after combat."); return end
+    if ns.Campfire and ns.Campfire.offered then ns.Campfire.CloseOwned() end
     local f = create()
     Card.HideLauncher()
     Card.HidePrompt(true)
@@ -651,7 +652,10 @@ end
 function Card.ResumeQuiz(context)
     if not launcherContext() or (context and launcherContext() ~= context)
         or (InCombatLockdown and InCombatLockdown()) then return end
-    if not Quick.state then Card.Show("flight"); return end
+    if not Quick.state then
+        if launcherContext() == "campfire" then ns.Campfire.OpenQuiz() else Card.Show("flight") end
+        return
+    end
     Card.HideLauncher()
     Quick.Resume()
     Card.Layout()
@@ -663,6 +667,7 @@ end
 function Card.ShowLauncher(context)
     local available = launcherContext()
     if not available or (context and context ~= available) or Card.IsShown() then return end
+    if available == "campfire" and Card.prompt and Card.prompt:IsShown() then return end
     watchCombat()
     if not Card.launcher then
         local b = CreateFrame("Button", nil, UIParent, "BackdropTemplate")
@@ -723,7 +728,7 @@ function Card.OnCombat(event)
             Card.frame:Hide()
             if Card.options then Card.options:Hide() end
         end
-        if Card.prompt and Card.prompt:IsShown() then Card.promptAfterCombat = true; Card.prompt:Hide() end
+        if Card.prompt and Card.prompt:IsShown() then Card.promptAfterCombat = Card.prompt.lfContext or "flight"; Card.prompt:Hide() end
         if Card.dailyPrompt and Card.dailyPrompt:IsShown() then Card.dailyAfterCombat = true; Card.dailyPrompt:Hide() end
     elseif Card.combatHidden then
         Card.combatHidden = nil
@@ -738,8 +743,11 @@ function Card.OnCombat(event)
         Card.ShowLauncher()
     end
     if event == "PLAYER_REGEN_ENABLED" and Card.promptAfterCombat then
+        local context = Card.promptAfterCombat
         Card.promptAfterCombat = nil
-        if Quick.Flying() and not Card.IsShown() then Card.Prompt() end
+        if context == "campfire" then
+            if ns.Campfire.CanLaunch() then Card.Prompt("campfire") end
+        elseif Quick.Flying() and not Card.IsShown() then Card.Prompt() end
     end
     if event == "PLAYER_REGEN_ENABLED" and Card.dailyAfterCombat then
         Card.dailyAfterCombat = nil
@@ -1020,7 +1028,7 @@ local function promptButton(parent, mode, x)
     b.line:SetJustifyH("CENTER")
     b.line:SetText(spec.line)
     b:SetScript("OnClick", function() Card.Show(mode) end)
-    b:HookScript("OnEnter", function(self) modeTooltip(self, mode) end)
+    b:HookScript("OnEnter", function(self) modeTooltip(self, self.lfMode or mode) end)
     b:HookScript("OnLeave", hideTooltip)
     return b
 end
@@ -1070,13 +1078,34 @@ local function createPrompt()
     return p
 end
 
-function Card.Prompt()
-    if InCombatLockdown and InCombatLockdown() then Card.promptAfterCombat = true; return end
+function Card.Prompt(context)
+    context = context == "campfire" and "campfire" or "flight"
+    if context == "campfire" and not ns.Campfire.CanLaunch() then return end
+    if InCombatLockdown and InCombatLockdown() then Card.promptAfterCombat = context; return end
+    if context == "campfire" then Card.HideLauncher() end
     local p = createPrompt()
+    p.lfContext = context
+    local campfire = context == "campfire"
+    local mode = campfire and ns.Campfire.Mode() or "quick"
+    local spec = Quick.MODE[mode]
+    p.quick.lfMode = mode
+    p.quick:SetScript("OnClick", function()
+        if campfire then ns.Campfire.OpenQuiz(mode) else Card.Show("quick") end
+    end)
+    p.quick:SetText(spec.label)
+    p.quick.line:SetText(spec.line)
+    p.quick:ClearAllPoints()
+    if campfire then p.quick:SetPoint("TOP", 0, -96)
+    else p.quick:SetPoint("TOPLEFT", 20, -96) end
+    p.flight:SetShown(not campfire)
+    p.dontOffer:SetShown(not campfire)
+    p.always:SetShown(not campfire)
+    p:SetHeight(campfire and 202 or 258)
     p:SetScale(Quick.SIZES[ns.db.qpSize] or 1)
-    p.line:SetText(Quick.PromptLine())
+    p.line:SetText(campfire and "A warm fire. Fancy a quiz?" or Quick.PromptLine())
     p.Refresh()
     p:Show()
+    return true
 end
 
 function Card.HidePrompt(silent)

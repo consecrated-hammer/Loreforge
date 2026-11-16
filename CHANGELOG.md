@@ -2,11 +2,13 @@
 
 ## [Unreleased]
 
+- By invitation only: campfires offer a quiz before starting, like flights. Not now leaves the book available while seated; questions and timers wait for your click.
+
 - A fireside bookmark: dismiss the campfire quiz to keep a movable book for resuming or starting fresh while seated. Standing puts it away; its position is separate from the flight book.
 
 - Keeping up with the guild: a chat reminder flags newer stable releases seen in your group or guild. Configure Update reminders on Visibility; development and test builds stay quiet.
 
-- Gather round the questions: Forever opens a solo quiz when you sit at a campfire. Quiz at the campfire on Quick play > Play starts on for new settings, preserving saved Off choices. Standing closes only its automatic quiz.
+- Gather round the questions: Forever offers a solo quiz when you sit at a campfire. Quiz at the campfire on Quick play > Play starts on for new settings, preserving saved Off choices. Standing closes only its automatic quiz.
 
 ## [1.4.2] - 2026-11-15
 
