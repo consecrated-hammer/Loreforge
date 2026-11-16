@@ -73,8 +73,10 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(S.pages['Quick play'].bodies.Camping ~= nil, era == 'classic', 'Camping tab is Forever-only')
     if era == 'classic' then
         local camp = rows('Quick play', 'Camping')
-        assert(camp['Quiz at the campfire'] and camp['Reset campfire book position'], 'campfire controls live on Camping')
-        eq(rows('Quick play', 'Play')['Quiz at the campfire'], nil, 'Play no longer owns campfire controls')
+        for _, label in ipairs({ 'When camping', 'Close after camping', 'Campfire answer pause', 'Standing grace', 'Show book when dismissed', 'Reset campfire book position' }) do
+            assert(camp[label], 'camping control searchable: ' .. label)
+        end
+        eq(rows('Quick play', 'Play')['When camping'], nil, 'Play no longer owns campfire controls')
     end
     -- Every registered control can be found and focused, across all tabs and pages.
     local checked = 0
@@ -256,11 +258,18 @@ for _, era in ipairs({ 'retail', 'classic' }) do
     eq(ns.db.qpCampfireBookPoint, bookPoint, 'Play reset preserves campfire book position')
     if era == 'classic' then
         ns.db.qpSeconds, ns.db.qpOnFlights, ns.db.qpFlightBookPoint = 29, 'NONE', bookPoint
+        ns.db.qpCampfireStart, ns.db.qpCampfireClose, ns.db.qpCampfireBook = true, false, false
+        ns.db.qpCampfireReveal, ns.db.qpCampfireGrace = 7, 25
         S:Show('Quick play', 'Camping')
         wow.Click(rows('Quick play', 'Camping')['Reset camping'])
         wow.Click(ns.HammerCore.Dialog.frame.accept)
         eq(ns.db.qpCampfire, true, 'Camping reset restores enabled default')
         eq(ns.db.qpCampfireBookPoint, nil, 'Camping reset restores book position')
+        eq(ns.db.qpCampfireStart, false, 'Camping reset restores Ask me')
+        eq(ns.db.qpCampfireClose, true, 'Camping reset restores close')
+        eq(ns.db.qpCampfireBook, true, 'Camping reset restores book')
+        eq(ns.db.qpCampfireReveal, 3, 'Camping reset restores answer pause')
+        eq(ns.db.qpCampfireGrace, 10, 'Camping reset restores grace')
         eq(ns.db.qpSeconds, 29, 'Camping reset preserves Play timer')
         eq(ns.db.qpOnFlights, 'NONE', 'Camping reset preserves flight preference')
         eq(ns.db.qpFlightBookPoint, bookPoint, 'Camping reset preserves flight book position')

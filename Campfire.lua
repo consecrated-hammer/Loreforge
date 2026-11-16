@@ -34,8 +34,8 @@ function Campfire.CloseOwned()
     ns.QuickCard.HideLauncher("campfire")
     local owned = Campfire.owned
     Campfire.owned = nil
-    if not owned or ns.Quick.state ~= owned then return end
-    ns.QuickCard.CloseSession(owned)
+    if owned and ns.Quick.state == owned then ns.QuickCard.CloseSession(owned)
+    elseif ns.Quick.state and ns.Quick.state.mode == "camping" and not ns.Quick.state.landed then ns.Quick.EndCamping() end
 end
 
 local function busy()
@@ -66,17 +66,30 @@ function Campfire.CanLaunch()
         and seated() == true and not ns.QuickCard.IsShown() and not ns.QuickCard.combatHidden
 end
 
-function Campfire.Mode(mode)
-    mode = mode or ns.db.qpMode
-    if mode ~= "quick" and mode ~= "streak" and mode ~= "lightning" then mode = "quick" end
-    return mode
+function Campfire.Here()
+    return ns.db and ns.db.qpCampfire and Campfire.Supported() and seated() == true
 end
 
-function Campfire.OpenQuiz(mode)
-    if not Campfire.CanLaunch() then return end
+function Campfire.OpenQuiz(mode, options)
+    if not Campfire.CanLaunch() then return false end
+    mode = mode == "quick" and "quick" or "camping"
     Campfire.offered = nil
-    ns.QuickCard.Show(Campfire.Mode(mode))
-    if ns.QuickCard.IsShown() then Campfire.owned = ns.Quick.state end
+    options = options or {}
+    options.campfireConfirmed = true
+    ns.QuickCard.Show(mode, options)
+    if ns.QuickCard.IsShown() then Campfire.owned = ns.Quick.state; return true end
+    return false
+end
+
+function Campfire.Leave()
+    local state = ns.Quick.state
+    if not Campfire.owned and not Campfire.offered and not (state and state.mode == "camping" and not state.landed) then return end
+    local owned = Campfire.owned
+    Campfire.owned, Campfire.offered = nil, nil
+    if ns.QuickCard.prompt and ns.QuickCard.prompt.lfContext == "campfire" then ns.QuickCard.HidePrompt(true) end
+    ns.QuickCard.HideLauncher("campfire")
+    local state = ns.Quick.state
+    if (owned and state == owned) or (state and state.mode == "camping" and not state.landed) then ns.Quick.EndCamping() end
 end
 
 function Campfire.Refresh()
@@ -86,13 +99,13 @@ function Campfire.Refresh()
     end
     local here = seated()
     if InCombatLockdown and InCombatLockdown() then
-        if here == false then Campfire.atCamp = false; Campfire.CloseOwned() end
+        if here == false then Campfire.atCamp = false; Campfire.Leave() end
         return
     end
     if here == nil then return end -- unknown/secret aura state cannot open or close a quiz
     if not here then
         Campfire.atCamp = false
-        Campfire.CloseOwned()
+        Campfire.Leave()
         return
     end
     if Campfire.atCamp then
@@ -103,6 +116,10 @@ function Campfire.Refresh()
     Campfire.atCamp = true -- closing manually stays closed until the next visit
     if busy() or ns.Quick.Flying() then return end
     Campfire.offered = true
+    if ns.db.qpCampfireStart then
+        if not Campfire.OpenQuiz("camping", { countdown = true }) then Campfire.offered, Campfire.atCamp = nil, nil end
+        return
+    end
     if not ns.QuickCard.Prompt("campfire") then
         Campfire.offered, Campfire.atCamp = nil, nil -- retry only when aura data becomes known
     end
@@ -124,13 +141,6 @@ function Campfire.Apply()
         Campfire.events:SetScript("OnEvent", function(_, event, unit)
             if event == "PLAYER_REGEN_DISABLED" then
                 ns.QuickCard.HideLauncher("campfire")
-                -- Keep an already-dismissed quiz paused across combat, but never
-                -- resurrect a visible automatic quiz through Card.OnCombat.
-                if not (Campfire.offered and not ns.Quick.state) and not (Campfire.owned and ns.Quick.state == Campfire.owned
-                    and Campfire.owned.pausedAt and not ns.QuickCard.IsShown()
-                    and not ns.QuickCard.combatHidden) then
-                    Campfire.CloseOwned()
-                end
                 return
             end
             if event == "UNIT_AURA" and unit ~= "player" then return end

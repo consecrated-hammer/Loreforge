@@ -16,7 +16,7 @@ local CONTENT = RIGHT_W - PAD * 2
 local COL_W = math.floor((CONTENT - 8) / 2)
 local OPTIONS_W = 236
 local FADE = 0.35
-local NO_TIMER = "These modes are always against the clock."
+local NO_TIMER = "Lightning runs against the clock. Challenges run until you land or stand."
 
 local function label(parent, font, role, width)
     local fs = UI.FontString(parent, font or "GameFontHighlight", role or "text")
@@ -90,7 +90,9 @@ end
 local function modeTooltip(owner, mode)
     local spec = Quick.MODE[mode]
     local lines = { spec.tip }
-    if mode == "flight" and not Quick.Flying() then lines[#lines + 1] = { spec.groundTip, 1, 0.35, 0.3 } end
+    if (mode == "flight" and not Quick.Flying()) or (mode == "camping" and not ns.Campfire.Here()) then
+        lines[#lines + 1] = { spec.groundTip, 1, 0.35, 0.3 }
+    end
     local best = Quick.BestLine(mode)
     if best then
         lines[#lines + 1] = ""
@@ -460,7 +462,7 @@ function Card.Render()
             f.primary:SetScript("OnClick", function() Quick.Start("quick") end)
             f.secondary:SetText("Close")
             f.secondary:SetScript("OnClick", function() Card.Hide() end)
-        elseif summary.kind == "touchdown" then
+        elseif summary.kind == "touchdown" or summary.kind == "campfire" then
             f.primary:SetText("Keep going")
             f.primary:SetScript("OnClick", function() Quick.KeepGoing() end)
             f.secondary:SetText("Close")
@@ -528,7 +530,7 @@ function Card.Update(elapsed)
     f.timer:SetShown(fraction ~= nil and (s.phase == "question" or s.phase == "reveal"))
     if fraction then
         f.timer.fill:SetWidth(math.max(1, CONTENT * fraction))
-        ns.TimerColour(f.timer.fill, left or 0, s.mode == "flight" and 999 or s.mode == "lightning" and s.length or ns.db.qpSeconds)
+        ns.TimerColour(f.timer.fill, left or 0, (s.mode == "flight" or s.mode == "camping") and 999 or s.mode == "lightning" and s.length or ns.db.qpSeconds)
     end
     ns.Flair.Pulse(f, f.timer.fill, f:IsShown() and animated() and s.phase == "question" and left ~= nil and left > 0 and left <= 5)
 end
@@ -557,6 +559,7 @@ function Card.Show(mode, options)
     Card.HideDailyPrompt()
     Card.Layout()
     Quick.Start(mode or ns.db.qpMode, options)
+    if Quick.state and Quick.state.mode == "camping" and ns.Campfire then ns.Campfire.owned = Quick.state end
     f:Show()
     Card.Render()
     bringForward(f)
@@ -564,7 +567,7 @@ end
 
 -- Esc and the close button share the same dismissal path.
 function Card.Dismiss()
-    if Quick.Flying() or (ns.Campfire and ns.Campfire.CanLaunch()) then
+    if Quick.Flying() or (ns.Campfire and ns.Campfire.CanLaunch() and ns.db.qpCampfireBook ~= false) then
         Quick.Pause()
         Card.ShowLauncher()
     else
@@ -667,6 +670,11 @@ end
 function Card.ShowLauncher(context)
     local available = launcherContext()
     if not available or (context and context ~= available) or Card.IsShown() then return end
+    if available == "campfire" and ns.db.qpCampfireBook == false then
+        Card.HideLauncher("campfire")
+        if Quick.state and ns.Campfire.owned == Quick.state and not Card.IsShown() then ns.Campfire.CloseOwned() end
+        return
+    end
     if available == "campfire" and Card.prompt and Card.prompt:IsShown() then return end
     watchCombat()
     if not Card.launcher then
@@ -779,8 +787,14 @@ local function section(parent, text, y)
     return fs
 end
 
+function Card.CampingContext()
+    if Quick.Flying() then return false end
+    return ns.Campfire and ((Quick.state and Quick.state.mode == "camping") or ns.Campfire.Here())
+end
+
 local function modeRow(parent, mode, y)
     local spec = Quick.MODE[mode]
+    local function resolved() return mode == "flight" and Card.CampingContext() and "camping" or mode end
     local row = CreateFrame("Button", nil, parent)
     row:SetSize(OPTIONS_W - 20, 34)
     row:SetPoint("TOPLEFT", 10, y)
@@ -795,15 +809,18 @@ local function modeRow(parent, mode, y)
     row.title:SetText(spec.label)
     row.line = label(row, "GameFontHighlightSmall", "muted", OPTIONS_W - 50)
     row.line:SetPoint("TOPLEFT", 22, -18)
-    row:SetScript("OnClick", function() if Quick.SetMode(mode) then Card.RefreshOptions() end end)
-    row:SetScript("OnEnter", function(self) modeTooltip(self, mode) end)
+    row:SetScript("OnClick", function() if Quick.SetMode(resolved()) then Card.RefreshOptions() end end)
+    row:SetScript("OnEnter", function(self) modeTooltip(self, resolved()) end)
     row:SetScript("OnLeave", hideTooltip)
     row.Refresh = function(self)
         local s = Quick.state
         local current = (s and (s.pendingMode or s.mode)) or ns.db.qpMode
-        local grounded = mode == "flight" and not Quick.Flying()
-        self.dot:SetShown(current == mode)
-        self.line:SetText(grounded and spec.ground or spec.line)
+        local actual = resolved()
+        local activeSpec = Quick.MODE[actual]
+        local grounded = actual == "flight" and not Quick.Flying() or actual == "camping" and not ns.Campfire.Here()
+        self.title:SetText(activeSpec.label)
+        self.dot:SetShown(current == actual)
+        self.line:SetText(grounded and activeSpec.ground or activeSpec.line)
         self:SetAlpha(grounded and 0.45 or 1)
         self:SetEnabled(not grounded)
     end
@@ -841,12 +858,12 @@ local function timerSwitch(parent, y)
     hover(holder, function(self)
         local s = Quick.state
         local mode = s and s.mode or ns.db.qpMode
-        if mode == "lightning" or mode == "flight" then tooltip(self, "Timer", { NO_TIMER }) end
+        if mode == "lightning" or mode == "flight" or mode == "camping" then tooltip(self, "Timer", { NO_TIMER }) end
     end)
     holder.Refresh = function()
         local s = Quick.state
         local mode = s and s.mode or ns.db.qpMode
-        local fixed = mode == "lightning" or mode == "flight"
+        local fixed = mode == "lightning" or mode == "flight" or mode == "camping"
         for _, b in ipairs({ holder.clock, holder.relaxed }) do
             local lit = fixed and not b.relaxed or not fixed and (b.relaxed == (ns.db.qpRelaxed == true))
             b:SetEnabled(not fixed)
@@ -862,7 +879,7 @@ local function timerSwitch(parent, y)
         b:HookScript("OnEnter", function(self)
             local s = Quick.state
             local mode = s and s.mode or ns.db.qpMode
-            if mode == "lightning" or mode == "flight" then tooltip(self, "Timer", { NO_TIMER }) end
+            if mode == "lightning" or mode == "flight" or mode == "camping" then tooltip(self, "Timer", { NO_TIMER }) end
         end)
     end
     return holder
@@ -928,19 +945,41 @@ local function buildOptions()
         end
         return items
     end); y = y - 36
-    section(o, "Flights", y); y = y - 20
+    local tripHeading = section(o, "Flights", y); y = y - 20
+    o.controls[#o.controls + 1] = { Refresh = function()
+        tripHeading:SetText(Card.CampingContext() and "Camping" or "Flights")
+    end }
     o.controls[#o.controls + 1] = menuButton(o, y, function()
-        return "On flights: " .. Quick.ON_FLIGHTS_LABELS[ns.db.qpOnFlights]
+        local camping = Card.CampingContext()
+        local choice = camping and (not ns.db.qpCampfire and "NONE" or ns.db.qpCampfireStart and "START" or "OFFER") or ns.db.qpOnFlights
+        return (camping and "When camping: " or "On flights: ") .. Quick.ON_FLIGHTS_LABELS[choice]
     end, function()
+        local camping = Card.CampingContext()
+        local current = camping and (not ns.db.qpCampfire and "NONE" or ns.db.qpCampfireStart and "START" or "OFFER") or ns.db.qpOnFlights
         local items = {}
         for _, value in ipairs(Quick.ON_FLIGHTS) do
-            items[#items + 1] = { text = Quick.ON_FLIGHTS_LABELS[value], checked = ns.db.qpOnFlights == value,
-                func = function() ns.db.qpOnFlights = value; Card.RefreshOptions() end }
+            items[#items + 1] = { text = Quick.ON_FLIGHTS_LABELS[value], checked = current == value,
+                func = function()
+                    if camping then
+                        ns.db.qpCampfire, ns.db.qpCampfireStart = value ~= "NONE", value == "START"
+                        ns.Campfire.Apply()
+                    else ns.db.qpOnFlights = value end
+                    Card.RefreshOptions()
+                end }
         end
         return items
     end); y = y - 30
-    o.controls[#o.controls + 1] = check(o, "Close on landing", y, function() return ns.db.qpCloseOnLanding ~= false end,
-        function(value) ns.db.qpCloseOnLanding = value end); y = y - 30
+    local closeTrip = check(o, "Close on landing", y, function()
+        return Card.CampingContext() and ns.db.qpCampfireClose ~= false or (not Card.CampingContext() and ns.db.qpCloseOnLanding ~= false)
+    end, function(value)
+        if Card.CampingContext() then ns.db.qpCampfireClose = value else ns.db.qpCloseOnLanding = value end
+    end)
+    local refreshClose = closeTrip.Refresh
+    closeTrip.Refresh = function(self)
+        self.Text:SetText(Card.CampingContext() and "Close after camping" or "Close on landing")
+        refreshClose(self)
+    end
+    o.controls[#o.controls + 1] = closeTrip; y = y - 30
     o.link = UI.Link(o, "Categories & difficulty ›", function() Card.OpenCategories() end)
     o.link:SetPoint("TOPLEFT", 14, y)
     y = y - 26
@@ -995,9 +1034,10 @@ function Card.MenuItems()
     items[#items + 1] = { separator = true }
     local s = Card.IsShown() and Quick.state
     for _, spec in ipairs(Quick.MODES) do
-        local mode = spec.key
-        local grounded = mode == "flight" and not Quick.Flying()
-        items[#items + 1] = { text = grounded and (spec.label .. " (on flights)") or spec.label,
+        local mode = spec.key == "flight" and Card.CampingContext() and "camping" or spec.key
+        local activeSpec = Quick.MODE[mode]
+        local grounded = mode == "flight" and not Quick.Flying() or mode == "camping" and not ns.Campfire.Here()
+        items[#items + 1] = { text = grounded and (activeSpec.label .. (mode == "camping" and " (at campfires)" or " (on flights)")) or activeSpec.label,
             checked = s and (s.pendingMode or s.mode) == mode or nil, disabled = grounded or nil,
             func = function()
                 if Card.IsShown() then Quick.SetMode(mode) else Card.Show(mode) end
@@ -1027,7 +1067,10 @@ local function promptButton(parent, mode, x)
     b.line:SetPoint("TOP", b.Text, "BOTTOM", 0, -3)
     b.line:SetJustifyH("CENTER")
     b.line:SetText(spec.line)
-    b:SetScript("OnClick", function() Card.Show(mode) end)
+    b:SetScript("OnClick", function(self)
+        if parent.lfContext == "campfire" then ns.Campfire.OpenQuiz(self.lfMode or mode)
+        else Card.Show(mode) end
+    end)
     b:HookScript("OnEnter", function(self) modeTooltip(self, self.lfMode or mode) end)
     b:HookScript("OnLeave", hideTooltip)
     return b
@@ -1055,15 +1098,20 @@ local function createPrompt()
     p.always:SetPoint("TOPLEFT", 22, -184)
     p.always.Text:SetText("Always start Flight challenge")
     local function refresh()
-        p.dontOffer:SetChecked(ns.db.qpOnFlights == "NONE")
-        p.always:SetChecked(ns.db.qpOnFlights == "START")
+        local camping = p.lfContext == "campfire"
+        p.dontOffer:SetChecked(camping and not ns.db.qpCampfire or (not camping and ns.db.qpOnFlights == "NONE"))
+        p.always:SetChecked(camping and ns.db.qpCampfireStart or (not camping and ns.db.qpOnFlights == "START"))
     end
     p.dontOffer:SetScript("OnClick", function(self)
-        ns.db.qpOnFlights = self:GetChecked() and "OFFER" or "NONE"
+        if p.lfContext == "campfire" then
+            ns.db.qpCampfire = self:GetChecked()
+            ns.Campfire.Apply()
+        else ns.db.qpOnFlights = self:GetChecked() and "OFFER" or "NONE" end
         refresh()
     end)
     p.always:SetScript("OnClick", function(self)
-        ns.db.qpOnFlights = self:GetChecked() and "OFFER" or "START"
+        if p.lfContext == "campfire" then ns.db.qpCampfireStart = not self:GetChecked()
+        else ns.db.qpOnFlights = self:GetChecked() and "OFFER" or "START" end
         refresh()
     end)
     p.decline = UI.Button(p, 100, 24)
@@ -1086,21 +1134,21 @@ function Card.Prompt(context)
     local p = createPrompt()
     p.lfContext = context
     local campfire = context == "campfire"
-    local mode = campfire and ns.Campfire.Mode() or "quick"
-    local spec = Quick.MODE[mode]
-    p.quick.lfMode = mode
+    p.quick.lfMode = "quick"
+    p.quick:SetText(Quick.MODE.quick.label)
+    p.quick.line:SetText(Quick.MODE.quick.line)
     p.quick:SetScript("OnClick", function()
-        if campfire then ns.Campfire.OpenQuiz(mode) else Card.Show("quick") end
+        if campfire then ns.Campfire.OpenQuiz("quick") else Card.Show("quick") end
     end)
-    p.quick:SetText(spec.label)
-    p.quick.line:SetText(spec.line)
-    p.quick:ClearAllPoints()
-    if campfire then p.quick:SetPoint("TOP", 0, -96)
-    else p.quick:SetPoint("TOPLEFT", 20, -96) end
-    p.flight:SetShown(not campfire)
-    p.dontOffer:SetShown(not campfire)
-    p.always:SetShown(not campfire)
-    p:SetHeight(campfire and 202 or 258)
+    local mode = campfire and "camping" or "flight"
+    p.flight.lfMode = mode
+    p.flight:SetText(Quick.MODE[mode].label)
+    p.flight.line:SetText(Quick.MODE[mode].line)
+    p.flight:SetScript("OnClick", function()
+        if campfire then ns.Campfire.OpenQuiz("camping") else Card.Show("flight") end
+    end)
+    p.dontOffer.Text:SetText(campfire and "Don't offer at campfires" or "Don't offer on flights")
+    p.always.Text:SetText(campfire and "Always start Campfire challenge" or "Always start Flight challenge")
     p:SetScale(Quick.SIZES[ns.db.qpSize] or 1)
     p.line:SetText(campfire and "A warm fire. Fancy a quiz?" or Quick.PromptLine())
     p.Refresh()
@@ -1111,7 +1159,12 @@ end
 function Card.HidePrompt(silent)
     Card.promptAfterCombat = nil
     if Card.prompt then Card.prompt:Hide() end
-    if not silent then Card.ShowLauncher() end
+    if not silent then
+        if Card.prompt and Card.prompt.lfContext == "campfire" and ns.db.qpCampfireBook == false then
+            ns.Campfire.offered = nil
+            Card.HideLauncher("campfire")
+        else Card.ShowLauncher() end
+    end
 end
 
 -- ── Daily question offer ───────────────────────────────────────────────────

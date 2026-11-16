@@ -145,7 +145,7 @@ Open `/lf settings`, then use search or these tabs:
 - **Quick play > Play:** timer, automatic/manual next question, Lightning length, solo main-button preference, and Categories & difficulty.
 - **Quick play > Card:** artwork, animations and Small/Medium/Large size.
 - **Quick play > Flights:** takeoff behaviour, shortest flight, answer pause, landing grace, close on landing and Retail Loremaster lines.
-- **Quick play > Camping (Forever):** campfire quiz offers and campfire book-position reset.
+- **Quick play > Camping (Forever):** Ask me/Auto-start/Off, close after camping, answer pause, standing grace and the dismissed book.
 - **Quick play > Daily question:** enable the daily and offer it at login.
 
 Each tab's reset changes only its own preferences. It keeps scores, daily attempts, history and the other tabs' settings. Card Options and the main settings use the same saved preferences. Search can find a dependent control while it is hidden and highlight the switch that enables it. Answer bindings and their current Change/Remove actions are searchable too.
@@ -213,20 +213,22 @@ Loreforge code is GPL v3, see [LICENSE.txt](LICENSE.txt). Embedded transport lib
 
 ### Campfire quizzes on WoW Forever
 
-**Quick play > Camping > Quiz at the campfire** offers your selected solo
-mode when seated at a campfire. Accept to start; no question or timer starts
-before your click. Not now leaves the book available while seated. It uses Loreforge's existing questions, category
-choices and timer settings. It starts on for new/missing settings and is shown
-only on Forever. Saved Off choices are preserved; disable it on the Camping tab.
+**Quick play > Camping** mirrors flights: Ask me offers **Quick play** or
+**Campfire challenge**, with Not now, Don't offer at campfires and Always start
+Campfire challenge. Auto-start uses the same countdown as flights. Saved Off
+choices stay Off. All quizzes use Loreforge's existing question bank.
 
-Dismiss the quiz to leave a draggable book with Resume quiz / New quiz while
-seated. Its saved position is separate from the flight book; reset it under
-Quick play > Camping. Standing or disabling the option closes the owned quiz and
-book. Combat closes a visible automatic quiz; an already dismissed quiz stays
-paused, with its book hidden until combat ends. A quiz opened manually is left
-alone. Dismissal never automatically reopens the card during the same visit. An active quiz, group game,
-welcome/update notice or daily/flight prompt takes priority. Flight prompts
-continue normally when you take off. Unknown/secret aura state does nothing.
+Campfire challenge lasts until you stand. Standing gives the open question its
+configured grace, then shows **Back on your feet!** results with **Keep going**
+and **Close**. Close after camping controls the same six-second auto-close used
+by flights. Campfire bests are separate from flight bests. Ordinary Quick play
+keeps running after standing, just as it keeps running after landing.
+
+Camping has its own answer pause, standing grace and book-position reset.
+Dismiss an offer or quiz to leave the movable book while seated; Show book when
+dismissed can turn it off. A paused hidden quiz closes on standing, like landing.
+Combat hides/resumes the card just as it does during a flight. Manual replacement
+quizzes remain alone; unknown/secret aura state cannot invent a campfire visit.
 
 ### Update reminders
 

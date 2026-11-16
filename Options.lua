@@ -231,19 +231,28 @@ local quickTabs = {
     end, { 'dailyOn', 'dailyOffer' }),
 }
 if ns.Campfire and ns.Campfire.Supported() then
-    table.insert(quickTabs, 4, quickTab('Camping', function(panel, y, db)
-        local _
+    table.insert(quickTabs, 4, quickTab('Camping', function(panel, y, db, Quick, hideWhen)
+        local _, row, when
         _, y = UI.Header(panel, 'Camping', y, QUICK_ICONS.camping)
-        _, y = UI.Check(panel, 'Quiz at the campfire',
-            'Offer your selected solo quiz when you sit at a campfire. Not now leaves a book to start later. Standing closes the offer and its quiz. Uses your normal categories and timer settings.', y,
-            function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
+        when, y = UI.Dropdown(panel, 'When camping', 'Ask me offers Quick play or Campfire challenge, just like flights. Auto-start starts Campfire challenge with a countdown.', y,
+            Quick.ON_FLIGHTS, { 'Ask me', 'Auto-start', 'Off' },
+            function() return not db.qpCampfire and 'NONE' or db.qpCampfireStart and 'START' or 'OFFER' end,
+            function(value) db.qpCampfire = value ~= 'NONE'; db.qpCampfireStart = value == 'START'; quickChanged() end)
+        _, y = UI.Check(panel, 'Close after camping', 'After standing, finish the open question and show the campfire results, then close the card. Off keeps the results open with Keep going and Close.', y,
+            function() return db.qpCampfireClose end, function(value) db.qpCampfireClose = value end)
+        _, y = UI.Slider(panel, 'Campfire answer pause', 'Seconds each answer shows during Campfire challenge.', y, 1, 8, 1,
+            function() return db.qpCampfireReveal end, function(value) db.qpCampfireReveal = value end, seconds)
+        _, y = UI.Slider(panel, 'Standing grace', 'Seconds to finish the open question after you stand. 0 ends straight away, just like landing grace.', y, 0, 30, 1,
+            function() return db.qpCampfireGrace end, function(value) db.qpCampfireGrace = value end, seconds)
+        _, y = UI.Check(panel, 'Show book when dismissed', 'Leave the movable book after Not now or closing a campfire quiz, while seated.', y,
+            function() return db.qpCampfireBook end, function(value) db.qpCampfireBook = value; quickChanged() end)
         y = UI.Flush(panel, y)
         _, y = UI.ActionButton(panel, y, 'Reset campfire book position',
             function() ns.QuickCard.ResetLauncherPosition('campfire') end,
             'Return the campfire book to its default spot. Its position is separate from the flight book.', nil, 210)
         y = UI.Flush(panel, y)
         return y
-    end, { 'qpCampfire', 'qpCampfireBookPoint' }))
+    end, { 'qpCampfire', 'qpCampfireStart', 'qpCampfireClose', 'qpCampfireReveal', 'qpCampfireGrace', 'qpCampfireBook', 'qpCampfireBookPoint' }))
 end
 HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card appearance, flights, camping and the daily.', tabs = quickTabs })
 

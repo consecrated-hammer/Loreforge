@@ -26,12 +26,13 @@ Quick.DEFAULTS = {
     qpMode = "quick", qpRelaxed = false, qpSeconds = 15, qpLightning = 60, qpAutoNext = true, qpNextDelay = 2,
     qpSize = "MEDIUM", qpArt = true, qpAnimations = true, qpBanterEvery = -1, qpOnFlights = "OFFER", qpShortest = 20,
     qpCloseOnLanding = true, qpLoremaster = true, qpCampfire = true,
+    qpCampfireStart = false, qpCampfireClose = true, qpCampfireBook = true, qpCampfireReveal = 3, qpCampfireGrace = 10,
     qpFlightReveal = 3,   -- seconds an answer shows in Flight challenge
     qpLandingGrace = 10,  -- seconds to finish the open question after landing (0 ends straight away)
     soloMain = "QUICK",   -- the Play tab's main button when solo: QUICK or PRACTICE
 }
 Quick.LIMITS = { qpSeconds = { 5, 30 }, qpLightning = { 30, 180 }, qpNextDelay = { 1, 5 }, qpShortest = { 0, 60 },
-    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 } }
+    qpFlightReveal = { 1, 8 }, qpLandingGrace = { 0, 30 }, qpCampfireReveal = { 1, 8 }, qpCampfireGrace = { 0, 30 } }
 Quick.SIZES = { SMALL = 0.85, MEDIUM = 1, LARGE = 1.2 }
 Quick.ON_FLIGHTS = { "OFFER", "START", "NONE" }
 Quick.ON_FLIGHTS_LABELS = { OFFER = "Ask me", START = "Auto-start", NONE = "Off" }
@@ -50,6 +51,11 @@ Quick.MODES = {
 }
 Quick.MODE = {}
 for _, mode in ipairs(Quick.MODES) do Quick.MODE[mode.key] = mode end
+Quick.MODE.camping = { key = "camping", label = "Campfire challenge", line = "Until you stand",
+    ground = "Only at campfires", tip = "Answer as many as you can before you stand. Finish the open question before the results, just like a flight.",
+    groundTip = "Sit at a campfire to play this." }
+local function endKind(s) return s.mode == "camping" and "campfire" or "touchdown" end
+
 -- The daily question (Daily.lua) plays on the card too, but isn't one of the
 -- modes you switch between.
 Quick.MODE.daily = { key = "daily", label = "Daily question", line = "One try, no timer",
@@ -93,6 +99,9 @@ end
 function Quick.Initialise()
     local db = ns.db
     db.qpCampfire = db.qpCampfire ~= false
+    db.qpCampfireStart = db.qpCampfireStart == true
+    db.qpCampfireClose = db.qpCampfireClose ~= false
+    db.qpCampfireBook = db.qpCampfireBook ~= false
     local banter = tonumber(db.qpBanterEvery)
     db.qpBanterEvery = (banter == 0 or banter == 1) and banter or -1
     for key, spec in pairs(Quick.LIMITS) do
@@ -104,7 +113,7 @@ function Quick.Initialise()
     if not Quick.ON_FLIGHTS_LABELS[db.qpOnFlights] then db.qpOnFlights = Quick.DEFAULTS.qpOnFlights end
     if db.soloMain ~= "QUICK" and db.soloMain ~= "PRACTICE" then db.soloMain = Quick.DEFAULTS.soloMain end
     if db.soloLeftClick ~= "WINDOW" and db.soloLeftClick ~= "QUICK" then db.soloLeftClick = "WINDOW" end
-    if not Quick.MODE[db.qpMode] or db.qpMode == "flight" then db.qpMode = "quick" end
+    if not Quick.MODE[db.qpMode] or db.qpMode == "flight" or db.qpMode == "camping" then db.qpMode = "quick" end
     for _, key in ipairs({ "quickBests", "quickToday", "quickUsed" }) do
         if type(db[key]) ~= "table" then db[key] = {} end
         if type(db[key][ns.era]) ~= "table" then db[key][ns.era] = {} end
@@ -271,8 +280,9 @@ function Quick.Start(mode, options)
     options = options or {}
     if mode == "daily" then return Quick.StartDaily() end
     if mode == "flight" and not Quick.Flying() then mode = "quick" end
+    if mode == "camping" and not options.campfireConfirmed and not (ns.Campfire and ns.Campfire.Here()) then mode = "quick" end
     if not Quick.MODE[mode] then mode = "quick" end
-    if mode ~= "flight" then ns.db.qpMode = mode end
+    if mode ~= "flight" and mode ~= "camping" then ns.db.qpMode = mode end
     local s = { mode = mode, correct = 0, answered = 0, streak = 0, bestStreak = 0, started = now() }
     if mode == "lightning" then s.length = ns.db.qpLightning end
     if mode == "flight" then
@@ -290,18 +300,28 @@ function Quick.Start(mode, options)
     return s
 end
 
+local function changeMode(mode)
+    local previous = Quick.state
+    local state = Quick.Start(mode)
+    if ns.Campfire and ((previous and ns.Campfire.owned == previous) or (state and state.mode == "camping")) then
+        ns.Campfire.owned = state
+    end
+    return state
+end
+
 -- Waits for the open question, then switches.
 function Quick.SetMode(mode)
-    if not Quick.MODE[mode] or (mode == "flight" and not Quick.Flying()) then return false end
+    if not Quick.MODE[mode] or (mode == "flight" and not Quick.Flying())
+        or (mode == "camping" and not (ns.Campfire and ns.Campfire.Here())) then return false end
     local s = Quick.state
     -- Leaving an unanswered daily is fine: it waits until it's answered.
     if s and s.phase == "question" and s.mode ~= "daily" and mode ~= "daily" then
         s.pendingMode = mode ~= s.mode and mode or nil
-        if mode ~= "flight" then ns.db.qpMode = mode end
+        if mode ~= "flight" and mode ~= "camping" then ns.db.qpMode = mode end
         changed()
         return true
     end
-    Quick.Start(mode)
+    changeMode(mode)
     return true
 end
 
@@ -353,12 +373,14 @@ local function finish(s, kind)
     elseif kind == "daily" then
         summary = ns.Daily.Summary() or { kind = "daily", title = "Daily question", lines = {} }
         summary.newBest = s.lastRight and ns.Daily.Streak() > 1 and ns.Daily.Streak() >= ns.Daily.Best() or nil
-    elseif kind == "touchdown" then
-        summary.title = "Touchdown!"
-        summary.lines = { s.correct .. " right this flight", "Best streak " .. s.bestStreak }
-        summary.newBest = setBest("flight", s.correct, { answered = s.answered,
+    elseif kind == "touchdown" or kind == "campfire" then
+        local camping = kind == "campfire"
+        summary.title = camping and "Back on your feet!" or "Touchdown!"
+        summary.lines = { s.correct .. (camping and " right this campfire" or " right this flight"), "Best streak " .. s.bestStreak }
+        summary.newBest = setBest(camping and "camping" or "flight", s.correct, { answered = s.answered,
             from = s.flight and s.flight.from, to = s.flight and s.flight.to })
-        if ns.db.qpCloseOnLanding then summary.closeAt = now() + TOUCHDOWN_CLOSE end
+        local close = camping and ns.db.qpCampfireClose or (not camping and ns.db.qpCloseOnLanding)
+        if close then summary.closeAt = now() + TOUCHDOWN_CLOSE end
     end
     if summary.newBest then
         if kind == "streak" then summary.title = "New best streak!"
@@ -416,9 +438,9 @@ function Quick.Answer(index)
         s.missedAnswer = q and q.choices and q.choices[q.correct] and ("It was " .. q.choices[q.correct] .. ".") or nil
         s.revealUntil, s.endAfterReveal = now() + math.max(2.5, ns.db.qpNextDelay or 2), "streak"
     elseif s.landed then
-        s.revealUntil, s.endAfterReveal = now() + math.max(1.5, ns.db.qpFlightReveal or 3), "touchdown"
-    elseif s.mode == "flight" then
-        s.revealUntil = now() + (ns.db.qpFlightReveal or 3)
+        s.revealUntil, s.endAfterReveal = now() + math.max(1.5, s.mode == "camping" and ns.db.qpCampfireReveal or ns.db.qpFlightReveal or 3), endKind(s)
+    elseif s.mode == "flight" or s.mode == "camping" then
+        s.revealUntil = now() + (s.mode == "camping" and ns.db.qpCampfireReveal or ns.db.qpFlightReveal or 3)
     elseif s.mode == "lightning" then
         s.revealUntil = now() + REVEAL_FAST
     elseif ns.db.qpAutoNext then
@@ -441,7 +463,7 @@ function Quick.Next()
     if s.pendingMode then
         local mode = s.pendingMode
         s.pendingMode = nil
-        Quick.Start(mode)
+        changeMode(mode)
         return
     end
     ask(s)
@@ -487,7 +509,7 @@ function Quick.Tick()
         elseif s.landedDeadline and t >= s.landedDeadline then
             -- Out of landing grace: the open question isn't counted.
             s.landedDeadline = nil
-            finish(s, "touchdown"); changed()
+            finish(s, endKind(s)); changed()
         elseif s.questionDeadline and t >= s.questionDeadline then Quick.Answer(nil) end
     elseif s.phase == "reveal" then
         if s.mode == "lightning" and s.deadline and t >= s.deadline and not s.endAfterReveal then
@@ -513,13 +535,15 @@ function Quick.Clock()
     local t = now()
     if s.mode == "daily" then
         return ns.Daily.Label(s.day or ns.Daily.Today().number)
-    elseif s.mode == "flight" then
+    elseif s.mode == "flight" or s.mode == "camping" then
+        local camping = s.mode == "camping"
         if s.landed then
             if s.landedDeadline and s.phase == "question" then
-                return "Landed: " .. math.max(0, math.ceil(s.landedDeadline - t)) .. " s"
+                return (camping and "Standing: " or "Landed: ") .. math.max(0, math.ceil(s.landedDeadline - t)) .. " s"
             end
-            return "Landed"
+            return camping and "Standing" or "Landed"
         end
+        if camping then return "Until you stand" end
         local current = flights() and flights():Current()
         if current and current.remaining then return clock(current.remaining) .. " to landing" end
         return "Until you land"
@@ -538,7 +562,7 @@ function Quick.TimerFraction()
     if not s then return nil end
     local t = now()
     if s.mode == "lightning" and s.deadline then return math.max(0, (s.deadline - t) / s.length), s.deadline - t end
-    if s.mode == "flight" and s.landedDeadline and s.phase == "question" then
+    if (s.mode == "flight" or s.mode == "camping") and s.landedDeadline and s.phase == "question" then
         local grace = math.max(1, s.landedGrace or 1)
         return math.max(0, (s.landedDeadline - t) / grace), s.landedDeadline - t
     end
@@ -570,34 +594,35 @@ function Quick.Takeoff(info)
     end
 end
 
-function Quick.Landed(info)
-    if ns.QuickCard then
-        ns.QuickCard.HidePrompt(true)
-        ns.QuickCard.HideLauncher()
-        if Quick.state and Quick.state.pausedAt and not ns.QuickCard.IsShown() and not ns.QuickCard.combatHidden then
-            Quick.Close()
-        end
+-- Flights and campfires deliberately share the same end-of-trip state machine.
+local function ended(mode, context, info)
+    local card = ns.QuickCard
+    if card then
+        if context == "flight" or card.prompt and card.prompt.lfContext == context then card.HidePrompt(true) end
+        card.HideLauncher(context)
+        if Quick.state and Quick.state.pausedAt and not card.IsShown() and not card.combatHidden then Quick.Close() end
     end
     local s = Quick.state
-    if not (s and s.mode == "flight") then changed(); return end
+    if not (s and s.mode == mode) then changed(); return end
     s.landed = info or {}
     if s.phase == "countdown" then
         Quick.Close()
-        if ns.QuickCard then ns.QuickCard.Hide() end
+        if card then card.Hide() end
         return
     end
+    local kind = endKind(s)
     if s.phase == "question" then
-        -- A short grace to finish the open question, then Touchdown.
-        local grace = ns.db.qpLandingGrace or 10
-        if grace <= 0 then finish(s, "touchdown")
+        local grace = mode == "camping" and ns.db.qpCampfireGrace or ns.db.qpLandingGrace or 10
+        if grace <= 0 then finish(s, kind)
         else s.landedGrace, s.landedDeadline = grace, now() + grace end
     elseif s.phase ~= "over" then
-        -- Between questions: finish now.
-        if s.phase == "reveal" then s.endAfterReveal = "touchdown"; s.revealUntil = s.revealUntil or now()
-        else finish(s, "touchdown") end
+        if s.phase == "reveal" then s.endAfterReveal = kind; s.revealUntil = s.revealUntil or now()
+        else finish(s, kind) end
     end
     changed()
 end
+function Quick.Landed(info) ended("flight", "flight", info) end
+function Quick.EndCamping(info) ended("camping", "campfire", info) end
 
 -- ── Best lines and tooltips ────────────────────────────────────────────────
 
@@ -630,6 +655,9 @@ function Quick.BestLine(mode)
         local best = Quick.LightningBest()
         if not best then return nil end
         return { text = "Best Lightning: " .. best.value .. " in " .. best.length .. "s", detail = { day(best.at) } }
+    elseif mode == "camping" then
+        local best = bests.camping
+        if best then return { text = "Best campfire: " .. best.value .. " right", detail = { day(best.at) } } end
     elseif mode == "flight" then
         local best = bests.flight
         if not best then return nil end
