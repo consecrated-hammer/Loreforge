@@ -1,6 +1,7 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <!-- Load order matters: each file extends the namespace the previous one created. -->
     <Script file="Core.lua"/>
+    <Script file="UpdateReminders.lua"/>
     <Script file="Theme.lua"/>
     <Script file="Widgets.lua"/>
     <Script file="Window.lua"/>

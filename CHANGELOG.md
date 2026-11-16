@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keeping up with the guild: a chat reminder flags newer stable releases seen in your group or guild. Configure Update reminders on Visibility; development and test builds stay quiet.
+
 - Gather round the questions: Forever opens a solo quiz when you sit at a campfire. Quiz at the campfire on Quick play > Play starts on for new settings, preserving saved Off choices. Standing closes only its automatic quiz.
 
 ## [1.4.2] - 2026-11-15

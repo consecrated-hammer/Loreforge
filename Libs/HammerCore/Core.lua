@@ -8,7 +8,7 @@ local addonName, ns = ...
 local HC = {}
 ns.HammerCore = HC
 
-HC.VERSION = "0.5.3"
+HC.VERSION = "0.5.5"
 HC.addonName = addonName
 
 -- The one chat colour every addon uses for its name prefix.
@@ -20,6 +20,7 @@ local DEFAULTS = {
     minimapAngle = 225,
     theme = "modern",
     whatsNew = true,
+    updateReminders = true,
     -- The unread "!" beside What's new in the settings rail.
     whatsNewDot = true,
     -- The quest turn-in sound when opening What's new clears the "!".
@@ -186,6 +187,7 @@ function HC:Start()
     if self.Settings then self.Settings:CreateLauncher() end
     if state and state.startupMessage then print(HC.LoginMessage(true)) end
     if self.WhatsNew then self.WhatsNew:Check() end
+    if self.UpdateReminders then self.UpdateReminders:Start() end
     if HC.spec.flights and self.Flights then self.Flights:Enable() end
 end
 

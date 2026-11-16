@@ -222,3 +222,12 @@ the campfire opened. A quiz opened manually is left alone. Closing an automatic
 quiz keeps it closed until you leave and sit again. An active quiz, group game,
 welcome/update notice or daily/flight prompt takes priority. Flight prompts
 continue normally when you take off. Unknown/secret aura state does nothing.
+
+### Update reminders
+
+Visibility > Updates > **Update reminders** tells you when another party, raid
+or guild member has a newer stable release. One chat reminder per login names
+the newer version and yours, with a pointer to CurseForge. Recent newer versions
+are remembered for up to 72 hours. This uses hidden addon messages, not a direct
+CurseForge check. Turning it off stops version sharing and reminders. Development,
+alpha, beta and test builds neither announce themselves nor show reminders.

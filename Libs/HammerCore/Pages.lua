@@ -41,6 +41,10 @@ Pages.visibility.build = function(panel, y)
     _, y = UI.Check(panel, "Show startup message", "Print the loaded version when you log in.", y,
         function() return HC.State().startupMessage end,
         function(value) HC.State().startupMessage = value end)
+    _, y = UI.Check(panel, "Update reminders",
+        "Tell me when party, raid or guild members have a newer stable release. Development and test builds are ignored. Off disables version sharing and reminders.", y,
+        function() return HC.State().updateReminders ~= false end,
+        function(value) HC.UpdateReminders:SetEnabled(value) end)
     if HC.WhatsNew and HC.WhatsNew.Enabled() then
         _, y = UI.Check(panel, "Show what's new after updates",
             "Open a short list of new features the first time you log in after an update.", y,
