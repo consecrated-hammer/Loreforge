@@ -138,6 +138,7 @@ local function quickTab(name, build, keys)
             end
             quickChanged()
             if name == 'Flights' then ns.QuickCard.ResetLauncherPosition() end
+            if name == 'Play' then ns.QuickCard.ResetLauncherPosition('campfire') end
             if ns.RefreshHost then ns.RefreshHost() end
         end, 'Reset ' .. name:sub(1, 1):lower() .. name:sub(2))
         return y
@@ -173,13 +174,17 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         _, y = UI.Check(panel, 'Quiz at the campfire',
             'Open your selected solo quiz when you sit at a campfire. Standing closes only the quiz opened for the campfire. Uses your normal categories and timer settings.', y,
             function() return db.qpCampfire end, function(value) db.qpCampfire = value; quickChanged() end)
+        y = UI.Flush(panel, y)
+        _, y = UI.ActionButton(panel, y, 'Reset campfire book position',
+            function() ns.QuickCard.ResetLauncherPosition('campfire') end,
+            'Return the campfire book to its default spot. Its position is separate from the flight book.', nil, 210)
     end
     y = UI.Flush(panel, y)
     _, y = UI.ActionButton(panel, y, 'Categories & difficulty', function() HC.Settings:Hide(); ns.QuickCard.OpenCategories() end,
         'Quick play uses the categories and difficulty from game setup.', nil, 180)
     y = UI.Flush(panel, y)
     return y
-    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain', 'qpCampfire' }),
+    end, { 'qpMode', 'qpRelaxed', 'qpSeconds', 'qpAutoNext', 'qpNextDelay', 'qpLightning', 'soloMain', 'qpCampfire', 'qpCampfireBookPoint' }),
     quickTab('Card', function(panel, y, db, Quick, hideWhen)
     local _, row
     _, y = UI.Header(panel, 'Look', y, QUICK_ICONS.look)
@@ -212,7 +217,7 @@ HC.Settings:NewPage({ name = 'Quick play', description = 'Solo quiz timing, card
         function() return db.qpFlightReveal end, function(value) db.qpFlightReveal = value end, seconds)
     _, y = UI.Slider(panel, 'Landing grace', 'Seconds to finish the open question after you land. 0 ends it on landing.', y, 0, 30, 1,
         function() return db.qpLandingGrace end, function(value) db.qpLandingGrace = value end, seconds)
-    _, y = UI.ActionButton(panel, y, 'Reset flight book position', ns.QuickCard.ResetLauncherPosition,
+    _, y = UI.ActionButton(panel, y, 'Reset flight book position', function() ns.QuickCard.ResetLauncherPosition('flight') end,
         'Move the in-flight book icon back to its default position. Drag the book to place it elsewhere.')
     if ns.era == 'retail' then
         _, y = UI.Check(panel, 'Loremaster lines', 'Extra takeoff lines for characters with the Loremaster title.', y,

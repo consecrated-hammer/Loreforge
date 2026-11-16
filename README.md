@@ -217,9 +217,12 @@ mode when seated at a campfire. It uses Loreforge's existing questions, category
 choices and timer settings. It starts on for new/missing settings and is shown
 only on Forever. Saved Off choices are preserved; disable it on the Play tab.
 
-Standing, entering combat or disabling the option closes only the quiz that
-the campfire opened. A quiz opened manually is left alone. Closing an automatic
-quiz keeps it closed until you leave and sit again. An active quiz, group game,
+Dismiss the quiz to leave a draggable book with Resume quiz / New quiz while
+seated. Its saved position is separate from the flight book; reset it under
+Quick play > Play. Standing or disabling the option closes the owned quiz and
+book. Combat closes a visible automatic quiz; an already dismissed quiz stays
+paused, with its book hidden until combat ends. A quiz opened manually is left
+alone. Dismissal never automatically reopens the card during the same visit. An active quiz, group game,
 welcome/update notice or daily/flight prompt takes priority. Flight prompts
 continue normally when you take off. Unknown/secret aura state does nothing.
 

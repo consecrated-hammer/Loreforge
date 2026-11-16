@@ -8,6 +8,7 @@ ns.WHATS_NEW = {
     { version = "1.4.3", date = "2026-11-16", items = {
         { title = "Gather round the questions", text = "Sitting at a campfire opens your selected solo quiz; standing closes only its automatic quiz. On by default for new settings; change Quiz at the campfire on Quick play > Play. Saved Off choices are kept.", client = "forever", kind = "improved", page = "Quick play", tab = "Play" },
         { title = "Keeping up with the guild", text = "A chat reminder flags newer stable releases seen in your party, raid or guild. Configure Update reminders on Visibility. Development and test builds stay quiet.", kind = "improved", page = "Visibility" },
+        { title = "A fireside bookmark", text = "Dismiss the campfire quiz and a movable book keeps your place. Resume or start a new quiz while seated; standing puts the book away.", client = "forever", kind = "improved", page = "Quick play", tab = "Play" },
     } },
     { version = "1.4.2", date = "2026-11-15", items = {
         { title = "This book refuses to stay shelved", text = "Drag the in-flight book to move it. It remembers its own spot; Reset flight book position on Quick play > Flights brings it home.", page = "Quick play", tab = "Flights", kind = "improved" },

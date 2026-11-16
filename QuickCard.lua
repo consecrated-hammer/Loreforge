@@ -563,7 +563,7 @@ end
 
 -- Esc and the close button share the same dismissal path.
 function Card.Dismiss()
-    if Quick.Flying() then
+    if Quick.Flying() or (ns.Campfire and ns.Campfire.CanLaunch()) then
         Quick.Pause()
         Card.ShowLauncher()
     else
@@ -592,9 +592,18 @@ local function validLauncherPoint(point)
         and math.abs(tonumber(point[4])) < math.huge
 end
 
+local function launcherContext()
+    if Quick.Flying() then return "flight" end
+    if ns.Campfire and ns.Campfire.CanLaunch() then return "campfire" end
+end
+
+local function launcherPointKey(context)
+    return context == "campfire" and "qpCampfireBookPoint" or "qpFlightBookPoint"
+end
+
 local function placeLauncher(book)
     book:ClearAllPoints()
-    local point = ns.db.qpFlightBookPoint
+    local point = ns.db[launcherPointKey(book.lfContext)]
     if validLauncherPoint(point) then
         book:SetPoint(point[1], UIParent, point[2], tonumber(point[3]), tonumber(point[4]))
     else
@@ -612,21 +621,36 @@ local function stopLauncherDrag(book)
         point, relativePoint, x, y = "TOPLEFT", "BOTTOMLEFT", book:GetLeft(), book:GetTop()
     end
     local saved = { point, relativePoint, x, y }
-    if validLauncherPoint(saved) then ns.db.qpFlightBookPoint = saved end
+    if validLauncherPoint(saved) then ns.db[launcherPointKey(book.lfContext)] = saved end
 end
 
-function Card.ResetLauncherPosition()
-    if Card.launcher then stopLauncherDrag(Card.launcher) end
-    ns.db.qpFlightBookPoint = nil
-    if Card.launcher then placeLauncher(Card.launcher) end
+function Card.ResetLauncherPosition(context)
+    -- Settings action rows pass their button; no explicit context means flight.
+    context = context == "campfire" and "campfire" or "flight"
+    local book = Card.launcher
+    if book and book.lfContext == context then stopLauncherDrag(book) end
+    ns.db[launcherPointKey(context)] = nil
+    if book and book.lfContext == context then placeLauncher(book) end
 end
 
-function Card.HideLauncher()
-    if Card.launcher then Card.launcher:Hide() end
+function Card.HideLauncher(context)
+    local book = Card.launcher
+    if not book or (context and book.lfContext ~= context) then return end
+    if HC.Menu.frame then
+        local _, anchor = HC.Menu.frame:GetPoint(1)
+        if anchor == book then HC.Menu:Close() end
+    end
+    book:Hide()
 end
 
-function Card.ResumeQuiz()
-    if not Quick.Flying() or (InCombatLockdown and InCombatLockdown()) then return end
+function Card.NewLauncherQuiz(context)
+    if launcherContext() ~= context or (InCombatLockdown and InCombatLockdown()) then return end
+    if context == "campfire" then ns.Campfire.OpenQuiz() else Card.Show("flight") end
+end
+
+function Card.ResumeQuiz(context)
+    if not launcherContext() or (context and launcherContext() ~= context)
+        or (InCombatLockdown and InCombatLockdown()) then return end
     if not Quick.state then Card.Show("flight"); return end
     Card.HideLauncher()
     Quick.Resume()
@@ -636,8 +660,9 @@ function Card.ResumeQuiz()
     bringForward(Card.frame)
 end
 
-function Card.ShowLauncher()
-    if not Quick.Flying() or Card.IsShown() then return end
+function Card.ShowLauncher(context)
+    local available = launcherContext()
+    if not available or (context and context ~= available) or Card.IsShown() then return end
     watchCombat()
     if not Card.launcher then
         local b = CreateFrame("Button", nil, UIParent, "BackdropTemplate")
@@ -664,13 +689,19 @@ function Card.ShowLauncher()
         end)
         b:SetScript("OnClick", function(self)
             if self.lfDragged or self.lfDragging then self.lfDragged = nil; return end
+            local context = self.lfContext
+            if launcherContext() ~= context then return end
             HC.Menu:Open({
                 { text = "Resume quiz", disabled = not Quick.state,
-                    func = function() Card.ResumeQuiz() end },
-                { text = "New quiz", func = function() Card.Show("flight") end },
+                    func = function() Card.ResumeQuiz(context) end },
+                { text = "New quiz", func = function() Card.NewLauncherQuiz(context) end },
             }, self, 160)
         end)
         Card.launcher = b
+    end
+    if Card.launcher.lfContext ~= available then
+        Card.HideLauncher()
+        Card.launcher.lfContext = available
     end
     if not (InCombatLockdown and InCombatLockdown()) then
         if not Card.launcher:IsShown() and not Card.launcher.lfDragging then placeLauncher(Card.launcher) end

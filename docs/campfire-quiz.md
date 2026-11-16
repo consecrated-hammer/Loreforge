@@ -10,9 +10,13 @@ hidden on unsupported clients. The module registers player aura/world/combat
 events only while enabled. No polling or protected gameplay actions occur.
 
 The module owns exactly the Quick.state object created on a new campfire
-visit. Standing/combat/disable/takeoff close only that state. A manually replaced
-quiz is not owned. Manual dismissal latches the visit until the aura is absent
-and returns. Secret/unavailable/malformed aura data is unknown, never absence.
+visit. Standing/disable/takeoff close only that state. Combat closes a visible automatic
+quiz; an already dismissed quiz remains paused, with its book hidden until combat ends. A manually replaced
+quiz is not owned. Manual dismissal pauses the owned quiz and shows the draggable book for Resume quiz /
+New quiz while seated. Neither choice reopens a stale visit. The book disappears on
+standing, disable or takeoff. Its `qpCampfireBookPoint` is independent of the flight
+book position; Quick play > Play offers Reset campfire book position.
+Manual dismissal latches the visit until the aura is absent and returns. Secret/unavailable/malformed aura data is unknown, never absence.
 Group games, active cards, prompts and queued/visible welcome/news take priority;
 a busy visit is skipped until the player leaves and sits again. Unknown aura
 intervals do not invent new visits. Explicitly re-enabling while seated may
