@@ -5,6 +5,7 @@ ns.Campfire = Campfire
 
 -- Forever's seated campfire aura. The feature uses Loreforge's own quiz bank.
 Campfire.SPELL_ID = 1229739
+local DEPARTURE_DELAY = 1
 
 function Campfire.Supported()
     if not GetBuildInfo then return false end
@@ -29,6 +30,7 @@ end
 -- Only close the exact session this feature opened. Manual replacement and
 -- other quiz modes retain their existing dismissal/combat behaviour.
 function Campfire.CloseOwned()
+    Campfire.pendingDeparture = nil
     Campfire.offered = nil
     if ns.QuickCard.prompt and ns.QuickCard.prompt.lfContext == "campfire" then ns.QuickCard.HidePrompt(true) end
     ns.QuickCard.HideLauncher("campfire")
@@ -92,17 +94,36 @@ function Campfire.Leave()
     if (owned and state == owned) or (state and state.mode == "camping" and not state.landed) then ns.Quick.EndCamping() end
 end
 
-function Campfire.Refresh()
+local function waitForAuraRefresh()
+    if Campfire.pendingDeparture then return true end
+    if not (C_Timer and C_Timer.After) then return false end
+    local departure = {}
+    Campfire.pendingDeparture = departure
+    C_Timer.After(DEPARTURE_DELAY, function()
+        if Campfire.pendingDeparture ~= departure then return end
+        Campfire.pendingDeparture = nil
+        Campfire.Refresh(true)
+    end)
+    return true
+end
+
+function Campfire.Refresh(confirmingDeparture)
     if not (ns.db and ns.db.qpCampfire and Campfire.Supported()) then
         Campfire.CloseOwned(); Campfire.atCamp = nil
         return
     end
     local here = seated()
+    if here == nil then return end -- unknown/secret aura state cannot open or close a quiz
+    if here or confirmingDeparture then
+        Campfire.pendingDeparture = nil
+    elseif Campfire.atCamp and not confirmingDeparture and waitForAuraRefresh() then
+        -- Sleeping bag stacks can replace the seated aura during the same visit.
+        return
+    end
     if InCombatLockdown and InCombatLockdown() then
         if here == false then Campfire.atCamp = false; Campfire.Leave() end
         return
     end
-    if here == nil then return end -- unknown/secret aura state cannot open or close a quiz
     if not here then
         Campfire.atCamp = false
         Campfire.Leave()
@@ -144,7 +165,7 @@ function Campfire.Apply()
                 return
             end
             if event == "UNIT_AURA" and unit ~= "player" then return end
-            Campfire.Refresh()
+            Campfire.Refresh(event == "PLAYER_ENTERING_WORLD")
         end)
     end
     Campfire.events:RegisterUnitEvent("UNIT_AURA", "player")

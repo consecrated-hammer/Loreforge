@@ -30,7 +30,9 @@ uses the same card pause/resume path as flights.
 
 Campfire ownership is the exact Quick.state pointer, retained across in-card mode
 changes. Manual replacement remains separate. A new seated visit is latched;
-dismissing the offer leaves a book without repeating the prompt. Group games,
+dismissing the offer leaves a book without repeating the prompt. Loreforge
+rechecks a missing seated aura after one second so sleeping bag stack refreshes
+keep the same visit and the current quiz or book. Group games,
 active cards/prompts and welcome/news have priority over automatic offers.
 Standing/disable/takeoff remove campfire prompts/books; takeoff clears owned
 sessions before normal flight handling and waits for known absence before a new

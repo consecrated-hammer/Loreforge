@@ -709,6 +709,35 @@ do
     combat = false; camp.Refresh(); card.OnCombat("PLAYER_REGEN_ENABLED")
     eq(quick.state, paused, "combat preserves session like flights")
     eq(card.IsShown(), true, "active quiz resumes after combat like flights")
+    card.Hide()
+    local confirmDeparture
+    local originalTimer, beforeRefreshes = C_Timer, clock
+    C_Timer = { After = function(delay, callback)
+        eq(delay, 1, "campfire briefly waits for the seated aura to refresh")
+        confirmDeparture = callback
+    end }
+    for _, seconds in ipairs({ 60, 120 }) do
+        clock = beforeRefreshes + seconds
+        aura = nil
+        camp.events.scripts.OnEvent(camp.events, "UNIT_AURA", "player")
+        local confirm = assert(confirmDeparture)
+        camp.Refresh()
+        eq(confirmDeparture, confirm, "repeated aura events share the pending check")
+        eq(quick.state, paused, "brief aura loss retains the paused quiz")
+        eq(card.launcher:IsShown(), true, "brief aura loss leaves the book visible")
+        aura = {}
+        camp.Refresh()
+        confirm()
+        eq(prompt:IsShown(), false, "new sleeping bag stack does not repeat the offer")
+        eq(quick.state, paused, "new stack retains the exact paused quiz")
+    end
+    aura = nil; camp.Refresh(); confirmDeparture()
+    eq(quick.state, nil, "confirmed departure clears the paused quiz")
+    eq(card.launcher:IsShown(), false, "confirmed departure hides the book")
+    aura = {}; camp.Refresh()
+    eq(prompt:IsShown(), true, "returning after departure can offer a new quiz")
+    prompt.flight.scripts.OnClick(prompt.flight)
+    C_Timer = originalTimer
     card.Hide(); aura = nil; camp.Refresh()
     eq(quick.state, nil, "standing closes hidden paused challenge like landing")
     aura = {}; camp.Refresh(); prompt.flight.scripts.OnClick(prompt.flight); card.Hide()
