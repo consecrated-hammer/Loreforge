@@ -285,7 +285,7 @@ function ns.BuildSetup(host)
     local categoryPage = page('categories')
     local catLeft, catRight = column(categoryPage, 1), column(categoryPage, 2)
     setup.columns.categories = { catLeft, catRight }
-    local top = section(catLeft, 'Categories', 0, fullWidth)
+    local top = section(catLeft, 'Everyday', 0, colWidth)
     local all = UI.Button(categoryPage, 50, 20); all:SetPoint('TOPRIGHT', categoryPage, 'TOPRIGHT', -(MARGIN + 54), 2); all:SetText('All')
     local none = UI.Button(categoryPage, 50, 20); none:SetPoint('TOPRIGHT', categoryPage, 'TOPRIGHT', -MARGIN, 2); none:SetText('None')
     local function setAll(value)
@@ -295,13 +295,13 @@ function ns.BuildSetup(host)
     all:SetScript('OnClick', function() setAll(true) end)
     none:SetScript('OnClick', function() setAll(false) end)
     setup.categoryRows = {}
-    local half = math.ceil(#ns.Game.CATEGORIES / 2)
-    local columnY = { [catLeft] = top, [catRight] = top }
-    for i, category in ipairs(ns.Game.CATEGORIES) do
+    -- Everyday categories on the left; holidays and their season settings on the right.
+    local columnY = { [catLeft] = top, [catRight] = section(catRight, 'Seasonal', 0, colWidth) }
+    local function categoryRow(panel, category)
         local key = category[1]
-        local panel = i <= half and catLeft or catRight
+        local when = ns.Seasons.WHEN[key]
         local row
-        row, columnY[panel] = Check(panel, category[2], nil, columnY[panel],
+        row, columnY[panel] = Check(panel, category[2], when and ('Usually runs ' .. when .. '.') or nil, columnY[panel],
             function() return ns.db.categories[key] == true end,
             function(value) ns.db.categories[key] = value end, colWidth)
         row.count = UI.FontString(row, 'GameFontHighlightSmall', 'muted')
@@ -314,6 +314,23 @@ function ns.BuildSetup(host)
         check.Text:SetPoint('RIGHT', row.count, 'LEFT', -8, 0)
         setup.categoryRows[key] = row
     end
+    for _, category in ipairs(ns.Game.CATEGORIES) do
+        if not ns.Game.SEASONAL[category[1]] then categoryRow(catLeft, category) end
+    end
+    for _, category in ipairs(ns.Game.CATEGORIES) do
+        if ns.Game.SEASONAL[category[1]] then categoryRow(catRight, category) end
+    end
+    local sy = section(catRight, 'Seasons', columnY[catRight] - 8, colWidth)
+    _, sy = Dropdown(catRight, 'In-season boost', 'How much more often a running holiday\'s questions come up.', sy,
+        ns.Seasons.BOOSTS, { 'Off', 'Double', 'Triple', 'Five times' },
+        function() return ns.Seasons.Boost(ns.db.seasonBoost) end, function(value) ns.db.seasonBoost = value; setup.Refresh() end,
+        colWidth, 150, 120)
+    _, sy = Check(catRight, 'Hide out of season', 'Holiday questions only come up while their holiday runs.', sy,
+        function() return ns.db.seasonHide ~= false end, function(value) ns.db.seasonHide = value; setup.Refresh() end, colWidth)
+    setup.seasonNow = UI.FontString(catRight, 'GameFontHighlightSmall', 'muted')
+    setup.seasonNow:SetPoint('TOPLEFT', UI.PAD, sy - 4); setup.seasonNow:SetWidth(colWidth)
+    setup.seasonNow:SetJustifyH('LEFT')
+    columnY[catRight] = sy - 40
     categoryPage.contentHeight = -math.min(columnY[catLeft], columnY[catRight]) + 12
 
     -- ── Party lobby ──
@@ -398,14 +415,6 @@ function ns.BuildSetup(host)
     setup.closeLobby:SetPoint('BOTTOMLEFT', 408, 18); setup.closeLobby:SetText('Close lobby')
     setup.closeLobby:SetScript('OnClick', function() if ns.Party then ns.Party.CloseLobby() end end)
 
-    local function categoryCounts()
-        local counts, probe = {}, { difficulty = ns.db.difficulty, categories = {} }
-        for _, category in ipairs(ns.Game.CATEGORIES) do
-            probe.categories = { [category[1]] = true }
-            counts[category[1]] = #ns.Game.Pool(HC.QUIZ, probe, ns.era)
-        end
-        return counts
-    end
 
     local function drawLobby()
         local h = ns.Party.host
@@ -461,7 +470,9 @@ function ns.BuildSetup(host)
         if InCombatLockdown() then return end
         for _, panel in ipairs(panels) do refresh(panel) end
         setup.questions.Title:SetText(ns.db.rounds > 1 and 'Questions per round' or 'Questions')
-        local available = #ns.Game.Pool(HC.QUIZ, ns.db, ns.era)
+        local config = ns.Seasons.Apply({ categories = ns.db.categories, difficulty = ns.db.difficulty }, ns.db)
+        local pool, counts = ns.Game.Pool(HC.QUIZ, config, ns.era, true)
+        local available = #pool
         local restricted = ns.Restricted()
         local rosterRows, err, localOnly = {}, nil, false
         if not restricted then rosterRows, err, localOnly = ns.Roster(ns.db.channel, ns.db.hostParticipates) end
@@ -513,7 +524,9 @@ function ns.BuildSetup(host)
             .. '  ·  ' .. (localOnly and 'Practice, no group' or plural(math.max(0, #rosterRows - (ns.db.hostParticipates and 1 or 0)), 'other player')
                 .. ' in ' .. ns.Game.CHANNELS[ns.db.channel].label))
         local ticked = 0
-        for _, category in ipairs(ns.Game.CATEGORIES) do if ns.db.categories[category[1]] then ticked = ticked + 1 end end
+        for key, count in pairs(counts) do
+            if ns.db.categories[key] and count >= ns.db.perRound then ticked = ticked + 1 end
+        end
         setup.pool:SetText(available .. ' questions available for these categories and difficulty.'
             .. (ns.db.rounds > ticked and ticked > 0 and ' Fewer categories than rounds, so themes repeat.' or ''))
 
@@ -525,8 +538,20 @@ function ns.BuildSetup(host)
             T.Text(setup.presets[i].Text, on and 'selected' or 'text')
         end
         host.tags:SetText(presetName .. ' · ' .. host.tags:GetText())
-        local counts = categoryCounts()
-        for key, row in pairs(setup.categoryRows) do row.count:SetText(tostring(counts[key] or 0)) end
+        local active = config.seasonal.active
+        for key, row in pairs(setup.categoryRows) do
+            local count = tostring(counts[key] or 0)
+            -- Running holidays show their count in green.
+            if active[key] then count = '|cff7fd17f' .. count .. '|r' end
+            row.count:SetText(count)
+        end
+        local running = {}
+        for _, category in ipairs(ns.Game.CATEGORIES) do
+            local key = category[1]
+            if active[key] and (counts[key] or 0) > 0 then running[#running + 1] = category[2] end
+        end
+        setup.seasonNow:SetText(#running > 0 and ('In season now: ' .. table.concat(running, ', ') .. '.')
+            or 'No in-season categories match this quiz.')
 
         -- Banner: a blocking issue first, else an interrupted game.
         local fixable = err and not restricted

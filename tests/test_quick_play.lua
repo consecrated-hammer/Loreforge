@@ -213,6 +213,21 @@ do
     assert(ns.Quick.Draw(), "the pool starts again")
 end
 
+-- The card uses the selected holiday and the realm's date on both clients.
+for _, client in ipairs({ "retail", "classic" }) do
+    local ns = load({ era = client })
+    ns.db.categories = { winterveil = true, midsummer = true }
+    ns.Daily.ServerTime = function() return { year = 2026, month = 12, day = 20 } end
+    ns.HammerCore.QUIZ = {
+        { "Snow?", "A", "B", "C", "D", id = "test-winter", categories = { "winterveil" } },
+        { "Fire?", "A", "B", "C", "D", id = "test-summer", categories = { "midsummer" } },
+    }
+    eq(#ns.Quick.Pool(), 1, client .. " Quick play hides out-of-season questions")
+    eq(ns.Quick.Draw().category, "winterveil", client .. " Quick play draws from the current season")
+    ns.db.seasonHide = false
+    eq(#ns.Quick.Pool(), 2, client .. " Quick play respects the holiday override")
+end
+
 -- Streak: a miss ends it, and the best is saved with its date.
 do
     local ns = load()

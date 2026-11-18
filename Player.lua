@@ -809,13 +809,8 @@ end
 
 function Player.ArtPath(model)
     local key = text(model.art)
-    if key ~= "mixed" then
-        local known = false
-        for _, category in ipairs(ns.Game and ns.Game.CATEGORIES or {}) do
-            if category[1] == key then known = true end
-        end
-        if not known then key = "mixed" end
-    end
+    -- Categories without their own painting show the mixed bell.
+    if key ~= "mixed" and not (ns.Game and ns.Game.ART and ns.Game.ART[key]) then key = "mixed" end
     return "Interface\\AddOns\\Loreforge\\Textures\\theme-" .. key .. ".tga"
 end
 

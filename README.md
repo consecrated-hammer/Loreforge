@@ -154,11 +154,27 @@ Hosted-game setup stays on **Play > Game, Categories, Pacing & chat**, with **Pa
 
 ## Categories
 
-The bank has 1,000 questions across General lore, Geography, Classes and mechanics, Races, Hallow's End, Boss quotes, Famous Last Words, Murlocs and Mischief, Dubious Goblin Engineering, and Things You Probably Vendored. That includes 103 boss quotes, 340 geography questions and 181 class questions. Tags overlap, so category totals exceed the bank size.
+The bank has **2,320 questions across 28 categories**, including
+18 new topics and more questions for Hallow's End, Murlocs, Famous Last
+Words, Goblins and Things You Probably Vendored. Tags overlap, so category
+counts can add up to more than the size of the bank.
 
-Retail can draw 861 questions and Forever 499. There are 308 hard questions across the full bank. Each client still needs enough matching questions for the host's chosen categories and game length.
+Retail has 2,138 eligible questions and WoW Forever has 852 before
+category, difficulty and seasonal filters. The full bank includes 790 hard
+questions. Each client still needs enough matching questions for the host's
+chosen game length.
 
-Selected categories combine. **Easier**, **Hard** and **Mixed** select the difficulty. The actual client controls which questions are eligible; `classic` in the data specifically means WoW Forever. Hosted games draw from every class and race topic, while the solo quiz keeps its character-specific filters.
+Choose topics under **Play > Categories**. **Easier**, **Hard** and **Mixed**
+set the difficulty. Hosted games draw from every class and race topic.
+HammerCore's `/lf quiz` uses its own character filters.
+
+Hosted games, Practice and all Quick play modes use the same selected
+categories. Seasonal questions have triple weight by default while their
+holiday is running. **In-season boost** lets you change that, and turning off
+**Hide out of season** makes dormant holiday questions available at their
+ordinary weight. Seasonal windows use the realm date and approximate the game
+calendar. Smaller Holidays keeps each event's questions on its own schedule.
+The Daily question uses its separate date-based schedule.
 
 ## Limits and client checks
 

@@ -19,6 +19,29 @@ Game.CATEGORIES = {
     { "lastwords", "Famous Last Words" },
     { "murlocs", "Murlocs and Mischief" }, { "goblins", "Dubious Goblin Engineering" },
     { "items", "Things You Probably Vendored" },
+    { "mounts", "Mount Up" }, { "pets", "Pets and Pet Battles" },
+    { "professions", "Professions and Recipes" }, { "eastereggs", "Easter Eggs and Pop Culture" },
+    { "badquests", "Quests That Ruined Your Day" }, { "gnomes", "Gnomes and Their Poor Decisions" },
+    { "dragons", "Dragons" }, { "hearth", "Hearth and Home" },
+    { "winterveil", "Feast of Winter Veil" }, { "lunar", "Lunar Festival" },
+    { "loveair", "Love is in the Air" }, { "noblegarden", "Noblegarden" },
+    { "childrensweek", "Children's Week" }, { "midsummer", "Midsummer Fire Festival" },
+    { "brewfest", "Brewfest" }, { "pilgrims", "Pilgrim's Bounty" },
+    { "darkmoon", "Darkmoon Faire" }, { "holidays", "Smaller Holidays" },
+}
+
+-- Holiday categories. Seasons.lua knows when each runs; in season their
+-- questions are favoured, and out of season they can stay hidden.
+Game.SEASONAL = {
+    hallowsend = true, winterveil = true, lunar = true, loveair = true, noblegarden = true,
+    childrensweek = true, midsummer = true, brewfest = true, pilgrims = true,
+    darkmoon = true, holidays = true,
+}
+
+-- Categories with their own painting; the rest show the mixed bell.
+Game.ART = {
+    lore = true, geography = true, class = true, race = true, hallowsend = true,
+    bossquotes = true, lastwords = true, murlocs = true, goblins = true, items = true,
 }
 
 Game.RECAP_EVERY = 5
@@ -43,6 +66,69 @@ local function hasTag(entry, tag)
     return false
 end
 
+-- Seasonal standing of a question: "in" when one of its ticked holiday tags is running (boosted),
+-- "running" when only an unticked one is, "out" when it has holiday tags but
+-- none is running, nil for ordinary questions.
+function Game.Season(entry, config)
+    local seasonal = config.seasonal
+    if not seasonal then return nil end
+    local tagged, running, boosted = false, false, false
+    for _, tag in ipairs(Game.Categories(entry)) do
+        if Game.SEASONAL[tag] then
+            tagged = true
+            local active = seasonal.active[tag]
+            if tag == "holidays" and active then
+                local event = entry.id and entry.id:match("^holidays%-([a-z]+)%-%S")
+                active = event and seasonal.small[event]
+            end
+            if active then
+                running = true
+                if config.categories[tag] then boosted = true end
+            end
+        end
+    end
+    if boosted then return "in" end
+    if running then return "running" end
+    return tagged and "out" or nil
+end
+
+function Game.Weight(entry, config)
+    local seasonal = config.seasonal
+    if seasonal and (seasonal.boost or 1) > 1 and Game.Season(entry, config) == "in" then return seasonal.boost end
+    return 1
+end
+
+-- Pick a position using one random roll, including when every weight is 1.
+local function weightedIndex(count, weight, random)
+    if count == 0 then return nil end
+    local weights, total = {}, 0
+    for i = 1, count do
+        weights[i] = weight(i)
+        total = total + weights[i]
+    end
+    local roll = random(total)
+    for i, value in ipairs(weights) do
+        roll = roll - value
+        if roll <= 0 then return i end
+    end
+end
+
+-- Removes and returns one entry, optionally from a subset of pool positions.
+function Game.TakeWeighted(pool, config, random, indices)
+    local count = indices and #indices or #pool
+    local seasonal = config.seasonal
+    if count == 0 then return nil end
+    local index
+    if seasonal and seasonal.boost > 1 then
+        index = weightedIndex(count, function(i)
+            return Game.Weight(pool[indices and indices[i] or i], config)
+        end, random)
+    else
+        index = random(count)
+    end
+    return table.remove(pool, indices and indices[index] or index)
+end
+
 -- A ticked category with enough questions left for a whole round, favouring
 -- one not used yet. Nil when no category can fill a round: that round mixes.
 function Game.PickTheme(pool, config, used, random)
@@ -60,14 +146,19 @@ function Game.PickTheme(pool, config, used, random)
         end
     end
     local list = #fresh > 0 and fresh or repeats
-    return #list > 0 and list[random(#list)] or nil
+    local seasonal = config.seasonal
+    local index = weightedIndex(#list, function(i)
+        return seasonal and seasonal.active[list[i].key] and seasonal.boost or 1
+    end, random)
+    return index and list[index] or nil
 end
 
-function Game.DrawThemed(pool, theme, random)
-    if not theme then return table.remove(pool, random(#pool)) end
+function Game.DrawThemed(pool, theme, random, config)
+    config = config or { categories = {} }
+    if not theme then return Game.TakeWeighted(pool, config, random) end
     local matching = {}
     for index, entry in ipairs(pool) do if hasTag(entry, theme.key) then matching[#matching + 1] = index end end
-    return table.remove(pool, matching[random(#matching)])
+    return Game.TakeWeighted(pool, config, random, matching)
 end
 
 function Game:Theme()
@@ -75,21 +166,24 @@ function Game:Theme()
     return theme and theme.label or nil
 end
 
-function Game.Pool(bank, config, era)
-    local pool = {}
+-- Counts, when requested, show questions each category could contribute
+-- regardless of which switches are currently on.
+function Game.Pool(bank, config, era, withCounts)
+    local pool, counts = {}, withCounts and {} or nil
     for _, entry in ipairs(bank) do
         local client = entry.era or "both"
         local difficulty = entry.difficulty or "easy"
-        local category = false
-        for _, tag in ipairs(Game.Categories(entry)) do
-            if config.categories[tag] then category = true end
-        end
-        if (client == "both" or client == era) and category
-            and (config.difficulty == "mixed" or config.difficulty == difficulty) then
-            pool[#pool + 1] = entry
+        if (client == "both" or client == era) and (config.difficulty == "mixed" or config.difficulty == difficulty)
+            and not (config.seasonal and config.seasonal.hide and Game.Season(entry, config) == "out") then
+            local selected = false
+            for _, tag in ipairs(Game.Categories(entry)) do
+                if config.categories[tag] then selected = true end
+                if counts then counts[tag] = (counts[tag] or 0) + 1 end
+            end
+            if selected then pool[#pool + 1] = entry end
         end
     end
-    return pool
+    return pool, counts
 end
 
 -- Each line fits a conservative chat budget including its prefix. Never split
@@ -171,9 +265,9 @@ function Game:Start(config, era, roster, serial)
             if index % config.perRound == 1 or config.perRound == 1 then
                 self.themes[round] = Game.PickTheme(pool, config, self.themes, self.random)
             end
-            entry = Game.DrawThemed(pool, self.themes[round], self.random)
+            entry = Game.DrawThemed(pool, self.themes[round], self.random, config)
         else
-            entry = table.remove(pool, self.random(#pool))
+            entry = Game.TakeWeighted(pool, config, self.random)
         end
         local choices = { entry[2], entry[3], entry[4], entry[5] }
         for i = 4, 2, -1 do

@@ -66,8 +66,11 @@ end
 local function config(source)
     local cats = {}
     for _, cat in ipairs(ns.Game.CATEGORIES) do if source.categories and source.categories[cat[1]] then cats[#cats + 1] = cat[2] end end
+    -- Older clients reject a category line over 512 bytes, so a long pick is summarised.
+    local line = #cats == #ns.Game.CATEGORIES and "All categories" or table.concat(cats, ", ")
+    if #line > 240 then line = #cats .. " categories" end
     return {rounds = source.rounds, perRound = source.perRound, seconds = source.seconds,
-        difficulty = source.difficulty or "mixed", categories = table.concat(cats, ", "), readyCheck = source.readyCheck ~= false, readySeconds = source.readySeconds or 30}
+        difficulty = source.difficulty or "mixed", categories = line, readyCheck = source.readyCheck ~= false, readySeconds = source.readySeconds or 30}
 end
 local function validConfig(c)
     return type(c) == "table" and integer(c.rounds, 1, 20) and integer(c.perRound, 1, 50)

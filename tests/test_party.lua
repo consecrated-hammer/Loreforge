@@ -83,8 +83,11 @@ local delayed=h.ns.Codec.Decode(hostEntry.text)
 delayed.id='host-realm:delayed-final'
 c.ns.db.pendingMatches[delayed.id]={hostKey='host-realm',date=1800000000}
 reloaded.ns.db.pendingMatches[delayed.id]={hostKey='host-realm',date=1800000000}
+for _, category in ipairs(h.ns.Game.CATEGORIES) do h.ns.db.categories[category[1]] = category[1] ~= 'pets' end
 assert(P.OpenLobby())
 untilTrue(function()return reloaded.ns.Party.client and reloaded.ns.Party.client.id==P.host.id end,20,'new lobby arrives')
+eq(reloaded.ns.Party.client.model.config.categories, (#h.ns.Game.CATEGORIES - 1) .. ' categories',
+    'a long category selection fits the existing Party config')
 local currentId=reloaded.ns.Party.client.id
 assert(P.bus.Send({v=1,kind='result',id=delayed.id,to='*',result=delayed},{['guest-realm']=true},3))
 untilTrue(function()return reloaded.ns.db.matches.retail.byId[delayed.id]~=nil end,60,'delayed final stored across sessions')

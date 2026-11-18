@@ -25,7 +25,7 @@ local ns = wow.LoadHammerCore('Libs/HammerCore', 'Loreforge')
 local T = ns.HammerCore.Theme
 T.Active = function() return T.registry.classic, 'classic' end
 assert(T.IsClassic(), 'the Classic theme is active')
-for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Flair.lua', 'Setup.lua', 'History.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua' }) do
+for _, file in ipairs({ 'Transport.lua', 'Codec.lua', 'PartyBus.lua', 'Game.lua', 'Core.lua', 'Flair.lua', 'Setup.lua', 'History.lua', 'Host.lua', 'Options.lua', 'Party.lua', 'Probe.lua', 'Player.lua', 'Daily.lua', 'Seasons.lua' }) do
     assert(loadfile(file))('Loreforge', ns)
 end
 local loader

@@ -355,10 +355,9 @@ eq(setup.columns.length:GetParent(), setup.pages.game, 'on the Game tab, never f
 eq(setup.columns.pacing:GetParent(), setup.pages.pacing, 'pacing has its own tab')
 
 -- Categories: two columns, every name with room to spare beside its count.
-local split = math.ceil(#ns.Game.CATEGORIES / 2)
-for i, category in ipairs(ns.Game.CATEGORIES) do
+for _, category in ipairs(ns.Game.CATEGORIES) do
     local row = setup.categoryRows[category[1]]
-    eq(row:GetParent(), setup.columns.categories[i <= split and 1 or 2], category[2] .. ' sits in its column')
+    eq(row:GetParent(), setup.columns.categories[ns.Game.SEASONAL[category[1]] and 2 or 1], category[2] .. ' sits in its column')
     eq(row:GetWidth(), half, category[2] .. ' row is half the window wide')
     -- Room for the name: the row less its insets, the switch, the count and the gaps.
     local room = row:GetWidth() - 14 - 14 - 40 - 12 - 36 - 8

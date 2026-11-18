@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Quiz night has more on the menu. Take on mounts, pets, professions, pop-culture nods, infamous quests, gnomish inventions, dragons and the comforts of a good inn.
+- Holiday questions get a turn in the spotlight. In-season questions have triple weight by default in hosted games and Quick play, and the Categories tab lets you change the boost or show out-of-season questions.
+
 ## [1.5.0] - 2026-11-19
 
 - **Forever:** Gather round the questions. Sit at a campfire to try Quick play or Campfire challenge. The challenge lasts until you stand, and gives you time for one last question. Choose Ask me, Auto-start or Off under Quick play > Camping.

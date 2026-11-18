@@ -37,4 +37,5 @@ Player.lua
 Probe.lua
 QuickPlay.lua
 Daily.lua
+Seasons.lua
 QuickCard.lua

@@ -195,13 +195,18 @@ local function categoryLabel(key)
 end
 Quick.CategoryLabel = categoryLabel
 
-function Quick.Pool()
-    return ns.Game.Pool(HC.QUIZ, { categories = ns.db.categories, difficulty = ns.db.difficulty }, ns.era)
+local function questionConfig()
+    return ns.Seasons.Apply({ categories = ns.db.categories, difficulty = ns.db.difficulty }, ns.db)
+end
+
+function Quick.Pool(config)
+    return ns.Game.Pool(HC.QUIZ, config or questionConfig(), ns.era)
 end
 
 -- The next question: no repeats until every question in the pool is used.
 function Quick.Draw()
-    local pool = Quick.Pool()
+    local config = questionConfig()
+    local pool = Quick.Pool(config)
     if #pool == 0 then return nil end
     local used = ns.db.quickUsed[ns.era]
     local fresh = {}
@@ -212,7 +217,7 @@ function Quick.Draw()
         for key in pairs(used) do used[key] = nil end
         fresh = pool
     end
-    local entry = fresh[random(#fresh)]
+    local entry = ns.Game.TakeWeighted(fresh, config, random)
     used[entry.id or entry[1]] = true
     local choices = { entry[2], entry[3], entry[4], entry[5] }
     for i = 4, 2, -1 do
@@ -243,7 +248,7 @@ local function ask(s)
     s.question = Quick.Draw()
     if not s.question then
         s.phase, s.summary = "over", { kind = "empty", title = "No questions",
-            lines = { "No questions match your categories and difficulty." } }
+            lines = { "No questions match your categories, difficulty and seasonal settings." } }
         return
     end
     s.phase, s.choice, s.revealUntil = "question", nil, nil

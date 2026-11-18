@@ -208,6 +208,7 @@ function ns.StartGame(practice)
     config.localOnly = localOnly == true
     if practice then config.hostParticipates = true end
     config.roundIntro = ns.db.roundIntro ~= false
+    ns.Seasons.Apply(config, ns.db)
     ok, err = ns.game:Start(config, ns.era, roster, serial)
     if not ok then failed(err); return end
     ns.setupError, ns.readyNotice, ns.lastUnmatched = nil, nil, nil
