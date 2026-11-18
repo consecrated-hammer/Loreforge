@@ -694,10 +694,17 @@ do
     aura = {}; camp.Refresh(); prompt.quick.scripts.OnClick(prompt.quick)
     local solo = quick.state
     eq(solo.mode, "quick", "first prompt button starts normal Quick play")
+    takeOff(ns)
+    eq(quick.state, solo, "taking off directly from camp preserves a visible solo quiz")
+    land(ns, 2)
     aura = nil; camp.Refresh()
     eq(quick.state, solo, "Quick play keeps running after standing just as after landing")
     card.Hide()
-    aura = {}; camp.Refresh(); prompt.flight.scripts.OnClick(prompt.flight)
+    takeOff(ns); land(ns, 2)
+    aura = {}; camp.Refresh()
+    eq(prompt.lfContext, "campfire", "first seated aura after an ordinary flight can offer camping")
+    eq(prompt:IsShown(), true, "ordinary takeoff cannot latch the next campsite")
+    prompt.flight.scripts.OnClick(prompt.flight)
     local paused = quick.state
     card.Hide()
     eq(card.launcher:IsShown(), true, "dismissed challenge leaves book")
@@ -819,6 +826,9 @@ do
     ns.db.qpCampfire = false; camp.Apply()
     assert(quick.state and quick.state.landed, "turning camping Off ends unowned challenge")
     eq(camp.Here(), false, "Off prevents starting new context-only challenge")
+    card.promptAfterCombat = "flight"
+    card.HidePrompt(true, "campfire")
+    eq(card.promptAfterCombat, "flight", "campfire cleanup preserves a deferred flight offer")
     card.Hide()
     C_UnitAuras = nil
 end

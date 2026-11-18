@@ -1156,8 +1156,9 @@ function Card.Prompt(context)
     return true
 end
 
-function Card.HidePrompt(silent)
-    Card.promptAfterCombat = nil
+function Card.HidePrompt(silent, context)
+    if not context or Card.promptAfterCombat == context then Card.promptAfterCombat = nil end
+    if context and (not Card.prompt or Card.prompt.lfContext ~= context) then return end
     if Card.prompt then Card.prompt:Hide() end
     if not silent then
         if Card.prompt and Card.prompt.lfContext == "campfire" and ns.db.qpCampfireBook == false then

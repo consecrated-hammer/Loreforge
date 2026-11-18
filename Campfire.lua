@@ -32,7 +32,7 @@ end
 function Campfire.CloseOwned()
     Campfire.pendingDeparture = nil
     Campfire.offered = nil
-    if ns.QuickCard.prompt and ns.QuickCard.prompt.lfContext == "campfire" then ns.QuickCard.HidePrompt(true) end
+    ns.QuickCard.HidePrompt(true, "campfire")
     ns.QuickCard.HideLauncher("campfire")
     local owned = Campfire.owned
     Campfire.owned = nil
@@ -88,7 +88,7 @@ function Campfire.Leave()
     if not Campfire.owned and not Campfire.offered and not (state and state.mode == "camping" and not state.landed) then return end
     local owned = Campfire.owned
     Campfire.owned, Campfire.offered = nil, nil
-    if ns.QuickCard.prompt and ns.QuickCard.prompt.lfContext == "campfire" then ns.QuickCard.HidePrompt(true) end
+    ns.QuickCard.HidePrompt(true, "campfire")
     ns.QuickCard.HideLauncher("campfire")
     local state = ns.Quick.state
     if (owned and state == owned) or (state and state.mode == "camping" and not state.landed) then ns.Quick.EndCamping() end
@@ -147,8 +147,14 @@ function Campfire.Refresh(confirmingDeparture)
 end
 
 function Campfire.BeforeTakeoff()
+    local state, card = ns.Quick.state, ns.QuickCard
+    if state and state == Campfire.owned and state.mode ~= "camping" and (card.IsShown() or card.combatHidden) then
+        Campfire.owned = nil
+    end
+    local here = seated()
     Campfire.CloseOwned()
-    Campfire.atCamp = true -- require an observed absence before another visit
+    -- A stale seated aura must clear before offering again after a flight.
+    Campfire.atCamp = here == true or (here == nil and Campfire.atCamp) or nil
 end
 
 function Campfire.Apply()

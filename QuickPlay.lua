@@ -598,7 +598,7 @@ end
 local function ended(mode, context, info)
     local card = ns.QuickCard
     if card then
-        if context == "flight" or card.prompt and card.prompt.lfContext == context then card.HidePrompt(true) end
+        if context == "flight" then card.HidePrompt(true) else card.HidePrompt(true, context) end
         card.HideLauncher(context)
         if Quick.state and Quick.state.pausedAt and not card.IsShown() and not card.combatHidden then Quick.Close() end
     end
