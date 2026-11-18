@@ -2,17 +2,11 @@
 
 ## [Unreleased]
 
-- A flight by the fire: camping uses the same two-choice offer, Auto-start countdown, dismissed book and challenge-ending flow as flights. Campfire challenge lasts until you stand, grants final-question grace, then shows results with Keep going / Close and optional auto-close. Camping has independent answer-pause, grace, close and book settings.
+## [1.5.0] - 2026-11-19
 
-- Pitch your settings tent: campfire offers and the book-position reset now live on Quick play > Camping, beside Flights. Camping has its own reset.
-
-- By invitation only: campfires offer a quiz before starting, like flights. Not now leaves the book available while seated; questions and timers wait for your click.
-
-- A fireside bookmark: dismiss the campfire quiz to keep a movable book for resuming or starting fresh while seated. Standing puts it away; its position is separate from the flight book.
-
-- Keeping up with the guild: a chat reminder flags newer stable releases seen in your group or guild. Configure Update reminders on Visibility; development and test builds stay quiet.
-
-- Gather round the questions: Forever offers a solo quiz when you sit at a campfire. When camping on Quick play > Camping defaults to Ask me for new settings, preserving saved Off choices. Standing closes only its automatic quiz.
+- **Forever:** Gather round the questions. Sit at a campfire to try Quick play or Campfire challenge. The challenge lasts until you stand, and gives you time for one last question. Choose Ask me, Auto-start or Off under Quick play > Camping.
+- Bookmark your campfire quiz by dismissing it. The movable book lets you resume or start fresh, and sleeping bag buff refreshes keep your place.
+- Keeping up with the guild. A chat reminder flags newer stable releases seen in your group or guild. Find the switch under Visibility > Updates.
 
 ## [1.4.2] - 2026-11-15
 

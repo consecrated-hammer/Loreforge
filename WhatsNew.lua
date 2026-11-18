@@ -5,13 +5,10 @@ local addonName, ns = ...
 -- tools/whatsnew_check.py fails the release without one. A `page` adds a
 -- link to that settings page.
 ns.WHATS_NEW = {
-    { version = "1.4.3", date = "2026-11-16", items = {
-        { title = "Gather round the questions", text = "Sitting at a campfire offers Quick play or Campfire challenge, just like flights. On by default for new settings; change When camping on Quick play > Camping. Saved Off choices are kept.", client = "forever", kind = "improved", page = "Quick play", tab = "Camping" },
-        { title = "Keeping up with the guild", text = "A chat reminder flags newer stable releases seen in your party, raid or guild. Configure Update reminders on Visibility. Development and test builds stay quiet.", kind = "improved", page = "Visibility" },
-        { title = "A fireside bookmark", text = "Dismiss the campfire quiz and a movable book keeps your place. Resume or start a new quiz while seated; standing puts the book away.", client = "forever", kind = "improved", page = "Quick play", tab = "Camping" },
-        { title = "By invitation only", text = "Campfires now ask before starting a quiz, just like flights. Choose Quick play, Campfire challenge or Not now; the book stays handy while seated.", client = "forever", kind = "improved", page = "Quick play", tab = "Camping" },
-        { title = "Pitch your settings tent", text = "Camping has Ask me/Auto-start/Off, answer pause, standing grace, close-after-camping and book controls beside Flights.", client = "forever", kind = "improved", page = "Quick play", tab = "Camping" },
-        { title = "A flight by the fire", text = "Campfire challenge runs until you stand, then gives you time for the last question and shows results with Keep going or Close, just like landing.", client = "forever", kind = "improved", page = "Quick play", tab = "Camping" },
+    { version = "1.5.0", date = "2026-11-19", items = {
+        { title = "Gather round the questions", text = "Sit at a campfire for Quick play or Campfire challenge. The challenge gives you time for one last question when you stand. Choose Ask me, Auto-start or Off under Camping.", client = "forever", kind = "new", page = "Quick play", tab = "Camping" },
+        { title = "A fireside bookmark", text = "Dismiss your campfire quiz to a movable book. Resume or start fresh while seated. Sleeping bag buff refreshes keep your place.", client = "forever", kind = "new", page = "Quick play", tab = "Camping" },
+        { title = "Keeping up with the guild", text = "A chat reminder flags newer stable releases seen in your group or guild. Find the switch under Visibility > Updates.", kind = "new", page = "Visibility", tab = "Updates" },
     } },
     { version = "1.4.2", date = "2026-11-15", items = {
         { title = "This book refuses to stay shelved", text = "Drag the in-flight book to move it. It remembers its own spot; Reset flight book position on Quick play > Flights brings it home.", page = "Quick play", tab = "Flights", kind = "improved" },
