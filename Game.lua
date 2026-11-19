@@ -42,6 +42,10 @@ Game.SEASONAL = {
 Game.ART = {
     lore = true, geography = true, class = true, race = true, hallowsend = true,
     bossquotes = true, lastwords = true, murlocs = true, goblins = true, items = true,
+    mounts = true, pets = true, professions = true, eastereggs = true,
+    badquests = true, gnomes = true, dragons = true, hearth = true,
+    winterveil = true, lunar = true, loveair = true, noblegarden = true, childrensweek = true,
+    midsummer = true, brewfest = true, pilgrims = true, darkmoon = true, holidays = true,
 }
 
 Game.RECAP_EVERY = 5
